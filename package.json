@@ -1,0 +1,31 @@
+{
+  "name": "end-user",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit --skipLibCheck && vite build",
+    "build:skip-check": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "date-fns": "^4.1.0",
+    "lucide-vue-next": "^0.555.0",
+    "ofetch": "^1.4.1",
+    "pinia": "^3.0.3",
+    "vue": "^3.5.22",
+    "vue-router": "^4.6.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.6.0",
+    "@vitejs/plugin-vue": "^6.0.1",
+    "@vue/tsconfig": "^0.8.1",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17",
+    "typescript": "~5.9.3",
+    "vite": "^7.1.7",
+    "vue-tsc": "^3.1.0"
+  }
+}
