@@ -14,7 +14,6 @@ import {
   Users, 
   MessageCircle, 
   RefreshCw,
-  CheckCircle,
   AlertCircle,
   Loader2
 } from 'lucide-vue-next';
@@ -59,14 +58,14 @@ const validateForm = () => {
   }
 
   if (!phone.value.trim()) {
-    error.value = t('phoneNumber') + ' diperlukan';
+    error.value = t('phoneNumber') + ' ' + t('required');
     return false;
   }
 
   // Validate Malaysian phone format
   const phoneRegex = /^01\d{8,9}$/;
   if (!phoneRegex.test(phone.value.replace(/[\s-]/g, ''))) {
-    error.value = 'Sila masukkan nombor telefon yang sah';
+    error.value = t('pleaseEnterValidPhone');
     return false;
   }
 
@@ -92,13 +91,13 @@ const searchBooking = async () => {
     const normalizedBookingPhone = (booking as any).customerInfo?.whatsapp?.replace(/[\s-]/g, '') || booking.customer_phone?.replace(/[\s-]/g, '');
 
     if (normalizedInputPhone !== normalizedBookingPhone) {
-      error.value = 'Tempahan tidak dijumpai atau nombor telefon tidak padan';
+      error.value = t('bookingNotFoundOrPhoneMismatch');
       return;
     }
 
     foundBooking.value = booking;
   } catch (err) {
-    error.value = 'Tempahan tidak dijumpai. Sila semak ID Tempahan dan nombor telefon anda.';
+    error.value = t('bookingNotFoundCheckDetails');
   } finally {
     isLoading.value = false;
   }
@@ -187,13 +186,13 @@ const brandColor = computed(() => studioStore.studio?.brand_color || '#000000');
             <div class="bg-white w-16 h-16 rounded-2xl flex items-center justify-center mx-auto shadow-sm border border-gray-100 mb-4">
               <Search class="w-8 h-8 text-gray-400" />
             </div>
-            <h2 class="text-2xl font-bold font-serif">Semak Status</h2>
-            <p class="text-sm text-gray-500">Masukkan butiran tempahan anda untuk menyemak status terkini.</p>
+            <h2 class="text-2xl font-bold font-serif">{{ t('checkStatus') }}</h2>
+            <p class="text-sm text-gray-500">{{ t('enterBookingDetailsToCheckStatus') }}</p>
           </div>
 
           <form @submit.prevent="searchBooking" class="space-y-5">
             <div class="space-y-1">
-              <label class="text-xs font-bold uppercase tracking-widest text-gray-500 ml-1">ID Tempahan</label>
+              <label class="text-xs font-bold uppercase tracking-widest text-gray-500 ml-1">{{ t('bookingId') }}</label>
               <input 
                 v-model="bookingId"
                 type="text" 
@@ -203,7 +202,7 @@ const brandColor = computed(() => studioStore.studio?.brand_color || '#000000');
             </div>
 
             <div class="space-y-1">
-              <label class="text-xs font-bold uppercase tracking-widest text-gray-500 ml-1">No. Telefon</label>
+              <label class="text-xs font-bold uppercase tracking-widest text-gray-500 ml-1">{{ t('phoneNumber') }}</label>
               <input 
                 v-model="phone"
                 type="tel" 
@@ -223,8 +222,8 @@ const brandColor = computed(() => studioStore.studio?.brand_color || '#000000');
               class="w-full bg-black text-white py-4 rounded-xl font-bold uppercase tracking-widest text-xs hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               :style="{ backgroundColor: brandColor }"
             >
-              <span v-if="!isLoading">Semak Sekarang</span>
-              <span v-else>Sedang Menyemak...</span>
+              <span v-if="!isLoading">{{ t('checkNow') }}</span>
+              <span v-else>{{ t('checking') }}</span>
               <Loader2 v-if="isLoading" class="w-4 h-4 animate-spin" />
               <ArrowRight v-else class="w-4 h-4" />
             </button>
@@ -235,11 +234,11 @@ const brandColor = computed(() => studioStore.studio?.brand_color || '#000000');
         <div v-else class="space-y-6 animate-fade-in">
           <!-- Success Header -->
           <div class="text-center border-b border-dashed border-gray-200 pb-6">
-            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-3 border" :class="getStatusBadge(foundBooking.status).class">
-              {{ getStatusBadge(foundBooking.status).text }}
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-3 border" :class="getStatusBadge(foundBooking.booking_status).class">
+              {{ getStatusBadge(foundBooking.booking_status).text }}
             </div>
             <h2 class="text-3xl font-bold font-serif mb-1">{{ foundBooking.booking_number }}</h2>
-            <p class="text-sm text-gray-500">ID Tempahan</p>
+            <p class="text-sm text-gray-500">{{ t('bookingId') }}</p>
           </div>
 
           <!-- Details -->
@@ -262,12 +261,12 @@ const brandColor = computed(() => studioStore.studio?.brand_color || '#000000');
               <div class="bg-white p-3 rounded-2xl border border-gray-100 flex flex-col items-center justify-center text-center gap-1">
                 <Calendar class="w-5 h-5 text-gray-400" />
                 <span class="text-sm font-bold text-gray-900">{{ formattedDate }}</span>
-                <span class="text-[10px] text-gray-400 uppercase">Tarikh</span>
+                <span class="text-[10px] text-gray-400 uppercase">{{ t('date') }}</span>
               </div>
               <div class="bg-white p-3 rounded-2xl border border-gray-100 flex flex-col items-center justify-center text-center gap-1">
                 <Clock class="w-5 h-5 text-gray-400" />
                 <span class="text-sm font-bold text-gray-900">{{ formattedTime }}</span>
-                <span class="text-[10px] text-gray-400 uppercase">Masa</span>
+                <span class="text-[10px] text-gray-400 uppercase">{{ t('time') }}</span>
               </div>
             </div>
 
@@ -275,9 +274,9 @@ const brandColor = computed(() => studioStore.studio?.brand_color || '#000000');
             <div class="bg-white p-4 rounded-2xl border border-gray-100 flex items-center justify-between">
               <div class="flex items-center gap-3">
                 <Users class="w-5 h-5 text-gray-400" />
-                <span class="text-sm font-medium text-gray-600">Bilangan Tetamu</span>
+                <span class="text-sm font-medium text-gray-600">{{ t('numberOfGuests') }}</span>
               </div>
-              <span class="font-bold text-gray-900">{{ foundBooking.pax_count || (foundBooking as any).pax }} Orang</span>
+              <span class="font-bold text-gray-900">{{ foundBooking.pax_count || (foundBooking as any).pax }} {{ t('people') }}</span>
             </div>
           </div>
 
@@ -290,7 +289,7 @@ const brandColor = computed(() => studioStore.studio?.brand_color || '#000000');
               class="w-full bg-green-50 text-green-700 py-4 rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-green-100 transition-all flex items-center justify-center gap-2 border border-green-100"
             >
               <MessageCircle class="w-4 h-4" />
-              Hubungi Studio
+              {{ t('contactStudio') }}
             </a>
             
             <button 
@@ -298,7 +297,7 @@ const brandColor = computed(() => studioStore.studio?.brand_color || '#000000');
               class="w-full bg-white border border-gray-200 text-gray-500 py-4 rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-gray-50 hover:text-gray-900 transition-all flex items-center justify-center gap-2"
             >
               <RefreshCw class="w-4 h-4" />
-              Semak Lain
+              {{ t('checkAnother') }}
             </button>
           </div>
 

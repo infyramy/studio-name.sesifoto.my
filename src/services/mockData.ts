@@ -1,18 +1,22 @@
 import type { Studio, Theme, Addon, WorkingHours, BlackoutDate, PricingRule } from '@/types';
 
-// Mock Studio Data
+// ============================================================================
+// STUDIO DETAILS
+// ============================================================================
+// Complete studio information including settings, contact details, and branding
+
 export const mockStudios: Record<string, Studio> = {
   najiahstudio: {
     id: 'studio-001',
     slug: 'najiahstudio',
     name: 'Najiah Photography',
     owner_name: 'Siti Najiah',
-    whatsapp: '0129876543',
-    address: 'Jln Maarof, Bangsar, Kuala Lumpur',
+    whatsapp: '60129876543',
+    address: 'No. 12, Jalan Maarof, Bangsar, 59000 Kuala Lumpur, Wilayah Persekutuan',
     instagram: 'https://instagram.com/najiahphotography',
-    maps_link: 'https://maps.google.com/?q=Bangsar+Kuala+Lumpur',
-    logo_url: 'https://ui-avatars.com/api/?name=Najiah+Photography',
-    brand_color: '#0B1215', // Pastel Mint
+    maps_link: 'https://maps.google.com/?q=Jalan+Maarof+Bangsar+Kuala+Lumpur',
+    logo_url: 'https://ui-avatars.com/api/?name=Najiah+Photography&background=0B1215&color=fff&size=200',
+    brand_color: '#0B1215',
     default_language: 'BM',
     timezone: 'Asia/Kuala_Lumpur',
     currency: 'MYR',
@@ -21,353 +25,48 @@ export const mockStudios: Record<string, Studio> = {
       cart_mode_enabled: false,
       cart_hold_duration: 10, // 10 minutes
       deposit_percentage: 50,
+      payment_type: 'full', // Deposit only payment
       booking_window_start: null, // Immediate booking allowed
       buffer_minutes: 15,
       auto_cutoff_hours: 0, // Book until slot start time
     },
-    created_at: '2025-01-01T00:00:00Z',
-    updated_at: '2025-01-15T00:00:00Z',
+    created_at: '2024-12-01T00:00:00Z',
+    updated_at: '2025-01-15T10:30:00Z',
   },
   arisham: {
     id: 'studio-002',
     slug: 'arishamstudios',
     name: 'Arisham Studios',
     owner_name: 'Ahmad Arisham',
-    whatsapp: '0123456789',
-    address: 'Plaza Damas, Sri Hartamas, KL',
-    maps_link: 'https://maps.google.com/?q=Sri+Hartamas+KL',
-    logo_url: 'https://ui-avatars.com/api/?name=Arisham+Studios',
-    brand_color: '#FFC8DD', // Pastel Rose
+    whatsapp: '60123456789',
+    address: 'Unit 3-15, Plaza Damas, Jalan Sri Hartamas 1, 50480 Kuala Lumpur',
+    instagram: 'https://instagram.com/arishamstudios',
+    maps_link: 'https://maps.google.com/?q=Plaza+Damas+Sri+Hartamas+Kuala+Lumpur',
+    logo_url: 'https://ui-avatars.com/api/?name=Arisham+Studios&background=FFC8DD&color=000&size=200',
+    brand_color: '#FFC8DD',
     default_language: 'EN',
     timezone: 'Asia/Kuala_Lumpur',
     currency: 'MYR',
     status: 'active',
     settings: {
       cart_mode_enabled: true,
-      cart_hold_duration: 15,
+      cart_hold_duration: 15, // 15 minutes
       deposit_percentage: 50,
+      payment_type: 'full', // Full payment required
       booking_window_start: null,
       buffer_minutes: 10,
       auto_cutoff_hours: 0,
     },
-    created_at: '2025-01-10T00:00:00Z',
-    updated_at: '2025-01-20T00:00:00Z',
+    created_at: '2024-12-10T00:00:00Z',
+    updated_at: '2025-01-20T14:20:00Z',
   },
 };
 
-// Mock Themes for Najiah Studio
-export const mockThemes: Record<string, Theme[]> = {
-  'studio-001': [
-    {
-      id: 'theme-001',
-      studio_id: 'studio-001',
-      name: 'Keluarga Bahagia',
-      description_short: 'Sesi foto keluarga dengan backdrop Raya',
-      description_long: 'Tangkap momen indah bersama keluarga tercinta dalam sesi fotografi profesional dengan tema Raya yang meriah. Termasuk backdrop eksklusif dan props Raya.',
-      images: [
-        'https://images.unsplash.com/photo-1511895426328-dc8714191300?w=800',
-        'https://images.unsplash.com/photo-1523450001312-faa4e2e37f0f?w=800',
-        'https://images.unsplash.com/photo-1567770809447-22c2e0f6ebb0?w=800',
-      ],
-      base_price: 180,
-      base_pax: 5,
-      extra_pax_price: 30,
-      duration_minutes: 30,
-      buffer_minutes: null,
-      status: 'active',
-      sort_order: 1,
-      created_at: '2025-01-05T00:00:00Z',
-      updated_at: '2025-01-05T00:00:00Z',
-      is_deposit: false,
-    },
-    {
-      id: 'theme-002',
-      studio_id: 'studio-001',
-      name: 'Couple Raya',
-      description_short: 'Sesi foto romantis untuk pasangan',
-      description_long: 'Pakej istimewa untuk pasangan yang ingin merakam kenangan Raya bersama. Konsep romantis dan elegan dengan backdrop cantik.',
-      images: [
-        'https://images.unsplash.com/photo-1591604466107-ec97de577aff?w=800',
-        'https://images.unsplash.com/photo-1523450001312-faa4e2e37f0f?w=800',
-      ],
-      base_price: 150,
-      base_pax: 2,
-      extra_pax_price: 40,
-      duration_minutes: 20,
-      buffer_minutes: null,
-      status: 'active',
-      sort_order: 2,
-      created_at: '2025-01-05T00:00:00Z',
-      updated_at: '2025-01-05T00:00:00Z',
-      is_deposit: true,
-    },
-    {
-      id: 'theme-003',
-      studio_id: 'studio-001',
-      name: 'Keluarga VIP',
-      description_short: 'Pakej premium untuk keluarga besar',
-      description_long: 'Pakej eksklusif untuk keluarga besar dengan tempoh sesi yang lebih panjang dan props premium. Termasuk makeup touch-up dan minuman.',
-      images: [
-        'https://images.unsplash.com/photo-1609220136736-443140cffec6?w=800',
-        'https://images.unsplash.com/photo-1567770809447-22c2e0f6ebb0?w=800',
-      ],
-      base_price: 350,
-      base_pax: 8,
-      extra_pax_price: 35,
-      duration_minutes: 45,
-      buffer_minutes: 20,
-      status: 'active',
-      sort_order: 3,
-      created_at: '2025-01-05T00:00:00Z',
-      updated_at: '2025-01-05T00:00:00Z',
-      is_deposit: false,
-    },
-  ],
-  'studio-002': [
-    {
-      id: 'theme-004',
-      studio_id: 'studio-002',
-      name: 'Modern Family',
-      description_short: 'Contemporary family photoshoot',
-      description_long: 'Modern and stylish family photography session with professional lighting and backdrops.',
-      images: [
-        'https://images.unsplash.com/photo-1511895426328-dc8714191300?w=800',
-      ],
-      base_price: 200,
-      base_pax: 5,
-      extra_pax_price: 35,
-      duration_minutes: 30,
-      buffer_minutes: null,
-      status: 'active',
-      sort_order: 1,
-      created_at: '2025-01-10T00:00:00Z',
-      updated_at: '2025-01-10T00:00:00Z',
-      is_deposit: true,
-    },
-  ],
-};
+// ============================================================================
+// STUDIO HOMEPAGE CONTENT
+// ============================================================================
+// Hero section content, branding colors, and marketing copy for each studio
 
-// Mock Add-ons for Najiah Studio
-export const mockAddons: Record<string, Addon[]> = {
-  'studio-001': [
-    {
-      id: 'addon-001',
-      studio_id: 'studio-001',
-      name: 'Set Props Raya',
-      price: 50,
-      max_quantity: 1,
-      status: 'active',
-      sort_order: 1,
-      created_at: '2025-01-05T00:00:00Z',
-    },
-    {
-      id: 'addon-002',
-      studio_id: 'studio-001',
-      name: 'Outdoor Shoot +15min',
-      price: 80,
-      max_quantity: 1,
-      status: 'active',
-      sort_order: 2,
-      created_at: '2025-01-05T00:00:00Z',
-    },
-    {
-      id: 'addon-003',
-      studio_id: 'studio-001',
-      name: 'Same-day Digital',
-      price: 120,
-      max_quantity: 1,
-      status: 'active',
-      sort_order: 3,
-      created_at: '2025-01-05T00:00:00Z',
-    },
-    {
-      id: 'addon-004',
-      studio_id: 'studio-001',
-      name: 'Printed Album',
-      price: 200,
-      max_quantity: null, // unlimited
-      status: 'active',
-      sort_order: 4,
-      created_at: '2025-01-05T00:00:00Z',
-    },
-  ],
-  'studio-002': [
-    {
-      id: 'addon-005',
-      studio_id: 'studio-002',
-      name: 'Premium Backdrop Set',
-      price: 70,
-      max_quantity: 1,
-      status: 'active',
-      sort_order: 1,
-      created_at: '2025-01-10T00:00:00Z',
-    },
-    {
-      id: 'addon-006',
-      studio_id: 'studio-002',
-      name: 'Extended Session +20min',
-      price: 100,
-      max_quantity: 1,
-      status: 'active',
-      sort_order: 2,
-      created_at: '2025-01-10T00:00:00Z',
-    },
-    {
-      id: 'addon-007',
-      studio_id: 'studio-002',
-      name: 'Instant Print Package',
-      price: 150,
-      max_quantity: 1,
-      status: 'active',
-      sort_order: 3,
-      created_at: '2025-01-10T00:00:00Z',
-    },
-    {
-      id: 'addon-008',
-      studio_id: 'studio-002',
-      name: 'Video Reel (30s)',
-      price: 250,
-      max_quantity: 1,
-      status: 'active',
-      sort_order: 4,
-      created_at: '2025-01-10T00:00:00Z',
-    },
-  ],
-};
-
-// Mock Working Hours (Syawal period)
-export const mockWorkingHours: Record<string, WorkingHours[]> = {
-  'studio-001': [
-    // Monday - Thursday
-    ...[1, 2, 3, 4].map((day) => ({
-      id: `wh-${day}`,
-      studio_id: 'studio-001',
-      day_of_week: day,
-      time_windows: [
-        { start: '09:00', end: '12:00' },
-        { start: '14:00', end: '18:00' },
-      ],
-      created_at: '2025-01-05T00:00:00Z',
-    })),
-    // Friday
-    {
-      id: 'wh-5',
-      studio_id: 'studio-001',
-      day_of_week: 5,
-      time_windows: [{ start: '09:00', end: '12:00' }],
-      created_at: '2025-01-05T00:00:00Z',
-    },
-    // Saturday - Sunday
-    ...[6, 0].map((day) => ({
-      id: `wh-${day}`,
-      studio_id: 'studio-001',
-      day_of_week: day,
-      time_windows: [
-        { start: '08:00', end: '13:00' },
-        { start: '15:00', end: '19:00' },
-      ],
-      created_at: '2025-01-05T00:00:00Z',
-    })),
-  ],
-  'studio-002': [
-    // Monday - Friday
-    ...[1, 2, 3, 4, 5].map((day) => ({
-      id: `wh-arisham-${day}`,
-      studio_id: 'studio-002',
-      day_of_week: day,
-      time_windows: [
-        { start: '10:00', end: '13:00' },
-        { start: '14:00', end: '20:00' },
-      ],
-      created_at: '2025-01-10T00:00:00Z',
-    })),
-    // Saturday - Sunday
-    ...[6, 0].map((day) => ({
-      id: `wh-arisham-${day}`,
-      studio_id: 'studio-002',
-      day_of_week: day,
-      time_windows: [
-        { start: '09:00', end: '21:00' },
-      ],
-      created_at: '2025-01-10T00:00:00Z',
-    })),
-  ],
-};
-
-// Mock Blackout Dates
-export const mockBlackoutDates: Record<string, BlackoutDate[]> = {
-  'studio-001': [
-    {
-      id: 'blackout-001',
-      studio_id: 'studio-001',
-      date: '2025-10-30', // Studio closed for maintenance
-      reason: 'Studio Maintenance',
-      created_at: '2025-01-05T00:00:00Z',
-    },
-    {
-      id: 'blackout-002',
-      studio_id: 'studio-001',
-      date: '2025-11-01', // Public holiday
-      reason: 'Public Holiday',
-      created_at: '2025-01-05T00:00:00Z',
-    },
-  ],
-  'studio-002': [
-    {
-      id: 'blackout-003',
-      studio_id: 'studio-002',
-      date: '2025-11-01', // Public holiday
-      reason: 'Public Holiday',
-      created_at: '2025-01-10T00:00:00Z',
-    },
-  ],
-};
-
-// Mock Pricing Rules
-export const mockPricingRules: Record<string, PricingRule[]> = {
-  'studio-001': [
-    {
-      id: 'pricing-001',
-      studio_id: 'studio-001',
-      name: 'Raya Special +50%',
-      date_range_start: '2025-11-02',
-      date_range_end: '2025-11-04',
-      rule_type: 'percentage_increase',
-      value: 50, // +50%
-      applies_to_themes: 'all',
-      status: 'active',
-      created_at: '2025-01-05T00:00:00Z',
-    },
-    {
-      id: 'pricing-002',
-      studio_id: 'studio-001',
-      name: 'Weekend Premium +20%',
-      date_range_start: '2025-10-25',
-      date_range_end: '2025-10-31',
-      rule_type: 'percentage_increase',
-      value: 20, // +20% on weekends
-      applies_to_themes: 'all',
-      status: 'active',
-      created_at: '2025-01-05T00:00:00Z',
-    },
-  ],
-  'studio-002': [
-    {
-      id: 'pricing-003',
-      studio_id: 'studio-002',
-      name: 'Raya Peak Premium +60%',
-      date_range_start: '2025-11-02',
-      date_range_end: '2025-11-04',
-      rule_type: 'percentage_increase',
-      value: 60, // +60%
-      applies_to_themes: 'all',
-      status: 'active',
-      created_at: '2025-01-10T00:00:00Z',
-    },
-  ],
-};
-
-// Mock Homepage Hero Content
 export const mockHeroContent: Record<string, {
   backgroundImage: string;
   heading: string;
@@ -383,66 +82,628 @@ export const mockHeroContent: Record<string, {
   };
 }> = {
   'studio-001': {
-    backgroundImage: 'https://www.whiteroomstudio.com.sg/wordpress/wp-content/uploads/2023/03/Family-Portrait-Hari-Raya-Photoshoot-Singapore-4-scaled.jpg',
+    backgroundImage: 'https://images.unsplash.com/photo-1609220136736-443140cffec6?q=80&w=2400&auto=format&fit=crop&ixlib=rb-4.1.0',
     heading: 'Tempah Sesi Fotografi Raya Anda dalam',
     highlightText: '30 Saat',
-    testimonial: 'Abadikan detik berharga Raya anda bersama fotografi profesional yang kekal selamanya.',
+    testimonial: 'Abadikan detik berharga Raya anda bersama fotografi profesional yang kekal selamanya. Setiap gambar menceritakan kisah kasih sayang keluarga.',
     author: 'Najiah Photography',
     colors: {
-      primary: '#A8DADC',      // Pastel Mint
-      secondary: '#457B9D',    // Blue
-      accent: '#F1FAEE',       // Off White
-      gradientFrom: '#A8DADC', // Mint
-      gradientTo: '#457B9D'    // Blue
-    }
+      primary: '#A8DADC',
+      secondary: '#457B9D',
+      accent: '#F1FAEE',
+      gradientFrom: '#A8DADC',
+      gradientTo: '#457B9D',
+    },
   },
   'studio-002': {
-    backgroundImage: 'https://images.unsplash.com/photo-1609220136736-443140cffec6?w=1600',
+    backgroundImage: 'https://images.unsplash.com/photo-1511895426328-dc8714191300?q=80&w=2400&auto=format&fit=crop&ixlib=rb-4.1.0',
     heading: 'Book Your Raya Photoshoot in',
     highlightText: '30 Seconds',
-    testimonial: 'Create timeless memories with professional Raya photography sessions.',
+    testimonial: 'Create timeless memories with professional Raya photography sessions. Every moment captured with elegance and style.',
     author: 'Arisham Studios',
     colors: {
-      primary: '#FFC8DD',      // Pastel Rose
-      secondary: '#FFAFCC',    // Pink
-      accent: '#BDE0FE',       // Light Blue
-      gradientFrom: '#FFC8DD', // Rose
-      gradientTo: '#FFAFCC'    // Pink
-    }
-  }
+      primary: '#FFC8DD',
+      secondary: '#FFAFCC',
+      accent: '#BDE0FE',
+      gradientFrom: '#FFC8DD',
+      gradientTo: '#FFAFCC',
+    },
+  },
 };
 
-// Mock Bookings for lookup demo
-export const mockBookingsData: Record<string, any> = {
+// ============================================================================
+// STUDIO THEMES
+// ============================================================================
+// Photography themes/packages available for each studio with pricing and details
+
+export const mockThemes: Record<string, Theme[]> = {
+  'studio-001': [
+    {
+      id: 'theme-001',
+      studio_id: 'studio-001',
+      name: 'Keluarga Bahagia',
+      description_short: 'Sesi foto keluarga dengan backdrop Raya yang meriah',
+      description_long: 'Tangkap momen indah bersama keluarga tercinta dalam sesi fotografi profesional dengan tema Raya yang meriah. Termasuk backdrop eksklusif, props Raya tradisional, dan lighting profesional. Sesuai untuk keluarga 3-8 orang. Semua gambar akan diedit dan diserahkan dalam format digital berkualiti tinggi.',
+      images: [
+        'https://images.unsplash.com/photo-1511895426328-dc8714191300?q=80&w=1200&auto=format&fit=crop&ixlib=rb-4.1.0',
+        'https://images.unsplash.com/photo-1523450001312-faa4e2e37f0f?q=80&w=1200&auto=format&fit=crop&ixlib=rb-4.1.0',
+        'https://images.unsplash.com/photo-1567770809447-22c2e0f6ebb0?q=80&w=1200&auto=format&fit=crop&ixlib=rb-4.1.0',
+        'https://images.unsplash.com/photo-1609220136736-443140cffec6?q=80&w=1200&auto=format&fit=crop&ixlib=rb-4.1.0',
+      ],
+      base_price: 180,
+      base_pax: 5,
+      extra_pax_price: 30,
+      duration_minutes: 30,
+      buffer_minutes: null,
+      status: 'active',
+      sort_order: 1,
+      created_at: '2024-12-05T09:00:00Z',
+      updated_at: '2025-01-10T11:15:00Z',
+      is_deposit: false,
+    },
+    {
+      id: 'theme-002',
+      studio_id: 'studio-001',
+      name: 'Couple Raya',
+      description_short: 'Sesi foto romantis untuk pasangan dengan konsep elegan',
+      description_long: 'Pakej istimewa untuk pasangan yang ingin merakam kenangan Raya bersama. Konsep romantis dan elegan dengan backdrop cantik, lighting lembut, dan props eksklusif. Sesuai untuk pasangan atau pasangan baru. Termasuk 2 perubahan pakaian dan semua gambar diedit dengan teliti.',
+      images: [
+        'https://images.unsplash.com/photo-1591604466107-ec97de577aff?q=80&w=1200&auto=format&fit=crop&ixlib=rb-4.1.0',
+        'https://images.unsplash.com/photo-1523450001312-faa4e2e37f0f?q=80&w=1200&auto=format&fit=crop&ixlib=rb-4.1.0',
+        'https://images.unsplash.com/photo-1516589178581-6cd7833ae3b2?q=80&w=1200&auto=format&fit=crop&ixlib=rb-4.1.0',
+      ],
+      base_price: 150,
+      base_pax: 2,
+      extra_pax_price: 40,
+      duration_minutes: 20,
+      buffer_minutes: null,
+      status: 'active',
+      sort_order: 2,
+      created_at: '2024-12-05T09:00:00Z',
+      updated_at: '2025-01-08T14:30:00Z',
+      is_deposit: true,
+    },
+    {
+      id: 'theme-003',
+      studio_id: 'studio-001',
+      name: 'Keluarga VIP',
+      description_short: 'Pakej premium untuk keluarga besar dengan sesi yang lebih panjang',
+      description_long: 'Pakej eksklusif untuk keluarga besar dengan tempoh sesi yang lebih panjang dan props premium. Termasuk backdrop mewah, makeup touch-up untuk 2 orang, minuman ringan, dan semua gambar diedit profesional. Sesuai untuk keluarga 8-15 orang. Bonus: 5 gambar cetakan 8R dan album digital premium.',
+      images: [
+        'https://images.unsplash.com/photo-1609220136736-443140cffec6?q=80&w=1200&auto=format&fit=crop&ixlib=rb-4.1.0',
+        'https://images.unsplash.com/photo-1567770809447-22c2e0f6ebb0?q=80&w=1200&auto=format&fit=crop&ixlib=rb-4.1.0',
+        'https://images.unsplash.com/photo-1511895426328-dc8714191300?q=80&w=1200&auto=format&fit=crop&ixlib=rb-4.1.0',
+        'https://images.unsplash.com/photo-1506112573664-1a1b66d93ff3?q=80&w=1200&auto=format&fit=crop&ixlib=rb-4.1.0',
+      ],
+      base_price: 350,
+      base_pax: 8,
+      extra_pax_price: 35,
+      duration_minutes: 45,
+      buffer_minutes: 20,
+      status: 'active',
+      sort_order: 3,
+      created_at: '2024-12-05T09:00:00Z',
+      updated_at: '2025-01-12T16:45:00Z',
+      is_deposit: false,
+    },
+  ],
+  'studio-002': [
+    {
+      id: 'theme-004',
+      studio_id: 'studio-002',
+      name: 'Modern Family',
+      description_short: 'Contemporary family photoshoot with modern aesthetics',
+      description_long: 'Modern and stylish family photography session with professional lighting and backdrops. Perfect for families who want a contemporary look. Includes modern props, professional editing, and high-resolution digital delivery. Suitable for families of 3-8 people.',
+      images: [
+        'https://images.unsplash.com/photo-1511895426328-dc8714191300?q=80&w=1200&auto=format&fit=crop&ixlib=rb-4.1.0',
+        'https://images.unsplash.com/photo-1523450001312-faa4e2e37f0f?q=80&w=1200&auto=format&fit=crop&ixlib=rb-4.1.0',
+        'https://images.unsplash.com/photo-1609220136736-443140cffec6?q=80&w=1200&auto=format&fit=crop&ixlib=rb-4.1.0',
+      ],
+      base_price: 200,
+      base_pax: 5,
+      extra_pax_price: 35,
+      duration_minutes: 30,
+      buffer_minutes: null,
+      status: 'active',
+      sort_order: 1,
+      created_at: '2024-12-10T10:00:00Z',
+      updated_at: '2025-01-15T09:20:00Z',
+      is_deposit: true,
+    },
+    {
+      id: 'theme-005',
+      studio_id: 'studio-002',
+      name: 'Elegant Couples',
+      description_short: 'Sophisticated couple photography with elegant styling',
+      description_long: 'Premium couple photography session with elegant backdrops and sophisticated styling. Perfect for newlyweds or couples celebrating special occasions. Includes professional makeup consultation, multiple backdrop options, and luxury editing.',
+      images: [
+        'https://images.unsplash.com/photo-1591604466107-ec97de577aff?q=80&w=1200&auto=format&fit=crop&ixlib=rb-4.1.0',
+        'https://images.unsplash.com/photo-1516589178581-6cd7833ae3b2?q=80&w=1200&auto=format&fit=crop&ixlib=rb-4.1.0',
+      ],
+      base_price: 180,
+      base_pax: 2,
+      extra_pax_price: 45,
+      duration_minutes: 25,
+      buffer_minutes: null,
+      status: 'active',
+      sort_order: 2,
+      created_at: '2024-12-10T10:00:00Z',
+      updated_at: '2025-01-18T13:10:00Z',
+      is_deposit: true,
+    },
+  ],
+};
+
+// ============================================================================
+// STUDIO ADDONS
+// ============================================================================
+// Additional services and products available for purchase with bookings
+// Note: Addons are studio-level but can be mapped to specific themes
+
+export const mockAddons: Record<string, Addon[]> = {
+  'studio-001': [
+    {
+      id: 'addon-001',
+      studio_id: 'studio-001',
+      name: 'Set Props Raya',
+      price: 50,
+      max_quantity: 1,
+      status: 'active',
+      sort_order: 1,
+      image: 'https://images.unsplash.com/photo-1604580864964-0462f5d5b1a8?q=80&w=800&auto=format&fit=crop&ixlib=rb-4.1.0',
+      created_at: '2024-12-05T09:00:00Z',
+    },
+    {
+      id: 'addon-002',
+      studio_id: 'studio-001',
+      name: 'Outdoor Shoot +15min',
+      price: 80,
+      max_quantity: 1,
+      status: 'active',
+      sort_order: 2,
+      image: 'https://images.unsplash.com/photo-1506112573664-1a1b66d93ff3?q=80&w=800&auto=format&fit=crop&ixlib=rb-4.1.0',
+      created_at: '2024-12-05T09:00:00Z',
+    },
+    {
+      id: 'addon-003',
+      studio_id: 'studio-001',
+      name: 'Same-day Digital',
+      price: 120,
+      max_quantity: 1,
+      status: 'active',
+      sort_order: 3,
+      image: 'https://images.unsplash.com/photo-1511895426328-dc8714191300?q=80&w=800&auto=format&fit=crop&ixlib=rb-4.1.0',
+      created_at: '2024-12-05T09:00:00Z',
+    },
+    {
+      id: 'addon-004',
+      studio_id: 'studio-001',
+      name: 'Printed Album',
+      price: 200,
+      max_quantity: null, // unlimited
+      status: 'active',
+      sort_order: 4,
+      image: 'https://images.unsplash.com/photo-1523450001312-faa4e2e37f0f?q=80&w=800&auto=format&fit=crop&ixlib=rb-4.1.0',
+      created_at: '2024-12-05T09:00:00Z',
+    },
+    {
+      id: 'addon-005',
+      studio_id: 'studio-001',
+      name: 'Makeup Artist',
+      price: 150,
+      max_quantity: 2,
+      status: 'active',
+      sort_order: 5,
+      image: 'https://images.unsplash.com/photo-1512496015851-a23fb4659e69?q=80&w=800&auto=format&fit=crop&ixlib=rb-4.1.0',
+      created_at: '2024-12-05T09:00:00Z',
+    },
+  ],
+  'studio-002': [
+    {
+      id: 'addon-006',
+      studio_id: 'studio-002',
+      name: 'Premium Backdrop Set',
+      price: 70,
+      max_quantity: 1,
+      status: 'active',
+      sort_order: 1,
+      image: 'https://images.unsplash.com/photo-1604580864964-0462f5d5b1a8?q=80&w=800&auto=format&fit=crop&ixlib=rb-4.1.0',
+      created_at: '2024-12-10T10:00:00Z',
+    },
+    {
+      id: 'addon-007',
+      studio_id: 'studio-002',
+      name: 'Extended Session +20min',
+      price: 100,
+      max_quantity: 1,
+      status: 'active',
+      sort_order: 2,
+      image: 'https://images.unsplash.com/photo-1506112573664-1a1b66d93ff3?q=80&w=800&auto=format&fit=crop&ixlib=rb-4.1.0',
+      created_at: '2024-12-10T10:00:00Z',
+    },
+    {
+      id: 'addon-008',
+      studio_id: 'studio-002',
+      name: 'Instant Print Package',
+      price: 150,
+      max_quantity: 1,
+      status: 'active',
+      sort_order: 3,
+      image: 'https://images.unsplash.com/photo-1511895426328-dc8714191300?q=80&w=800&auto=format&fit=crop&ixlib=rb-4.1.0',
+      created_at: '2024-12-10T10:00:00Z',
+    },
+    {
+      id: 'addon-009',
+      studio_id: 'studio-002',
+      name: 'Video Reel (30s)',
+      price: 250,
+      max_quantity: 1,
+      status: 'active',
+      sort_order: 4,
+      image: 'https://images.unsplash.com/photo-1523450001312-faa4e2e37f0f?q=80&w=800&auto=format&fit=crop&ixlib=rb-4.1.0',
+      created_at: '2024-12-10T10:00:00Z',
+    },
+    {
+      id: 'addon-010',
+      studio_id: 'studio-002',
+      name: 'Professional Hair Styling',
+      price: 120,
+      max_quantity: 3,
+      status: 'active',
+      sort_order: 5,
+      image: 'https://images.unsplash.com/photo-1512496015851-a23fb4659e69?q=80&w=800&auto=format&fit=crop&ixlib=rb-4.1.0',
+      created_at: '2024-12-10T10:00:00Z',
+    },
+  ],
+};
+
+// ============================================================================
+// ADDONS BY THEME MAPPING
+// ============================================================================
+// Maps which addons are available for each theme
+// Structure: { 'studio-id': { 'theme-id': ['addon-id-1', 'addon-id-2'] } }
+// If an addon is available for all themes, it should be listed in all theme arrays
+
+export const mockAddonsByTheme: Record<string, Record<string, string[]>> = {
+  'studio-001': {
+    // Keluarga Bahagia - All addons available
+    'theme-001': ['addon-001', 'addon-002', 'addon-003', 'addon-004', 'addon-005'],
+    // Couple Raya - Limited addons (no outdoor shoot, no makeup)
+    'theme-002': ['addon-001', 'addon-003', 'addon-004'],
+    // Keluarga VIP - All addons available (includes makeup)
+    'theme-003': ['addon-001', 'addon-002', 'addon-003', 'addon-004', 'addon-005'],
+  },
+  'studio-002': {
+    // Modern Family - All addons available
+    'theme-004': ['addon-006', 'addon-007', 'addon-008', 'addon-009', 'addon-010'],
+    // Elegant Couples - Premium addons only
+    'theme-005': ['addon-006', 'addon-008', 'addon-009', 'addon-010'],
+  },
+};
+
+// ============================================================================
+// WORKING HOURS
+// ============================================================================
+// Studio operating hours by day of week
+// Day of week: 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+
+export const mockWorkingHours: Record<string, WorkingHours[]> = {
+  'studio-001': [
+    // Monday - Thursday
+    ...[1, 2, 3, 4].map((day) => ({
+      id: `wh-001-${day}`,
+      studio_id: 'studio-001',
+      day_of_week: day,
+      time_windows: [
+        { start: '09:00', end: '12:00' },
+        { start: '14:00', end: '18:00' },
+      ],
+      created_at: '2024-12-05T09:00:00Z',
+    })),
+    // Friday (shorter hours)
+    {
+      id: 'wh-001-5',
+      studio_id: 'studio-001',
+      day_of_week: 5,
+      time_windows: [{ start: '09:00', end: '12:00' }],
+      created_at: '2024-12-05T09:00:00Z',
+    },
+    // Saturday - Sunday (extended hours)
+    ...[6, 0].map((day) => ({
+      id: `wh-001-${day}`,
+      studio_id: 'studio-001',
+      day_of_week: day,
+      time_windows: [
+        { start: '08:00', end: '13:00' },
+        { start: '15:00', end: '19:00' },
+      ],
+      created_at: '2024-12-05T09:00:00Z',
+    })),
+  ],
+  'studio-002': [
+    // Monday - Friday
+    ...[1, 2, 3, 4, 5].map((day) => ({
+      id: `wh-002-${day}`,
+      studio_id: 'studio-002',
+      day_of_week: day,
+      time_windows: [
+        { start: '10:00', end: '13:00' },
+        { start: '14:00', end: '20:00' },
+      ],
+      created_at: '2024-12-10T10:00:00Z',
+    })),
+    // Saturday - Sunday (full day)
+    ...[6, 0].map((day) => ({
+      id: `wh-002-${day}`,
+      studio_id: 'studio-002',
+      day_of_week: day,
+      time_windows: [
+        { start: '09:00', end: '21:00' },
+      ],
+      created_at: '2024-12-10T10:00:00Z',
+    })),
+  ],
+};
+
+// ============================================================================
+// SPECIAL DATES (BLACKOUT DATES)
+// ============================================================================
+// Dates when studio is closed or unavailable for booking
+// Categories: Maintenance, Public Holidays, Special Events, etc.
+
+export const mockBlackoutDates: Record<string, BlackoutDate[]> = {
+  'studio-001': [
+    // Maintenance
+    {
+      id: 'blackout-001',
+      studio_id: 'studio-001',
+      date: '2025-10-30',
+      reason: 'Studio Maintenance - Equipment upgrade and cleaning',
+      created_at: '2025-01-05T09:00:00Z',
+    },
+    // Public Holidays
+    {
+      id: 'blackout-002',
+      studio_id: 'studio-001',
+      date: '2025-11-01',
+      reason: 'Public Holiday - Deepavali',
+      created_at: '2025-01-05T09:00:00Z',
+    },
+    {
+      id: 'blackout-003',
+      studio_id: 'studio-001',
+      date: '2025-10-28',
+      reason: 'Public Holiday - Awal Muharram',
+      created_at: '2025-01-05T09:00:00Z',
+    },
+    // Special Events
+    {
+      id: 'blackout-004',
+      studio_id: 'studio-001',
+      date: '2025-11-10',
+      reason: 'Private Event - Corporate booking',
+      created_at: '2025-01-10T14:00:00Z',
+    },
+  ],
+  'studio-002': [
+    // Public Holidays
+    {
+      id: 'blackout-005',
+      studio_id: 'studio-002',
+      date: '2025-11-01',
+      reason: 'Public Holiday - Deepavali',
+      created_at: '2025-01-10T10:00:00Z',
+    },
+    {
+      id: 'blackout-006',
+      studio_id: 'studio-002',
+      date: '2025-10-28',
+      reason: 'Public Holiday - Awal Muharram',
+      created_at: '2025-01-10T10:00:00Z',
+    },
+    // Maintenance
+    {
+      id: 'blackout-007',
+      studio_id: 'studio-002',
+      date: '2025-11-05',
+      reason: 'Studio Maintenance - Backdrop refresh',
+      created_at: '2025-01-15T11:00:00Z',
+    },
+  ],
+};
+
+// ============================================================================
+// SPECIAL PRICING BY DATE
+// ============================================================================
+// Pricing rules that apply to specific date ranges
+// Can be percentage increase or fixed price, and can apply to all themes or specific themes
+
+export const mockPricingRules: Record<string, PricingRule[]> = {
+  'studio-001': [
+    // Raya Peak Period - Highest demand dates
+    {
+      id: 'pricing-001',
+      studio_id: 'studio-001',
+      name: 'Raya Peak Premium Pricing',
+      date_range_start: '2025-11-02', // First day of Raya
+      date_range_end: '2025-11-04', // Third day of Raya
+      rule_type: 'percentage_increase',
+      value: 50, // +50% increase
+      applies_to_themes: 'all',
+      status: 'active',
+      created_at: '2024-12-05T09:00:00Z',
+    },
+    // Pre-Raya Weekend Premium
+    {
+      id: 'pricing-002',
+      studio_id: 'studio-001',
+      name: 'Pre-Raya Weekend Premium',
+      date_range_start: '2025-10-25',
+      date_range_end: '2025-10-31',
+      rule_type: 'percentage_increase',
+      value: 20, // +20% increase on weekends
+      applies_to_themes: 'all',
+      status: 'active',
+      created_at: '2024-12-05T09:00:00Z',
+    },
+    // Post-Raya Weekend Premium
+    {
+      id: 'pricing-003',
+      studio_id: 'studio-001',
+      name: 'Post-Raya Weekend Premium',
+      date_range_start: '2025-11-08',
+      date_range_end: '2025-11-30',
+      rule_type: 'percentage_increase',
+      value: 15, // +15% increase on weekends
+      applies_to_themes: ['theme-001', 'theme-002'], // Only for basic themes
+      status: 'active',
+      created_at: '2025-01-08T10:00:00Z',
+    },
+  ],
+  'studio-002': [
+    // Raya Peak Period
+    {
+      id: 'pricing-004',
+      studio_id: 'studio-002',
+      name: 'Raya Peak Premium Pricing',
+      date_range_start: '2025-11-02',
+      date_range_end: '2025-11-04',
+      rule_type: 'percentage_increase',
+      value: 60, // +60% increase
+      applies_to_themes: 'all',
+      status: 'active',
+      created_at: '2024-12-10T10:00:00Z',
+    },
+    // Weekend Premium (all weekends in October)
+    {
+      id: 'pricing-005',
+      studio_id: 'studio-002',
+      name: 'October Weekend Premium',
+      date_range_start: '2025-10-04',
+      date_range_end: '2025-10-31',
+      rule_type: 'percentage_increase',
+      value: 25, // +25% increase
+      applies_to_themes: 'all',
+      status: 'active',
+      created_at: '2024-12-10T10:00:00Z',
+    },
+  ],
+};
+
+// ============================================================================
+// MOCK BOOKINGS (FOR LOOKUP DEMO)
+// ============================================================================
+// Sample booking data for testing booking lookup functionality
+// These are pre-populated bookings that can be used for testing the success page
+
+import type { Booking } from '@/types';
+
+export const mockBookingsData: Record<string, Booking> = {
   'RY2026-0142': {
     id: 'booking-001',
-    booking_number: 'RY2026-0142',
     studio_id: 'studio-001',
-    theme: mockThemes['studio-001']?.[0], // Keluarga Bahagia
-    selectedDate: '2025-11-03',
-    selectedSlot: {
-      time: '10:00 - 10:30',
-      start: '10:00',
-      end: '10:30'
-    },
-    pax: 6,
-    customerInfo: {
-      name: 'Ahmad Razak',
-      whatsapp: '0129876543',
-      email: 'ahmad@example.com',
-    },
-    selectedAddons: [
+    booking_number: 'RY2026-0142',
+    theme_id: 'theme-001',
+    theme: mockThemes['studio-001']?.[0]!, // Keluarga Bahagia
+    booking_date: '2025-11-03',
+    start_time: '10:00',
+    end_time: '10:30',
+    pax_count: 6,
+    customer_name: 'Ahmad Razak',
+    customer_phone: '0129876543',
+    customer_email: 'ahmad@example.com',
+    customer_notes: '',
+    consent_tc: true,
+    consent_marketing: false,
+    base_price: 180, // theme-001 base_price
+    extra_pax_fee: 30, // 1 extra pax (6 - 5) × 30
+    addons_total: 50,
+    special_pricing_applied: 0,
+    total_amount: 260, // 180 + 30 + 50
+    deposit_amount: 130, // 50% of 260
+    balance_amount: 130,
+    payment_status: 'deposit_paid',
+    booking_status: 'confirmed',
+    cart_hold_expires_at: null,
+    created_at: '2025-10-20T10:00:00Z',
+    updated_at: '2025-10-20T10:00:00Z',
+    addons: [
       {
-        id: 'addon-001',
-        name: 'Set Props Raya',
-        price: 50,
-      }
+        addon: mockAddons['studio-001']?.[0]!, // Set Props Raya
+        quantity: 1,
+        price_at_booking: 50,
+      },
     ],
-    totalPrice: 240,
-    depositAmount: 120,
-    balanceAmount: 120,
-    status: 'confirmed',
-    paymentStatus: 'deposit_paid',
-    createdAt: '2025-10-20T10:00:00Z',
-  }
+  },
+  'RY2026-0289': {
+    id: 'booking-002',
+    studio_id: 'studio-001',
+    booking_number: 'RY2026-0289',
+    theme_id: 'theme-002',
+    theme: mockThemes['studio-001']?.[1]!, // Couple Raya
+    booking_date: '2025-11-15',
+    start_time: '14:00',
+    end_time: '14:20',
+    pax_count: 4,
+    customer_name: 'Siti Nurhaliza',
+    customer_phone: '0198765432',
+    customer_email: 'siti@example.com',
+    customer_notes: 'Please prepare traditional props',
+    consent_tc: true,
+    consent_marketing: true,
+    base_price: 150, // theme-002 base_price
+    extra_pax_fee: 80, // 2 extra pax (4 - 2) × 40
+    addons_total: 130, // Set Props + Outdoor Shoot
+    special_pricing_applied: 0,
+    total_amount: 360, // 150 + 80 + 130
+    deposit_amount: 180, // 50% of 360
+    balance_amount: 180,
+    payment_status: 'paid_full',
+    booking_status: 'confirmed',
+    cart_hold_expires_at: null,
+    created_at: '2025-10-25T14:30:00Z',
+    updated_at: '2025-10-25T15:00:00Z',
+    addons: [
+      {
+        addon: mockAddons['studio-001']?.[0]!, // Set Props Raya
+        quantity: 1,
+        price_at_booking: 50,
+      },
+      {
+        addon: mockAddons['studio-001']?.[1]!, // Outdoor Shoot
+        quantity: 1,
+        price_at_booking: 80,
+      },
+    ],
+  },
+  'RY2026-0051': {
+    id: 'booking-003',
+    studio_id: 'studio-002',
+    booking_number: 'RY2026-0051',
+    theme_id: 'theme-004',
+    theme: mockThemes['studio-002']?.[0]!, // Modern Minimalist
+    booking_date: '2025-11-20',
+    start_time: '11:00',
+    end_time: '11:30',
+    pax_count: 2,
+    customer_name: 'Ali bin Hassan',
+    customer_phone: '0134567890',
+    customer_email: 'ali@example.com',
+    customer_notes: '',
+    consent_tc: true,
+    consent_marketing: false,
+    base_price: 200, // theme-004 base_price
+    extra_pax_fee: 0, // 2 pax is within base_pax of 5
+    addons_total: 0,
+    special_pricing_applied: 0,
+    total_amount: 200,
+    deposit_amount: 100, // 50% of 200
+    balance_amount: 100,
+    payment_status: 'pending',
+    booking_status: 'cart_hold',
+    cart_hold_expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    addons: [],
+  },
 };

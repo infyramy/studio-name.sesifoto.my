@@ -23,6 +23,7 @@ export interface StudioSettings {
   cart_mode_enabled: boolean;
   cart_hold_duration: number; // minutes
   deposit_percentage: number; // 50 for 50%
+  payment_type: 'deposit' | 'full'; // 'deposit' = deposit only, 'full' = full payment required
   booking_window_start: string | null; // ISO date or null for immediate
   buffer_minutes: number; // default buffer between slots
   auto_cutoff_hours: number; // 0 for slot start time
@@ -100,6 +101,7 @@ export interface Addon {
   max_quantity: number | null; // null = unlimited
   status: 'active' | 'inactive';
   sort_order: number;
+  image?: string; // Optional image URL
   created_at: string;
 }
 

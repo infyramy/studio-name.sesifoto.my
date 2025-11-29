@@ -9,6 +9,7 @@ import type {
   DateSlotInfo,
   BookingRequest,
   Booking,
+  BookingAddon,
 } from '@/types';
 import {
   mockStudios,
@@ -69,6 +70,16 @@ export const api = {
     await delay(200);
 
     return mockAddons[studioId] || [];
+  },
+
+  async getAddonById(addonId: string): Promise<Addon | null> {
+    await delay(100);
+    // Search through all studios' addons
+    for (const studioAddons of Object.values(mockAddons)) {
+      const addon = studioAddons.find(a => a.id === addonId);
+      if (addon) return addon;
+    }
+    return null;
   },
 
   // ===== Working Hours APIs =====
@@ -247,6 +258,23 @@ export const api = {
 
     const bookingNumber = `RY2026-${String(Math.floor(Math.random() * 9999)).padStart(4, '0')}`;
 
+    // Process addons
+    const bookingAddons: BookingAddon[] = [];
+    let addonsTotal = 0;
+
+    for (const selectedAddon of request.selected_addons) {
+      const addon = await this.getAddonById(selectedAddon.addon_id);
+      if (addon) {
+        const addonTotal = addon.price * selectedAddon.quantity;
+        addonsTotal += addonTotal;
+        bookingAddons.push({
+          addon: addon,
+          quantity: selectedAddon.quantity,
+          price_at_booking: addon.price
+        });
+      }
+    }
+
     const booking: Booking = {
       id: `booking-${Date.now()}`,
       studio_id: theme.studio_id,
@@ -265,7 +293,7 @@ export const api = {
       consent_marketing: request.consent_marketing,
       base_price: theme.base_price,
       extra_pax_fee: Math.max(0, request.pax_count - theme.base_pax) * theme.extra_pax_price,
-      addons_total: 0, // Calculate from addons
+      addons_total: addonsTotal,
       special_pricing_applied: 0, // Calculate from pricing rules
       total_amount: 0, // Will be calculated
       deposit_amount: 0, // 50% of total
@@ -275,7 +303,7 @@ export const api = {
       cart_hold_expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(), // 10 min
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-      addons: [],
+      addons: bookingAddons,
     };
 
     // Calculate totals
@@ -283,7 +311,7 @@ export const api = {
     booking.deposit_amount = Math.round(booking.total_amount * 0.5);
     booking.balance_amount = booking.total_amount - booking.deposit_amount;
 
-    // Store in mock storage
+    // Store in mock storage (keyed by booking_number for lookup)
     mockBookings[bookingNumber] = booking;
 
     return booking;
@@ -330,12 +358,18 @@ export const getAvailableTimeSlots = (studioId: string, themeId: string, date: s
   api.getAvailableTimeSlots(studioId, themeId, date);
 export const createBooking = (request: BookingRequest) => api.createBooking(request);
 export const getBookingById = (bookingId: string) => {
-  // Check in-memory bookings first (from actual bookings made)
+  // bookingId is actually the booking_number from the URL
+  // Check in-memory bookings first (from actual bookings made, keyed by booking_number)
   let booking = mockBookings[bookingId];
 
   // If not found, check mock demo data
   if (!booking) {
-    booking = mockBookingsData[bookingId];
+    const mockBooking = mockBookingsData[bookingId];
+    if (mockBooking) {
+      // Convert mock booking data to Booking type if needed
+      // For now, just return it as-is (it should match the structure)
+      booking = mockBooking as Booking;
+    }
   }
 
   if (!booking) throw new Error('Booking not found');

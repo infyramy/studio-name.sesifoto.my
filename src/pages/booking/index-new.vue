@@ -2,6 +2,8 @@
 import { ref, computed, watch, onMounted, onUnmounted } from "vue";
 import { useRouter } from "vue-router";
 import { useStudioStore } from "@/stores/studio";
+import { useTranslation } from "@/composables/useTranslation";
+import { createBooking } from "@/services/api";
 import { 
   ChevronLeft, 
   Calendar, 
@@ -19,6 +21,7 @@ import type { Theme, Addon } from "@/types";
 
 const router = useRouter();
 const studioStore = useStudioStore();
+const { t } = useTranslation();
 
 // Steps
 const currentStep = ref<number>(1);
@@ -48,12 +51,13 @@ watch(currentStep, () => {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 });
 
-const steps = [
-  { id: 1, title: 'Pilih Tema' },
-  { id: 2, title: 'Tarikh & Masa' },
-  { id: 3, title: 'Pax & Tambahan' },
-  { id: 4, title: 'Ringkasan' }
-];
+const steps = computed(() => [
+  { id: 1, title: t('stepSelectTheme') },
+  { id: 2, title: t('stepDateAndTime') },
+  { id: 3, title: t('stepPaxAndAddons') },
+  { id: 4, title: t('stepCustomerInformation') },
+  { id: 5, title: t('stepSummary') }
+]);
 
 // Data Selections
 const selectedTheme = ref<Theme | null>(null);
@@ -132,18 +136,79 @@ const updateAddon = (addon: Addon, change: number) => {
 };
 
 const nextStep = async () => {
-  if (currentStep.value < 4) {
+  if (currentStep.value < 5) {
     currentStep.value++;
   } else {
-    // Handle Payment Simulation
+    // Handle Payment and Booking Creation
+    if (!selectedTheme.value || !selectedDate.value || !selectedSlot.value) {
+      return;
+    }
+
     isProcessingPayment.value = true;
     
-    // Simulate API call delay
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // Redirect to success page with mock booking ID
-    const mockBookingId = `RY2025-${Math.floor(Math.random() * 10000)}`;
-    router.push(`/success/${mockBookingId}`);
+    try {
+      // Prepare addons array
+      const selectedAddonsArray = Object.entries(selectedAddons.value)
+        .filter(([_, qty]) => qty > 0)
+        .map(([addonId, quantity]) => ({
+          addon_id: addonId,
+          quantity: quantity as number
+        }));
+
+      // Parse time from slot (convert "09:00 AM" to "09:00")
+      const parseTime = (timeStr: string): string => {
+        if (!timeStr) return '09:00';
+        // Remove AM/PM and spaces
+        let time = timeStr.replace(/\s*(AM|PM)\s*/i, '');
+        const timeParts = time.split(':');
+        if (timeParts.length !== 2) return '09:00';
+        
+        const hours = Number(timeParts[0]);
+        const minutes = Number(timeParts[1]);
+        
+        if (isNaN(hours) || isNaN(minutes)) return '09:00';
+        
+        // If PM and not 12:xx, add 12 hours
+        if (timeStr.toUpperCase().includes('PM') && hours !== 12) {
+          time = `${String(hours + 12).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+        } else if (timeStr.toUpperCase().includes('AM') && hours === 12) {
+          // Handle 12:xx AM -> 00:xx
+          time = `00:${String(minutes).padStart(2, '0')}`;
+        } else {
+          time = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+        }
+        return time;
+      };
+      
+      const startTime = parseTime(selectedSlot.value.start || '09:00 AM');
+      const endTime = parseTime(selectedSlot.value.end || '09:30 AM');
+      
+      // Create booking request
+      const bookingRequest = {
+        theme_id: selectedTheme.value.id,
+        booking_date: selectedDate.value,
+        start_time: startTime,
+        end_time: endTime,
+        pax_count: paxCount.value,
+        customer_name: customerInfo.value.name,
+        customer_phone: customerInfo.value.phone,
+        customer_email: customerInfo.value.email || '',
+        customer_notes: customerInfo.value.notes || '',
+        consent_tc: true, // TODO: Add checkbox in form
+        consent_marketing: false, // TODO: Add checkbox in form
+        selected_addons: selectedAddonsArray
+      };
+
+      // Create booking
+      const createdBooking = await createBooking(bookingRequest);
+      
+      // Redirect to success page with booking number
+      router.push(`/success/${createdBooking.booking_number}`);
+    } catch (error) {
+      console.error('Failed to create booking:', error);
+      isProcessingPayment.value = false;
+      // TODO: Show error message to user
+    }
   }
 };
 
@@ -175,8 +240,24 @@ const grandTotal = computed(() => {
   return selectedTheme.value.base_price + extraPaxCost.value + addonsTotal.value;
 });
 
+const paymentType = computed(() => {
+  return studioStore.studio?.settings.payment_type || 'deposit';
+});
+
+const depositPercentage = computed(() => {
+  return studioStore.studio?.settings.deposit_percentage || 50;
+});
+
 const depositAmount = computed(() => {
-  return grandTotal.value * 0.5; // 50% deposit
+  if (!grandTotal.value) return 0;
+  return grandTotal.value * (depositPercentage.value / 100);
+});
+
+const paymentAmount = computed(() => {
+  if (paymentType.value === 'full') {
+    return grandTotal.value;
+  }
+  return depositAmount.value;
 });
 
 const isSpecialDateSelected = computed(() => {
@@ -221,7 +302,7 @@ const isSpecialDateSelected = computed(() => {
           <ChevronLeft class="w-6 h-6" />
         </button>
         <h1 class="text-lg font-bold font-serif tracking-wide transition-opacity duration-300 text-gray-900">
-          {{ steps[currentStep - 1]?.title || 'Booking' }}
+          {{ steps[currentStep - 1]?.title || t('booking') }}
         </h1>
         <div class="w-8"></div> <!-- Spacer for centering -->
       </header>
@@ -248,8 +329,8 @@ const isSpecialDateSelected = computed(() => {
             </div>
           </div>
           <div class="text-center space-y-2">
-            <h3 class="text-xl font-bold font-serif">Memproses Bayaran</h3>
-            <p class="text-sm text-gray-500">Sila tunggu sebentar...</p>
+            <h3 class="text-xl font-bold font-serif">{{ t('processingPayment') }}</h3>
+            <p class="text-sm text-gray-500">{{ t('pleaseWait') }}</p>
           </div>
         </div>
       </div>
@@ -259,11 +340,33 @@ const isSpecialDateSelected = computed(() => {
     <div class="h-1 bg-gray-200 w-full">
       <div 
         class="h-full bg-gray-900 transition-all duration-300 ease-out"
-        :style="{ width: `${(currentStep / 4) * 100}%` }"
+        :style="{ width: `${(currentStep / 5) * 100}%` }"
       ></div>
     </div>
 
     <main class="p-6 sm:p-8 max-w-4xl mx-auto space-y-8 pb-32">
+      
+      <!-- Theme Overview (shown in steps 2-5) -->
+      <div v-if="currentStep > 1 && selectedTheme" class="bg-white/90 backdrop-blur-sm rounded-2xl p-4 border border-gray-200 shadow-sm animate-fade-in">
+        <div class="flex items-center gap-4">
+          <div class="w-20 h-20 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0">
+            <img :src="selectedTheme.images[0]" :alt="selectedTheme.name" class="w-full h-full object-cover" />
+          </div>
+          <div class="flex-1 min-w-0">
+            <h3 class="font-bold font-serif text-lg text-gray-900 truncate">{{ selectedTheme.name }}</h3>
+            <p class="text-sm text-gray-600 font-sans mt-0.5 line-clamp-1">{{ selectedTheme.description_short }}</p>
+            <div class="flex items-center gap-3 mt-2 text-xs text-gray-500">
+              <span class="flex items-center gap-1">
+                <Clock class="w-3 h-3" /> {{ selectedTheme.duration_minutes }}m
+              </span>
+              <span class="flex items-center gap-1">
+                <Users class="w-3 h-3" /> {{ selectedTheme.base_pax }} {{ t('people') }}
+              </span>
+              <span class="font-bold text-gray-900">RM{{ selectedTheme.base_price }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
       
       <!-- Step 1: Themes -->
       <div v-if="currentStep === 1" class="space-y-6 animate-fade-in md:grid md:grid-cols-2 md:gap-6 md:space-y-0">
@@ -318,6 +421,17 @@ const isSpecialDateSelected = computed(() => {
       <!-- Step 2: Date & Time -->
       <div v-if="currentStep === 2" class="space-y-10 animate-fade-in">
         <div class="flex flex-col space-y-4">
+          <!-- Instructions Note -->
+          <div class="bg-blue-50/80 backdrop-blur-sm border border-blue-100/50 p-4 rounded-2xl flex items-start gap-3 text-blue-900 shadow-sm">
+            <div class="bg-blue-100 p-2 rounded-full flex-shrink-0">
+              <Info class="w-4 h-4" />
+            </div>
+            <div class="text-sm font-sans leading-relaxed">
+              <span class="font-bold block uppercase tracking-wider text-xs mb-1 text-blue-700">{{ t('selectDateAndTime') }}</span>
+              {{ t('selectDateAndTimeDescription') }}
+            </div>
+          </div>
+          
           <!-- Date Scroller -->
           <div class="flex gap-3 overflow-x-auto pb-4 pt-2 px-1 scrollbar-hide snap-x mask-fade">
             <button 
@@ -345,8 +459,8 @@ const isSpecialDateSelected = computed(() => {
               <Info class="w-4 h-4" />
             </div>
             <div class="text-xs font-sans leading-relaxed">
-              <span class="font-bold block uppercase tracking-wider text-[10px] mb-0.5 text-amber-700">Tarikh Istimewa</span>
-              Harga mungkin sedikit berbeza pada tarikh ini.
+              <span class="font-bold block uppercase tracking-wider text-[10px] mb-0.5 text-amber-700">{{ t('specialDate') }}</span>
+              {{ t('specialDatePriceNote') }}
             </div>
           </div>
           </div>
@@ -355,9 +469,9 @@ const isSpecialDateSelected = computed(() => {
         <div class="space-y-4 transition-all duration-500" :class="{ 'opacity-50 blur-sm pointer-events-none': !selectedDate }">
             <div class="flex items-center justify-between">
               <h3 class="text-lg font-bold font-serif flex items-center gap-2">
-                  <Clock class="w-5 h-5" /> Pilih Masa
+                  <Clock class="w-5 h-5" /> {{ t('selectTime') }}
               </h3>
-              <span v-if="selectedDate" class="text-xs font-sans text-gray-400 uppercase tracking-wider">{{ selectedSlot ? '1 Masa Dipilih' : 'Pilih 1 Slot' }}</span>
+              <span v-if="selectedDate" class="text-xs font-sans text-gray-400 uppercase tracking-wider">{{ selectedSlot ? t('oneSlotSelected') : t('selectOneSlot') }}</span>
             </div>
           <div class="grid grid-cols-2 gap-3">
             <button 
@@ -389,9 +503,9 @@ const isSpecialDateSelected = computed(() => {
         <div class="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 space-y-6">
           <div class="flex justify-between items-center">
             <div>
-              <h3 class="font-bold font-serif text-xl">Bilangan Orang</h3>
+              <h3 class="font-bold font-serif text-xl">{{ t('numberOfPeople') }}</h3>
               <p class="text-sm text-gray-500 font-sans mt-1">
-                Termasuk: <span class="font-medium text-gray-900">{{ selectedTheme?.base_pax }} orang</span>
+                {{ t('baseIncluded') }}: <span class="font-medium text-gray-900">{{ selectedTheme?.base_pax }} {{ t('people') }}</span>
               </p>
             </div>
             <div class="flex items-center gap-6 bg-gray-50 rounded-full p-1.5 border border-gray-200/50">
@@ -415,7 +529,7 @@ const isSpecialDateSelected = computed(() => {
           <div v-if="extraPaxCost > 0" class="bg-gray-50 p-4 rounded-xl flex justify-between items-center text-sm font-sans">
             <div class="text-gray-600 flex items-center gap-2">
               <Users class="w-4 h-4" />
-              <span>Caj Tambahan ({{ paxCount - (selectedTheme!.base_pax || 0) }} pax)</span>
+              <span>{{ t('additionalCharge') }} ({{ paxCount - (selectedTheme!.base_pax || 0) }} {{ t('pax') }})</span>
             </div>
             <span class="font-bold text-gray-900">+ RM{{ extraPaxCost }}</span>
           </div>
@@ -423,14 +537,22 @@ const isSpecialDateSelected = computed(() => {
 
         <!-- Addons List -->
         <div class="space-y-4">
-          <h3 class="font-bold font-serif text-xl px-1">Add-ons</h3>
+          <h3 class="font-bold font-serif text-xl px-1">{{ t('addOns') }}</h3>
           <div v-for="addon in studioStore.addons" :key="addon.id" 
-            class="bg-white p-5 rounded-2xl border border-gray-100 flex justify-between items-center transition-all hover:shadow-md"
+            class="bg-white p-5 rounded-2xl border border-gray-100 flex gap-4 items-center transition-all hover:shadow-md"
             :class="{ 'border-gray-900 ring-1 ring-gray-900 bg-gray-50/50': selectedAddons[addon.id] }"
           >
-            <div>
+            <!-- Addon Image -->
+            <div v-if="addon.image" class="flex-shrink-0 w-20 h-20 rounded-xl overflow-hidden bg-gray-100">
+              <img :src="addon.image" :alt="addon.name" class="w-full h-full object-cover" />
+            </div>
+            <div v-else class="flex-shrink-0 w-20 h-20 rounded-xl bg-gray-100 flex items-center justify-center">
+              <Plus class="w-6 h-6 text-gray-400" />
+            </div>
+            
+            <div class="flex-1 min-w-0">
               <div class="font-bold font-serif text-lg">{{ addon.name }}</div>
-              <div class="text-sm text-gray-500 font-sans mt-0.5">RM{{ addon.price }} <span v-if="addon.max_quantity !== 1" class="text-xs opacity-70">/ unit</span></div>
+              <div class="text-sm text-gray-500 font-sans mt-0.5">RM{{ addon.price }} <span v-if="addon.max_quantity !== 1" class="text-xs opacity-70">{{ t('perUnit') }}</span></div>
             </div>
             
             <div v-if="addon.max_quantity === 1" class="flex items-center">
@@ -466,15 +588,62 @@ const isSpecialDateSelected = computed(() => {
                 </div>
               </div>
 
-      <!-- Step 4: Summary -->
+      <!-- Step 4: Customer Information -->
       <div v-if="currentStep === 4" class="space-y-8 animate-fade-in">
+        <div class="space-y-6 px-2">
+          <h3 class="font-bold font-serif text-xl">{{ t('customerInformation') }}</h3>
+          <div class="space-y-6 bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
+            <div class="relative group">
+              <input 
+                type="text" 
+                v-model="customerInfo.name" 
+                id="name"
+                class="peer w-full bg-transparent border-b-2 border-gray-200 focus:border-gray-900 py-2.5 pt-4 outline-none font-sans text-lg transition-colors placeholder-transparent" 
+                :placeholder="t('enterFullName')" 
+              />
+              <label for="name" class="absolute left-0 -top-1 text-xs font-bold uppercase tracking-wider text-gray-500 transition-all peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400 peer-placeholder-shown:font-normal peer-placeholder-shown:normal-case peer-focus:-top-1 peer-focus:text-xs peer-focus:text-gray-900 peer-focus:font-bold peer-focus:uppercase">
+                {{ t('fullName') }}
+              </label>
+            </div>
+            
+            <div class="relative group">
+              <input 
+                type="tel" 
+                v-model="customerInfo.phone" 
+                id="phone"
+                class="peer w-full bg-transparent border-b-2 border-gray-200 focus:border-gray-900 py-2.5 pt-4 outline-none font-sans text-lg transition-colors placeholder-transparent" 
+                :placeholder="t('enterPhone')" 
+              />
+              <label for="phone" class="absolute left-0 -top-1 text-xs font-bold uppercase tracking-wider text-gray-500 transition-all peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400 peer-placeholder-shown:font-normal peer-placeholder-shown:normal-case peer-focus:-top-1 peer-focus:text-xs peer-focus:text-gray-900 peer-focus:font-bold peer-focus:uppercase">
+                {{ t('phoneNumber') }}
+              </label>
+            </div>
+
+            <div class="relative group">
+              <input 
+                type="email" 
+                v-model="customerInfo.email" 
+                id="email"
+                class="peer w-full bg-transparent border-b-2 border-gray-200 focus:border-gray-900 py-2.5 pt-4 outline-none font-sans text-lg transition-colors placeholder-transparent" 
+                :placeholder="t('enterEmail')" 
+              />
+              <label for="email" class="absolute left-0 -top-1 text-xs font-bold uppercase tracking-wider text-gray-500 transition-all peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400 peer-placeholder-shown:font-normal peer-placeholder-shown:normal-case peer-focus:-top-1 peer-focus:text-xs peer-focus:text-gray-900 peer-focus:font-bold peer-focus:uppercase">
+                {{ t('email') }} ({{ t('optional') }})
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 5: Summary -->
+      <div v-if="currentStep === 5" class="space-y-8 animate-fade-in">
         
         <!-- Booking Summary Card -->
         <div class="bg-white rounded-3xl shadow-lg shadow-gray-200/50 border border-gray-100 overflow-hidden">
           <div class="bg-gray-900 p-6 text-white flex justify-between items-center">
             <div>
-              <h3 class="font-bold font-serif text-xl">Ringkasan Tempahan</h3>
-              <p class="text-xs text-gray-400 font-sans mt-1 uppercase tracking-wider">ID: DRAFT</p>
+              <h3 class="font-bold font-serif text-xl">{{ t('bookingSummary') }}</h3>
+              <p class="text-xs text-gray-400 font-sans mt-1 uppercase tracking-wider">ID: {{ t('draft') }}</p>
                 </div>
             <div class="bg-white/10 p-2 rounded-lg backdrop-blur-sm">
               <CreditCard class="w-6 h-6" />
@@ -498,7 +667,7 @@ const isSpecialDateSelected = computed(() => {
             <div class="space-y-3 text-sm font-sans">
               <!-- Extra Pax -->
               <div v-if="extraPaxCost > 0" class="flex justify-between">
-                <span class="text-gray-600">Pax Tambahan ({{ paxCount - (selectedTheme!.base_pax || 0) }})</span>
+                <span class="text-gray-600">{{ t('extraPaxLabel') }} ({{ paxCount - (selectedTheme!.base_pax || 0) }})</span>
                 <span class="font-medium">+ RM{{ extraPaxCost }}</span>
               </div>
 
@@ -514,58 +683,18 @@ const isSpecialDateSelected = computed(() => {
             <!-- Totals -->
             <div class="bg-gray-50 rounded-xl p-4 space-y-3">
               <div class="flex justify-between items-end">
-                <span class="text-sm text-gray-500 font-medium uppercase tracking-wider">Jumlah Keseluruhan</span>
+                <span class="text-sm text-gray-500 font-medium uppercase tracking-wider">{{ t('grandTotal') }}</span>
                 <span class="text-2xl font-bold font-serif">RM{{ grandTotal }}</span>
                 </div>
               <div class="flex justify-between items-center pt-3 border-t border-gray-200">
-                <span class="text-sm font-bold text-gray-900">Bayar Deposit (50%)</span>
-                <span class="font-bold font-sans text-lg text-gray-900">RM{{ depositAmount }}</span>
+                <span class="text-sm font-bold text-gray-900">
+                  {{ paymentType === 'full' 
+                    ? t('payFullPaymentLabel') 
+                    : t('payDeposit') + ` (${depositPercentage}%)` 
+                  }}
+                </span>
+                <span class="font-bold font-sans text-lg text-gray-900">RM{{ paymentAmount }}</span>
               </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Customer Form -->
-        <div class="space-y-6 px-2">
-          <h3 class="font-bold font-serif text-xl">Maklumat Pelanggan</h3>
-          <div class="space-y-6 bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
-            <div class="relative group">
-              <input 
-                type="text" 
-                v-model="customerInfo.name" 
-                id="name"
-                class="peer w-full bg-transparent border-b-2 border-gray-200 focus:border-gray-900 py-2.5 pt-4 outline-none font-sans text-lg transition-colors placeholder-transparent" 
-                placeholder="Nama Anda" 
-              />
-              <label for="name" class="absolute left-0 -top-1 text-xs font-bold uppercase tracking-wider text-gray-500 transition-all peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400 peer-placeholder-shown:font-normal peer-placeholder-shown:normal-case peer-focus:-top-1 peer-focus:text-xs peer-focus:text-gray-900 peer-focus:font-bold peer-focus:uppercase">
-                Nama Penuh
-              </label>
-            </div>
-            
-            <div class="relative group">
-              <input 
-                type="tel" 
-                v-model="customerInfo.phone" 
-                id="phone"
-                class="peer w-full bg-transparent border-b-2 border-gray-200 focus:border-gray-900 py-2.5 pt-4 outline-none font-sans text-lg transition-colors placeholder-transparent" 
-                placeholder="0123456789" 
-              />
-              <label for="phone" class="absolute left-0 -top-1 text-xs font-bold uppercase tracking-wider text-gray-500 transition-all peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400 peer-placeholder-shown:font-normal peer-placeholder-shown:normal-case peer-focus:-top-1 peer-focus:text-xs peer-focus:text-gray-900 peer-focus:font-bold peer-focus:uppercase">
-                Nombor Telefon
-              </label>
-            </div>
-
-            <div class="relative group">
-              <input 
-                type="email" 
-                v-model="customerInfo.email" 
-                id="email"
-                class="peer w-full bg-transparent border-b-2 border-gray-200 focus:border-gray-900 py-2.5 pt-4 outline-none font-sans text-lg transition-colors placeholder-transparent" 
-                placeholder="email@example.com" 
-              />
-              <label for="email" class="absolute left-0 -top-1 text-xs font-bold uppercase tracking-wider text-gray-500 transition-all peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:text-gray-400 peer-placeholder-shown:font-normal peer-placeholder-shown:normal-case peer-focus:-top-1 peer-focus:text-xs peer-focus:text-gray-900 peer-focus:font-bold peer-focus:uppercase">
-                Emel (Pilihan)
-              </label>
             </div>
           </div>
         </div>
@@ -579,7 +708,7 @@ const isSpecialDateSelected = computed(() => {
         <div class="max-w-4xl mx-auto px-4 pb-6 safe-area-bottom">
             <div class="bg-white/80 backdrop-blur-md border border-white/40 p-4 rounded-3xl shadow-2xl shadow-black/5 flex items-center justify-between gap-4 pointer-events-auto">
                 <div class="flex flex-col pl-2">
-                <span class="text-[10px] text-gray-500 uppercase tracking-wider font-bold">Jumlah Anggaran</span>
+                <span class="text-[10px] text-gray-500 uppercase tracking-wider font-bold">{{ t('estimatedTotal') }}</span>
                 <span class="font-bold font-serif text-2xl text-gray-900">RM{{ grandTotal }}</span>
                 </div>
                 <button 
@@ -587,13 +716,14 @@ const isSpecialDateSelected = computed(() => {
                 :disabled="
                     (currentStep === 1 && !selectedTheme) || 
                     (currentStep === 2 && !selectedSlot) ||
+                    (currentStep === 4 && (!customerInfo.name || !customerInfo.phone)) ||
                     isProcessingPayment
                 "
                 class="bg-gray-900 text-white px-8 py-4 rounded-2xl font-bold uppercase tracking-widest text-xs disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-3 transition-all duration-300 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]"
                 >
-                <span v-if="isProcessingPayment">Memproses...</span>
-                <span v-else-if="currentStep === 4">Bayar Sekarang</span>
-                <span v-else>Seterusnya</span>
+                <span v-if="isProcessingPayment">{{ t('processingPayment') }}</span>
+                <span v-else-if="currentStep === 5">{{ t('payNow') }}</span>
+                <span v-else>{{ t('next') }}</span>
                 <ArrowRight v-if="!isProcessingPayment" class="w-4 h-4" />
                 <Loader2 v-else class="w-4 h-4 animate-spin" />
                 </button>

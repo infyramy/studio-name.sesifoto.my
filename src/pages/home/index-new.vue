@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from "vue";
+import { ref, onMounted, onUnmounted, computed } from "vue";
 import { useRouter } from "vue-router";
 import { useStudioStore } from "@/stores/studio";
 import { useTranslation } from "@/composables/useTranslation";
@@ -11,6 +11,8 @@ import {
   MapPin,
   MessageCircle,
   Palette,
+  Star,
+  ArrowUpRight,
 } from "lucide-vue-next";
 import { mockHeroContent } from "@/services/mockData";
 
@@ -19,6 +21,12 @@ const studioStore = useStudioStore();
 const heroContent = ref(mockHeroContent[studioStore.studio?.id || ""]);
 const { t } = useTranslation();
 const showSwitcher = ref(false);
+
+// Style switcher - 'rustic' | 'luxe' | 'modern'
+const currentStyle = ref<'rustic' | 'luxe' | 'modern'>('rustic');
+
+// Loading state
+const isLoading = ref(true);
 
 // Background Images Setup
 const backgroundImages = [
@@ -30,20 +38,131 @@ const backgroundImages = [
 const currentImageIndex = ref(0);
 let intervalId: any;
 
-onMounted(() => {
+const imageInterval = computed(() => {
+  // Different intervals for different styles
+  if (currentStyle.value === 'modern') return 4000; // Faster for modern
+  if (currentStyle.value === 'luxe') return 5000;
+  return 5000; // Rustic
+});
+
+// Preload images
+const preloadImages = (): Promise<void> => {
+  return new Promise((resolve) => {
+    let loadedCount = 0;
+    const totalImages = backgroundImages.length;
+    
+    if (totalImages === 0) {
+      resolve();
+      return;
+    }
+
+    backgroundImages.forEach((src) => {
+      const img = new Image();
+      img.onload = () => {
+        loadedCount++;
+        if (loadedCount === totalImages) {
+          resolve();
+        }
+      };
+      img.onerror = () => {
+        loadedCount++;
+        if (loadedCount === totalImages) {
+          resolve();
+        }
+      };
+      img.src = src;
+    });
+  });
+};
+
+onMounted(async () => {
+  try {
+    // Wait for images to preload and ensure studio data is ready
+    await Promise.all([
+      preloadImages(),
+      new Promise((resolve) => {
+        // Wait a bit for studio data to be available
+        if (studioStore.studio) {
+          resolve(true);
+        } else {
+          // If studio not loaded, wait a short time
+          setTimeout(resolve, 500);
+        }
+      }),
+    ]);
+  } finally {
+    // Small delay for smooth transition
+    setTimeout(() => {
+      isLoading.value = false;
+    }, 300);
+  }
+
+  // Start image slideshow
   intervalId = setInterval(() => {
     currentImageIndex.value =
       (currentImageIndex.value + 1) % backgroundImages.length;
-  }, 5000); // Change every 5 seconds
+  }, imageInterval.value);
 });
 
 onUnmounted(() => {
   if (intervalId) clearInterval(intervalId);
 });
+
+// Update interval when style changes
+const updateInterval = () => {
+  if (intervalId) clearInterval(intervalId);
+  intervalId = setInterval(() => {
+    currentImageIndex.value =
+      (currentImageIndex.value + 1) % backgroundImages.length;
+  }, imageInterval.value);
+};
+
+const setStyle = (style: 'rustic' | 'luxe' | 'modern') => {
+  currentStyle.value = style;
+  updateInterval();
+  showSwitcher.value = false;
+};
 </script>
 
 <template>
+  <!-- Loading State -->
+  <Transition
+    enter-active-class="transition duration-500 ease-out"
+    enter-from-class="opacity-0"
+    enter-to-class="opacity-100"
+    leave-active-class="transition duration-300 ease-in"
+    leave-from-class="opacity-100"
+    leave-to-class="opacity-0"
+  >
+    <div
+      v-if="isLoading"
+      class="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center"
+    >
+      <div class="flex flex-col items-center space-y-6">
+        <!-- Logo/Icon -->
+        <div class="relative">
+          <div class="w-16 h-16 border-4 border-white/20 border-t-white rounded-full animate-spin"></div>
+          <div class="absolute inset-0 flex items-center justify-center">
+            <Camera class="w-6 h-6 text-white" />
+          </div>
+        </div>
+        
+        <!-- Loading Text -->
+        <div class="text-center space-y-2">
+          <p class="text-white text-sm font-medium tracking-wide uppercase">
+            {{ t("loading") }}
+          </p>
+          <div class="flex items-center gap-2 text-white/60 text-xs">
+            <span>{{ studioStore.studio?.name || "Lensa Studio" }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </Transition>
+
+  <!-- RUSTIC STYLE -->
   <div
+    v-if="currentStyle === 'rustic' && !isLoading"
     class="min-h-screen w-full relative overflow-hidden flex flex-col font-sans"
     style="font-family: 'Bricolage Grotesque', sans-serif"
   >
@@ -75,14 +194,7 @@ onUnmounted(() => {
       <div
         class="flex items-center gap-3 bg-black/40 backdrop-blur-md px-5 py-2.5 rounded-full shadow-lg border border-white/10 hover:bg-black/50 transition-all duration-300"
       >
-        <!-- <img
-          v-if="studioStore.studio?.logo_url"
-          :src="studioStore.studio.logo_url"
-          :alt="studioStore.studio?.name"
-          class="w-6 h-6 rounded-full object-cover"
-        /> -->
         <Camera class="w-5 h-5 text-white" />
-
         <span class="text-white font-semibold text-sm tracking-wide uppercase">
           LS {{ studioStore.studio?.name || "Lensa Studio" }}
         </span>
@@ -115,11 +227,6 @@ onUnmounted(() => {
           <!-- Header Section -->
           <div class="space-y-4 w-full">
             <div class="inline-block">
-              <!-- <span
-                class="py-1 px-3 rounded-full bg-white/20 text-white text-[10px] xs:text-xs font-bold uppercase tracking-[0.2em] border border-white/10 shadow-sm"
-              >
-                Tempahan Raya 2025
-              </span> -->
               <img
                 src="../../assets/studio-logo-2.webp"
                 class="w-auto h-6 invert"
@@ -129,12 +236,10 @@ onUnmounted(() => {
             <h1
               class="text-3xl xs:text-4xl sm:text-5xl md:text-4.5xl font-black text-white leading-[1.1] tracking-tight drop-shadow-lg break-words font-serif"
             >
-              <!-- Tempah slot studio raya -->
               {{ heroContent?.heading }}
               <span
                 class="text-transparent bg-clip-text bg-gradient-to-r from-white via-white/90 to-white/70"
               >
-                <!-- anda sekarang. -->
                 {{ heroContent?.highlightText }}
               </span>
             </h1>
@@ -240,44 +345,320 @@ onUnmounted(() => {
 
     <!-- Bottom Spacer to balance visual center (optional) -->
     <div class="hidden sm:block h-6 sm:h-8"></div>
+  </div>
 
-    <!-- Design Switcher Helper -->
-    <div class="fixed bottom-4 left-4 z-50 flex flex-col gap-2">
-      <div
-        v-if="showSwitcher"
-        class="bg-white rounded-lg shadow-xl p-2 flex flex-col gap-1 mb-2 text-xs font-sans border border-gray-200 text-black"
+  <!-- LUXE STYLE -->
+  <div
+    v-else-if="currentStyle === 'luxe' && !isLoading"
+    class="min-h-screen w-full flex flex-col md:flex-row font-serif bg-emerald-950 overflow-hidden"
+  >
+    <!-- Left: Visual Area (Image) -->
+    <div class="relative w-full md:w-[60%] lg:w-[65%] h-[55vh] md:h-screen overflow-hidden">
+      <!-- Slideshow -->
+      <div 
+        v-for="(img, index) in backgroundImages" 
+        :key="index"
+        class="absolute inset-0 transition-opacity duration-[2000ms] ease-in-out will-change-opacity"
+        :class="index === currentImageIndex ? 'opacity-100' : 'opacity-0'"
       >
-        <button
-          @click="router.push('/home-new')"
-          class="px-3 py-2 hover:bg-gray-100 rounded text-left font-medium"
-        >
-          Rustic (New)
-        </button>
-        <button
-          @click="router.push('/home-luxe')"
-          class="px-3 py-2 hover:bg-gray-100 rounded text-left font-medium"
-        >
-          Luxe
-        </button>
-        <button
-          @click="router.push('/home-modern')"
-          class="px-3 py-2 hover:bg-gray-100 rounded text-left font-medium"
-        >
-          Modern
-        </button>
+        <img
+          :src="img"
+          alt="Background"
+          class="w-full h-full object-cover animate-slow-zoom"
+        />
       </div>
-      <button
-        @click="showSwitcher = !showSwitcher"
-        class="bg-white/90 text-black p-3 rounded-full shadow-lg hover:scale-110 transition-transform backdrop-blur-sm"
+      
+      <!-- Gradient Overlay (Vignette) -->
+      <div class="absolute inset-0 bg-gradient-to-t md:bg-gradient-to-r from-emerald-950/90 via-transparent to-transparent opacity-80"></div>
+
+      <!-- Floating Badge (Top Left) -->
+      <div class="absolute top-6 left-6 z-20">
+        <div class="flex items-center gap-3 bg-emerald-900/80 backdrop-blur-sm py-2 px-4 rounded-full border border-amber-500/30 shadow-xl">
+          <img src="../../assets/studio-logo-2.webp" alt="" class="w-auto h-4 invert">
+          <span class="text-amber-100 text-xs tracking-widest uppercase font-medium">
+            LS {{ studioStore.studio?.name || "Lensa Studio" }}
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Content Panel (Solid Color) -->
+    <div class="relative w-full md:w-[40%] lg:w-[35%] h-[45vh] md:h-screen bg-emerald-950 flex flex-col justify-center px-8 md:px-12 lg:px-16 py-10 md:py-0 shadow-[-20px_0_50px_rgba(0,0,0,0.5)] z-10 border-t md:border-t-0 md:border-l border-amber-500/20">
+      
+      <!-- Decorative Pattern Background -->
+      <div class="absolute inset-0 opacity-5 pointer-events-none mix-blend-overlay bg-[url('https://www.transparenttextures.com/patterns/binding-dark.png')]"></div>
+
+      <!-- Decorative Corner Elements -->
+      <div class="absolute top-6 right-6 w-20 h-20 border-t border-r border-amber-500/20 rounded-tr-3xl"></div>
+      <div class="absolute bottom-6 left-6 w-20 h-20 border-b border-l border-amber-500/20 rounded-bl-3xl"></div>
+
+      <!-- Content Content -->
+      <div class="relative z-10 flex flex-col items-start space-y-8">
+        
+        <!-- Decorative Header Line -->
+        <div class="flex items-center gap-4 w-full">
+          <div class="h-[1px] flex-1 bg-gradient-to-r from-transparent to-amber-500/50"></div>
+          <span class="text-amber-400 text-[10px] uppercase tracking-[0.4em] font-sans">Edisi 2025</span>
+          <div class="h-[1px] flex-1 bg-gradient-to-l from-transparent to-amber-500/50"></div>
+        </div>
+
+        <!-- Main Title -->
+        <div class="space-y-2">
+          <h1 class="text-4xl md:text-5xl lg:text-6xl text-amber-50 leading-[1.1] tracking-tight font-serif">
+            {{ heroContent?.heading }} <br/>
+            <span class="text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-amber-100 to-amber-400 italic pr-2">
+              {{ heroContent?.highlightText }}
+            </span>
+          </h1>
+          <p class="text-emerald-200/60 text-sm font-sans font-light leading-relaxed max-w-xs">
+            {{ heroContent?.testimonial }}
+          </p>
+        </div>
+
+        <!-- Buttons -->
+        <div class="w-full space-y-4 pt-4">
+          <button 
+            @click="router.push('/booking-new')"
+            class="group w-full bg-amber-100 hover:bg-white text-emerald-950 py-4 px-6 rounded-3xl font-sans text-xs uppercase tracking-[0.2em] font-bold transition-all duration-300 flex items-center justify-between hover:shadow-[0_0_30px_rgba(251,191,36,0.2)]"
+            :style="{ backgroundColor: studioStore.studio?.brand_color ? studioStore.studio.brand_color : undefined, color: studioStore.studio?.brand_color ? '#fff' : undefined }"
+          >
+            <span>{{ t("startBooking") }}</span>
+            <ArrowRight class="w-4 h-4 transition-transform group-hover:translate-x-1" />
+          </button>
+          
+          <button 
+            @click="router.push('/check-booking')"
+            class="group w-full bg-transparent border border-amber-500/30 text-amber-200 py-4 px-6 rounded-3xl font-sans text-xs uppercase tracking-[0.2em] transition-all duration-300 hover:border-amber-400 hover:text-amber-100 flex items-center justify-between"
+          >
+            <span>{{ t("checkBooking") }}</span>
+            <Star class="w-4 h-4 opacity-50 group-hover:opacity-100 transition-opacity" />
+          </button>
+        </div>
+
+        <!-- Footer Info -->
+        <div class="w-full pt-8 border-t border-amber-500/10 flex flex-col gap-4">
+           <a
+             v-if="studioStore.studio?.maps_link"
+             :href="studioStore.studio.maps_link"
+             target="_blank"
+             rel="noopener noreferrer"
+             class="flex items-center gap-3 text-emerald-200/50 hover:text-emerald-200/80 text-[10px] uppercase tracking-widest cursor-pointer group transition-colors"
+           >
+             <MapPin class="w-3 h-3 text-amber-500/50 group-hover:text-amber-400 transition-colors" />
+             <span class="group-hover:underline decoration-amber-500/30 underline-offset-4">{{ studioStore.studio?.address || "Bangi Gateway, Seksyen 15" }}</span>
+           </a>
+           <div v-else class="flex items-center gap-3 text-emerald-200/50 text-[10px] uppercase tracking-widest">
+             <MapPin class="w-3 h-3 text-amber-500/50" />
+             {{ studioStore.studio?.address || "Bangi Gateway, Seksyen 15" }}
+           </div>
+
+           <div class="flex justify-between items-center text-[10px] uppercase tracking-widest text-emerald-200/30">
+             <span>© {{ new Date().getFullYear() }} {{ studioStore.studio?.name || 'Lensa' }}</span>
+             <a 
+                v-if="studioStore.studio?.whatsapp"
+                :href="`https://wa.me/${studioStore.studio.whatsapp}`"
+                class="hover:text-amber-200 transition-colors flex items-center gap-1"
+             >
+               <MessageCircle class="w-3 h-3" /> {{ t("contactUs") }}
+             </a>
+           </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- MODERN STYLE -->
+  <div
+    v-else-if="currentStyle === 'modern' && !isLoading"
+    class="min-h-screen w-full bg-white text-black font-sans flex flex-col md:flex-row overflow-hidden"
+    style="font-family: 'Bricolage Grotesque', sans-serif"
+  >
+    <!-- Left: Visual (Hero Image) -->
+    <div
+      class="relative h-[60vh] md:h-screen w-full md:w-1/2 lg:w-[55%] overflow-hidden bg-gray-100"
+    >
+      <div
+        v-for="(img, index) in backgroundImages"
+        :key="index"
+        class="absolute inset-0 transition-opacity duration-700 ease-out"
+        :class="index === currentImageIndex ? 'opacity-100' : 'opacity-0'"
       >
-        <Palette class="w-5 h-5" />
+        <img
+          :src="img"
+          class="w-full h-full object-cover grayscale contrast-125 hover:scale-105 transition-transform duration-[5000ms] ease-linear"
+        />
+      </div>
+
+      <!-- Floating Badge -->
+      <div
+        class="absolute top-6 left-6 bg-white px-4 py-2 rounded-full flex items-center gap-2 shadow-xl z-20"
+      >
+        <div class="w-2 h-2 bg-black rounded-full animate-pulse"></div>
+        <span class="text-xs font-bold tracking-widest uppercase"
+          >Raya Collection '25</span
+        >
+      </div>
+    </div>
+
+    <!-- Right: Content -->
+    <div
+      class="relative h-[40vh] md:h-screen w-full md:w-1/2 lg:w-[45%] flex flex-col justify-between p-8 md:p-16 lg:p-20 bg-white z-10"
+    >
+      <!-- Header -->
+      <header class="flex justify-between items-start">
+        <div class="text-xl font-black tracking-tighter uppercase leading-none">
+          LS<br />Studio.
+        </div>
+        <button class="p-2 hover:bg-gray-100 rounded-full transition-colors">
+          <img
+            src="../../assets/studio-logo-2.webp"
+            alt=""
+            class="w-auto h-6"
+          />
+        </button>
+      </header>
+
+      <!-- Main Text -->
+      <div class="flex flex-col gap-6 items-start">
+        <h1
+          class="text-5xl md:text-7xl lg:text-8xl font-black tracking-tighter leading-[0.9] -ml-1"
+        >
+          {{ heroContent?.heading }} <br />
+          <span
+            class="text-transparent bg-clip-text bg-gradient-to-r from-black to-gray-500"
+            >{{ heroContent?.highlightText }}</span
+          >
+        </h1>
+        <p class="text-sm font-medium text-gray-500 max-w-xs leading-relaxed">
+          {{ heroContent?.testimonial }}
+        </p>
+      </div>
+
+      <!-- Footer / Actions -->
+      <div class="space-y-6">
+        <div class="flex flex-col gap-3">
+          <button
+            @click="router.push('/booking-new')"
+            class="group w-full bg-black text-white py-5 px-6 rounded-3xl flex justify-between items-center hover:bg-gray-900 transition-all active:scale-[0.99]"
+            :style="{
+              backgroundColor: studioStore.studio?.brand_color
+                ? studioStore.studio.brand_color
+                : undefined,
+            }"
+          >
+            <span class="font-bold text-sm uppercase tracking-widest">{{
+              t("startBooking")
+            }}</span>
+            <ArrowRight
+              class="w-5 h-5 transition-transform group-hover:-rotate-45"
+            />
+          </button>
+
+          <button
+            @click="router.push('/check-booking')"
+            class="group w-full border border-gray-200 py-5 px-6 rounded-3xl flex justify-between items-center hover:border-black transition-colors"
+          >
+            <span
+              class="font-bold text-sm uppercase tracking-widest text-gray-500 group-hover:text-black transition-colors"
+              >{{ t("checkBooking") }}</span
+            >
+            <ArrowUpRight
+              class="w-5 h-5 text-gray-300 group-hover:text-black transition-colors"
+            />
+          </button>
+        </div>
+
+        <div
+           class="flex justify-between items-end pt-8 border-t border-gray-100"
+         >
+           <a
+             v-if="studioStore.studio?.maps_link"
+             :href="studioStore.studio.maps_link"
+             target="_blank"
+             rel="noopener noreferrer"
+             class="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-black transition-colors cursor-pointer border-b border-transparent hover:border-black/20 pb-0.5"
+           >
+             {{ studioStore.studio?.address || "Bangi Gateway, Seksyen 15" }}
+           </a>
+           <div
+             v-else
+             class="text-[10px] font-bold uppercase tracking-widest text-gray-400"
+           >
+             {{ studioStore.studio?.address || "Bangi Gateway, Seksyen 15" }}
+           </div>
+           <div
+             class="text-[10px] font-bold uppercase tracking-widest text-gray-400"
+           >
+            © {{ new Date().getFullYear() }}
+            {{ studioStore.studio?.name || "Lensa" }}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Style Switcher (Common for all styles) -->
+  <div class="fixed bottom-4 left-4 z-50 flex flex-col gap-2">
+    <div
+      v-if="showSwitcher"
+      class="bg-white rounded-lg shadow-xl p-2 flex flex-col gap-1 mb-2 text-xs font-sans border border-gray-200 text-black"
+    >
+      <button
+        @click="setStyle('rustic')"
+        class="px-3 py-2 hover:bg-gray-100 rounded text-left font-medium transition-colors"
+        :class="{ 'bg-gray-100 font-bold': currentStyle === 'rustic' }"
+      >
+        Rustic (New)
+      </button>
+      <button
+        @click="setStyle('luxe')"
+        class="px-3 py-2 hover:bg-gray-100 rounded text-left font-medium transition-colors"
+        :class="{ 'bg-gray-100 font-bold': currentStyle === 'luxe' }"
+      >
+        Luxe
+      </button>
+      <button
+        @click="setStyle('modern')"
+        class="px-3 py-2 hover:bg-gray-100 rounded text-left font-medium transition-colors"
+        :class="{ 'bg-gray-100 font-bold': currentStyle === 'modern' }"
+      >
+        Modern
       </button>
     </div>
+    <button
+      @click="showSwitcher = !showSwitcher"
+      class="bg-white/90 text-black p-3 rounded-full shadow-lg hover:scale-110 transition-transform backdrop-blur-sm"
+    >
+      <Palette class="w-5 h-5" />
+    </button>
   </div>
 </template>
 
 <style scoped>
 @import url("https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,500;1,600;1,700;1,800;1,900&family=Bricolage+Grotesque:opsz,wght@12..96,200..800&display=swap");
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400&family=Cinzel:wght@400;500;600;700&display=swap');
+
+/* Rustic Style Fonts */
+.font-serif {
+  font-family: "Playfair Display", serif;
+  font-weight: 600;
+  font-style: italic;
+}
+
+/* Luxe Style Fonts */
+.font-sans {
+  font-family: "Bricolage Grotesque", sans-serif;
+}
+
+/* Luxe specific font */
+.font-serif-luxe {
+  font-family: 'Playfair Display', serif;
+}
+
+.font-sans-luxe {
+  font-family: 'Cinzel', serif;
+}
 
 @keyframes fade-in {
   from {
@@ -288,12 +669,6 @@ onUnmounted(() => {
     opacity: 1;
     transform: translateY(0);
   }
-}
-
-.font-serif {
-  font-family: "Playfair Display", serif;
-  font-weight: 600;
-  font-style: italic;
 }
 
 @keyframes slide-up {
@@ -326,5 +701,14 @@ onUnmounted(() => {
 
 .animate-ken-burns {
   animation: ken-burns 20s linear infinite alternate;
+}
+
+@keyframes slow-zoom {
+  0% { transform: scale(1.0); }
+  100% { transform: scale(1.1); }
+}
+
+.animate-slow-zoom {
+  animation: slow-zoom 20s linear infinite alternate;
 }
 </style>
