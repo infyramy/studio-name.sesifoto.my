@@ -102,10 +102,17 @@ onMounted(async () => {
     currentImageIndex.value =
       (currentImageIndex.value + 1) % backgroundImages.length;
   }, imageInterval.value);
+
+  // Add body class to prevent scroll when rustic style is active on mobile
+  if (currentStyle.value === 'rustic') {
+    document.body.classList.add('rustic-active');
+  }
 });
 
 onUnmounted(() => {
   if (intervalId) clearInterval(intervalId);
+  // Remove body class when component unmounts
+  document.body.classList.remove('rustic-active');
 });
 
 // Update interval when style changes
@@ -118,6 +125,14 @@ const updateInterval = () => {
 };
 
 const setStyle = (style: 'rustic' | 'luxe' | 'modern') => {
+  // Remove rustic-active class if switching away from rustic
+  if (currentStyle.value === 'rustic' && style !== 'rustic') {
+    document.body.classList.remove('rustic-active');
+  }
+  // Add rustic-active class if switching to rustic
+  if (style === 'rustic') {
+    document.body.classList.add('rustic-active');
+  }
   currentStyle.value = style;
   updateInterval();
   showSwitcher.value = false;
@@ -163,7 +178,7 @@ const setStyle = (style: 'rustic' | 'luxe' | 'modern') => {
   <!-- RUSTIC STYLE -->
   <div
     v-if="currentStyle === 'rustic' && !isLoading"
-    class="min-h-screen w-full relative overflow-hidden flex flex-col font-sans"
+    class="min-h-screen w-full relative overflow-hidden flex flex-col font-sans rustic-container"
     style="font-family: 'Bricolage Grotesque', sans-serif"
   >
     <!-- Rustic Background Images with Crossfade -->
@@ -188,7 +203,7 @@ const setStyle = (style: 'rustic' | 'luxe' | 'modern') => {
 
     <!-- Top Bar -->
     <header
-      class="relative z-30 w-full px-5 sm:px-8 md:px-10 py-6 flex items-center justify-between animate-fade-in"
+      class="fixed sm:relative top-0 left-0 right-0 z-30 w-full px-5 sm:px-8 md:px-10 py-6 flex items-center justify-between animate-fade-in"
     >
       <!-- Top Left: LS Lensa Studio Branding -->
       <div
@@ -214,11 +229,11 @@ const setStyle = (style: 'rustic' | 'luxe' | 'modern') => {
 
     <!-- Main Content Area - Flex Col for Vertical Centering -->
     <main
-      class="relative z-20 flex-1 flex flex-col items-center justify-end sm:justify-center px-0 sm:px-6 w-full pt-8 pb-0 sm:py-8"
+      class="relative z-20 flex-1 flex flex-col items-center justify-end sm:justify-center px-0 sm:px-6 w-full pt-20 sm:pt-8 pb-0 sm:py-8"
     >
       <!-- Centered Card -->
       <div
-        class="w-full max-w-xl bg-black/30 backdrop-blur-md rounded-t-3xl sm:rounded-3xl shadow-2xl border-t border-x sm:border border-white/20 overflow-hidden animate-slide-up min-h-[50vh] sm:min-h-0 border-b-0 sm:border-b"
+        class="fixed sm:relative bottom-0 left-0 right-0 sm:bottom-auto sm:left-auto sm:right-auto w-full max-w-xl bg-black/30 backdrop-blur-md rounded-t-3xl sm:rounded-3xl shadow-2xl border-t border-x sm:border border-white/20 overflow-hidden animate-slide-up min-h-[50vh] sm:min-h-0 border-b-0 sm:border-b"
       >
         <!-- Card Content -->
         <div
@@ -289,37 +304,37 @@ const setStyle = (style: 'rustic' | 'luxe' | 'modern') => {
           ></div>
 
           <!-- Footer Info -->
-          <div class="flex flex-col gap-6 w-full">
-            <!-- Location - Centered -->
+          <div class="flex flex-col gap-3 sm:gap-4 w-full">
+            <!-- Location -->
             <a
               v-if="studioStore.studio?.maps_link"
               :href="studioStore.studio.maps_link"
               target="_blank"
               rel="noopener noreferrer"
-              class="flex items-center gap-2 text-white/80 hover:text-white transition-colors w-full text-left group cursor-pointer"
+              class="flex items-start sm:items-center gap-2 text-white/80 hover:text-white transition-colors w-full text-left group cursor-pointer"
             >
-              <MapPin class="w-3 h-3 xs:w-4 xs:h-4 flex-shrink-0 group-hover:scale-110 transition-transform" />
-              <span class="text-[10px] xs:text-xs font-medium tracking-wider uppercase border-b border-transparent group-hover:border-white/50 transition-all">
+              <MapPin class="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 mt-0.5 sm:mt-0 group-hover:scale-110 transition-transform" />
+              <span class="text-[11px] sm:text-xs font-medium tracking-wide sm:tracking-wider uppercase leading-relaxed break-words border-b border-transparent group-hover:border-white/50 transition-all">
                 {{ studioStore.studio?.address || "Bangi Gateway, Seksyen 15" }}
               </span>
             </a>
             <div
               v-else
-              class="flex items-center gap-2 text-white/80 hover:text-white transition-colors w-full text-left"
+              class="flex items-start sm:items-center gap-2 text-white/80 w-full text-left"
             >
-              <MapPin class="w-3 h-3 xs:w-4 xs:h-4 flex-shrink-0" />
+              <MapPin class="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 mt-0.5 sm:mt-0" />
               <span
-                class="text-[10px] xs:text-xs font-medium tracking-wider uppercase"
+                class="text-[11px] sm:text-xs font-medium tracking-wide sm:tracking-wider uppercase leading-relaxed break-words"
               >
                 {{ studioStore.studio?.address || "Bangi Gateway, Seksyen 15" }}
               </span>
             </div>
 
             <!-- Row 2: Copyright & Contact -->
-            <div class="flex items-center justify-between w-full px-1">
+            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0 w-full">
               <!-- Copyright -->
               <div
-                class="text-white/40 text-[10px] xs:text-[12px] uppercase tracking-widest"
+                class="text-white/50 sm:text-white/40 text-[11px] sm:text-[12px] uppercase tracking-wide sm:tracking-widest"
               >
                 © {{ new Date().getFullYear() }}
                 {{ studioStore.studio?.name || "Lensa" }}
@@ -330,11 +345,11 @@ const setStyle = (style: 'rustic' | 'luxe' | 'modern') => {
                 v-if="studioStore.studio?.whatsapp"
                 :href="`https://wa.me/${studioStore.studio.whatsapp}`"
                 target="_blank"
-                class="flex items-center gap-2 text-white/60 hover:text-white transition-colors text-[10px] xs:text-xs font-medium uppercase tracking-widest group"
+                class="flex items-center gap-1.5 sm:gap-2 text-white/70 sm:text-white/60 hover:text-white transition-colors text-[11px] sm:text-xs font-medium uppercase tracking-wide sm:tracking-widest group"
               >
                 <span>{{ t("contactUs") }}</span>
                 <MessageCircle
-                  class="w-3 h-3 transition-transform group-hover:translate-x-0.5"
+                  class="w-3.5 h-3.5 sm:w-3 sm:h-3 transition-transform group-hover:translate-x-0.5"
                 />
               </a>
             </div>
@@ -350,10 +365,10 @@ const setStyle = (style: 'rustic' | 'luxe' | 'modern') => {
   <!-- LUXE STYLE -->
   <div
     v-else-if="currentStyle === 'luxe' && !isLoading"
-    class="min-h-screen w-full flex flex-col md:flex-row font-serif bg-emerald-950 overflow-hidden"
+    class="min-h-screen w-full flex flex-col md:flex-row font-serif bg-emerald-950 overflow-hidden relative animate-fade-in"
   >
-    <!-- Left: Visual Area (Image) -->
-    <div class="relative w-full md:w-[60%] lg:w-[65%] h-[55vh] md:h-screen overflow-hidden">
+    <!-- Background Image Area (Full screen on mobile, split on desktop) -->
+    <div class="fixed md:relative inset-0 md:w-[60%] lg:w-[65%] h-screen md:h-screen overflow-hidden z-0">
       <!-- Slideshow -->
       <div 
         v-for="(img, index) in backgroundImages" 
@@ -369,7 +384,7 @@ const setStyle = (style: 'rustic' | 'luxe' | 'modern') => {
       </div>
       
       <!-- Gradient Overlay (Vignette) -->
-      <div class="absolute inset-0 bg-gradient-to-t md:bg-gradient-to-r from-emerald-950/90 via-transparent to-transparent opacity-80"></div>
+      <div class="absolute inset-0 bg-gradient-to-t md:bg-gradient-to-r from-emerald-950/95 md:from-emerald-950/90 via-emerald-950/80 md:via-transparent to-transparent opacity-90 md:opacity-80"></div>
 
       <!-- Floating Badge (Top Left) -->
       <div class="absolute top-6 left-6 z-20">
@@ -382,8 +397,8 @@ const setStyle = (style: 'rustic' | 'luxe' | 'modern') => {
       </div>
     </div>
 
-    <!-- Right: Content Panel (Solid Color) -->
-    <div class="relative w-full md:w-[40%] lg:w-[35%] h-[45vh] md:h-screen bg-emerald-950 flex flex-col justify-center px-8 md:px-12 lg:px-16 py-10 md:py-0 shadow-[-20px_0_50px_rgba(0,0,0,0.5)] z-10 border-t md:border-t-0 md:border-l border-amber-500/20">
+    <!-- Right: Content Panel (Overlay on mobile, side panel on desktop) -->
+    <div class="fixed md:relative bottom-0 left-0 right-0 md:w-[40%] lg:w-[35%] md:h-screen bg-emerald-950/95 md:bg-emerald-950 backdrop-blur-md md:backdrop-blur-none flex flex-col justify-center px-6 md:px-12 lg:px-16 py-6 md:py-0 shadow-[0_-20px_50px_rgba(0,0,0,0.5)] md:shadow-[-20px_0_50px_rgba(0,0,0,0.5)] z-10 border-t md:border-t-0 md:border-l border-amber-500/20 rounded-t-3xl md:rounded-none max-h-[65vh] md:max-h-none overflow-y-auto md:overflow-y-visible animate-slide-up">
       
       <!-- Decorative Pattern Background -->
       <div class="absolute inset-0 opacity-5 pointer-events-none mix-blend-overlay bg-[url('https://www.transparenttextures.com/patterns/binding-dark.png')]"></div>
@@ -393,33 +408,33 @@ const setStyle = (style: 'rustic' | 'luxe' | 'modern') => {
       <div class="absolute bottom-6 left-6 w-20 h-20 border-b border-l border-amber-500/20 rounded-bl-3xl"></div>
 
       <!-- Content Content -->
-      <div class="relative z-10 flex flex-col items-start space-y-8">
+      <div class="relative z-10 flex flex-col items-start space-y-4 md:space-y-8 w-full justify-center">
         
         <!-- Decorative Header Line -->
-        <div class="flex items-center gap-4 w-full">
+        <div class="flex items-center gap-4 w-full flex-shrink-0">
           <div class="h-[1px] flex-1 bg-gradient-to-r from-transparent to-amber-500/50"></div>
           <span class="text-amber-400 text-[10px] uppercase tracking-[0.4em] font-sans">Edisi 2025</span>
           <div class="h-[1px] flex-1 bg-gradient-to-l from-transparent to-amber-500/50"></div>
         </div>
 
         <!-- Main Title -->
-        <div class="space-y-2">
-          <h1 class="text-4xl md:text-5xl lg:text-6xl text-amber-50 leading-[1.1] tracking-tight font-serif">
+        <div class="space-y-2 flex-shrink-0">
+          <h1 class="text-3xl md:text-5xl lg:text-6xl text-amber-50 leading-[1.1] tracking-tight font-serif">
             {{ heroContent?.heading }} <br/>
             <span class="text-transparent bg-clip-text bg-gradient-to-r from-amber-200 via-amber-100 to-amber-400 italic pr-2">
               {{ heroContent?.highlightText }}
             </span>
           </h1>
-          <p class="text-emerald-200/60 text-sm font-sans font-light leading-relaxed max-w-xs">
+          <p class="text-emerald-200/60 text-xs md:text-sm font-sans font-light leading-relaxed max-w-xs">
             {{ heroContent?.testimonial }}
           </p>
         </div>
 
         <!-- Buttons -->
-        <div class="w-full space-y-4 pt-4">
+        <div class="w-full space-y-3 md:space-y-4 pt-2 md:pt-4 flex-shrink-0">
           <button 
             @click="router.push('/booking-new')"
-            class="group w-full bg-amber-100 hover:bg-white text-emerald-950 py-4 px-6 rounded-3xl font-sans text-xs uppercase tracking-[0.2em] font-bold transition-all duration-300 flex items-center justify-between hover:shadow-[0_0_30px_rgba(251,191,36,0.2)]"
+            class="group w-full bg-amber-100 hover:bg-white text-emerald-950 py-3 md:py-4 px-6 rounded-3xl font-sans text-xs uppercase tracking-[0.2em] font-bold transition-all duration-300 flex items-center justify-between hover:shadow-[0_0_30px_rgba(251,191,36,0.2)]"
             :style="{ backgroundColor: studioStore.studio?.brand_color ? studioStore.studio.brand_color : undefined, color: studioStore.studio?.brand_color ? '#fff' : undefined }"
           >
             <span>{{ t("startBooking") }}</span>
@@ -428,7 +443,7 @@ const setStyle = (style: 'rustic' | 'luxe' | 'modern') => {
           
           <button 
             @click="router.push('/check-booking')"
-            class="group w-full bg-transparent border border-amber-500/30 text-amber-200 py-4 px-6 rounded-3xl font-sans text-xs uppercase tracking-[0.2em] transition-all duration-300 hover:border-amber-400 hover:text-amber-100 flex items-center justify-between"
+            class="group w-full bg-transparent border border-amber-500/30 text-amber-200 py-3 md:py-4 px-6 rounded-3xl font-sans text-xs uppercase tracking-[0.2em] transition-all duration-300 hover:border-amber-400 hover:text-amber-100 flex items-center justify-between"
           >
             <span>{{ t("checkBooking") }}</span>
             <Star class="w-4 h-4 opacity-50 group-hover:opacity-100 transition-opacity" />
@@ -436,30 +451,34 @@ const setStyle = (style: 'rustic' | 'luxe' | 'modern') => {
         </div>
 
         <!-- Footer Info -->
-        <div class="w-full pt-8 border-t border-amber-500/10 flex flex-col gap-4">
+        <div class="w-full pt-4 md:pt-6 border-t border-amber-500/10 flex flex-col gap-3 md:gap-4 flex-shrink-0">
+           <!-- Location -->
            <a
              v-if="studioStore.studio?.maps_link"
              :href="studioStore.studio.maps_link"
              target="_blank"
              rel="noopener noreferrer"
-             class="flex items-center gap-3 text-emerald-200/50 hover:text-emerald-200/80 text-[10px] uppercase tracking-widest cursor-pointer group transition-colors"
+             class="flex items-start md:items-center gap-2.5 md:gap-3 text-emerald-200/60 md:text-emerald-200/50 hover:text-emerald-200/90 md:hover:text-emerald-200/80 text-[11px] md:text-[10px] uppercase tracking-wide md:tracking-widest cursor-pointer group transition-colors"
            >
-             <MapPin class="w-3 h-3 text-amber-500/50 group-hover:text-amber-400 transition-colors" />
-             <span class="group-hover:underline decoration-amber-500/30 underline-offset-4">{{ studioStore.studio?.address || "Bangi Gateway, Seksyen 15" }}</span>
+             <MapPin class="w-3.5 h-3.5 md:w-3 md:h-3 text-amber-500/60 md:text-amber-500/50 group-hover:text-amber-400 transition-colors flex-shrink-0 mt-0.5 md:mt-0" />
+             <span class="group-hover:underline decoration-amber-500/30 underline-offset-4 leading-relaxed break-words">{{ studioStore.studio?.address || "Bangi Gateway, Seksyen 15" }}</span>
            </a>
-           <div v-else class="flex items-center gap-3 text-emerald-200/50 text-[10px] uppercase tracking-widest">
-             <MapPin class="w-3 h-3 text-amber-500/50" />
-             {{ studioStore.studio?.address || "Bangi Gateway, Seksyen 15" }}
+           <div v-else class="flex items-start md:items-center gap-2.5 md:gap-3 text-emerald-200/60 md:text-emerald-200/50 text-[11px] md:text-[10px] uppercase tracking-wide md:tracking-widest">
+             <MapPin class="w-3.5 h-3.5 md:w-3 md:h-3 text-amber-500/60 md:text-amber-500/50 flex-shrink-0 mt-0.5 md:mt-0" />
+             <span class="leading-relaxed break-words">{{ studioStore.studio?.address || "Bangi Gateway, Seksyen 15" }}</span>
            </div>
 
-           <div class="flex justify-between items-center text-[10px] uppercase tracking-widest text-emerald-200/30">
+           <!-- Copyright & Contact -->
+           <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-0 text-[11px] md:text-[10px] uppercase tracking-wide md:tracking-widest text-emerald-200/50 md:text-emerald-200/30">
              <span>© {{ new Date().getFullYear() }} {{ studioStore.studio?.name || 'Lensa' }}</span>
              <a 
                 v-if="studioStore.studio?.whatsapp"
                 :href="`https://wa.me/${studioStore.studio.whatsapp}`"
-                class="hover:text-amber-200 transition-colors flex items-center gap-1"
+                target="_blank"
+                class="hover:text-amber-200 md:hover:text-amber-200 transition-colors flex items-center gap-1.5 md:gap-1"
              >
-               <MessageCircle class="w-3 h-3" /> {{ t("contactUs") }}
+               <MessageCircle class="w-3.5 h-3.5 md:w-3 md:h-3" /> 
+               <span>{{ t("contactUs") }}</span>
              </a>
            </div>
         </div>
@@ -471,12 +490,12 @@ const setStyle = (style: 'rustic' | 'luxe' | 'modern') => {
   <!-- MODERN STYLE -->
   <div
     v-else-if="currentStyle === 'modern' && !isLoading"
-    class="min-h-screen w-full bg-white text-black font-sans flex flex-col md:flex-row overflow-hidden"
+    class="min-h-screen w-full bg-white text-black font-sans flex flex-col md:flex-row overflow-hidden relative animate-fade-in"
     style="font-family: 'Bricolage Grotesque', sans-serif"
   >
-    <!-- Left: Visual (Hero Image) -->
+    <!-- Background Image (Full screen on mobile, split on desktop) -->
     <div
-      class="relative h-[60vh] md:h-screen w-full md:w-1/2 lg:w-[55%] overflow-hidden bg-gray-100"
+      class="fixed md:relative inset-0 md:w-1/2 lg:w-[55%] h-screen md:h-screen overflow-hidden bg-gray-100 z-0"
     >
       <div
         v-for="(img, index) in backgroundImages"
@@ -490,6 +509,9 @@ const setStyle = (style: 'rustic' | 'luxe' | 'modern') => {
         />
       </div>
 
+      <!-- Gradient Overlay for mobile -->
+      <div class="absolute inset-0 bg-gradient-to-t from-white/95 md:from-transparent via-white/80 md:via-transparent to-transparent md:hidden"></div>
+
       <!-- Floating Badge -->
       <div
         class="absolute top-6 left-6 bg-white px-4 py-2 rounded-full flex items-center gap-2 shadow-xl z-20"
@@ -501,28 +523,28 @@ const setStyle = (style: 'rustic' | 'luxe' | 'modern') => {
       </div>
     </div>
 
-    <!-- Right: Content -->
+    <!-- Content Card (Overlay on mobile, side panel on desktop) -->
     <div
-      class="relative h-[40vh] md:h-screen w-full md:w-1/2 lg:w-[45%] flex flex-col justify-between p-8 md:p-16 lg:p-20 bg-white z-10"
+      class="fixed md:relative bottom-0 left-0 right-0 md:w-1/2 lg:w-[45%] md:h-screen flex flex-col justify-between p-6 md:p-16 lg:p-20 bg-white/95 md:bg-white backdrop-blur-md md:backdrop-blur-none z-10 rounded-t-3xl md:rounded-none max-h-[70vh] md:max-h-none overflow-y-auto md:overflow-y-visible animate-slide-up"
     >
       <!-- Header -->
-      <header class="flex justify-between items-start">
-        <div class="text-xl font-black tracking-tighter uppercase leading-none">
+      <header class="flex justify-between items-start flex-shrink-0 mb-4 md:mb-0">
+        <!-- <div class="text-lg md:text-xl font-black tracking-tighter uppercase leading-none">
           LS<br />Studio.
-        </div>
+        </div> -->
         <button class="p-2 hover:bg-gray-100 rounded-full transition-colors">
           <img
             src="../../assets/studio-logo-2.webp"
             alt=""
-            class="w-auto h-6"
+            class="w-auto h-5 md:h-6"
           />
         </button>
       </header>
 
       <!-- Main Text -->
-      <div class="flex flex-col gap-6 items-start">
+      <div class="flex flex-col gap-4 md:gap-6 items-start flex-shrink-0 my-2 md:my-4">
         <h1
-          class="text-5xl md:text-7xl lg:text-8xl font-black tracking-tighter leading-[0.9] -ml-1"
+          class="text-4xl md:text-7xl lg:text-8xl font-black tracking-tighter leading-[0.9] -ml-1"
         >
           {{ heroContent?.heading }} <br />
           <span
@@ -530,69 +552,85 @@ const setStyle = (style: 'rustic' | 'luxe' | 'modern') => {
             >{{ heroContent?.highlightText }}</span
           >
         </h1>
-        <p class="text-sm font-medium text-gray-500 max-w-xs leading-relaxed">
+        <p class="text-xs md:text-sm font-medium text-gray-500 max-w-xs leading-relaxed">
           {{ heroContent?.testimonial }}
         </p>
       </div>
 
       <!-- Footer / Actions -->
-      <div class="space-y-6">
-        <div class="flex flex-col gap-3">
+      <div class="space-y-4 md:space-y-6 flex-shrink-0 mt-auto pt-4 md:pt-0">
+        <div class="flex flex-col gap-2 md:gap-3">
           <button
             @click="router.push('/booking-new')"
-            class="group w-full bg-black text-white py-5 px-6 rounded-3xl flex justify-between items-center hover:bg-gray-900 transition-all active:scale-[0.99]"
+            class="group w-full bg-black text-white py-4 md:py-5 px-6 rounded-3xl flex justify-between items-center hover:bg-gray-900 transition-all active:scale-[0.99]"
             :style="{
               backgroundColor: studioStore.studio?.brand_color
                 ? studioStore.studio.brand_color
                 : undefined,
             }"
           >
-            <span class="font-bold text-sm uppercase tracking-widest">{{
+            <span class="font-bold text-xs md:text-sm uppercase tracking-widest">{{
               t("startBooking")
             }}</span>
             <ArrowRight
-              class="w-5 h-5 transition-transform group-hover:-rotate-45"
+              class="w-4 h-4 md:w-5 md:h-5 transition-transform group-hover:-rotate-45"
             />
           </button>
 
           <button
             @click="router.push('/check-booking')"
-            class="group w-full border border-gray-200 py-5 px-6 rounded-3xl flex justify-between items-center hover:border-black transition-colors"
+            class="group w-full border border-gray-200 py-4 md:py-5 px-6 rounded-3xl flex justify-between items-center hover:border-black transition-colors"
           >
             <span
-              class="font-bold text-sm uppercase tracking-widest text-gray-500 group-hover:text-black transition-colors"
+              class="font-bold text-xs md:text-sm uppercase tracking-widest text-gray-500 group-hover:text-black transition-colors"
               >{{ t("checkBooking") }}</span
             >
             <ArrowUpRight
-              class="w-5 h-5 text-gray-300 group-hover:text-black transition-colors"
+              class="w-4 h-4 md:w-5 md:h-5 text-gray-300 group-hover:text-black transition-colors"
             />
           </button>
         </div>
 
         <div
-           class="flex justify-between items-end pt-8 border-t border-gray-100"
+           class="flex flex-col gap-3 md:flex-row md:justify-between md:items-end pt-4 md:pt-8 border-t border-gray-100"
          >
+           <!-- Location -->
            <a
              v-if="studioStore.studio?.maps_link"
              :href="studioStore.studio.maps_link"
              target="_blank"
              rel="noopener noreferrer"
-             class="text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-black transition-colors cursor-pointer border-b border-transparent hover:border-black/20 pb-0.5"
+             class="flex items-start md:items-end gap-2 text-[11px] md:text-[10px] font-bold uppercase tracking-wide md:tracking-widest text-gray-500 md:text-gray-400 hover:text-black transition-colors cursor-pointer border-b border-transparent hover:border-black/20 pb-0.5 leading-relaxed break-words"
            >
-             {{ studioStore.studio?.address || "Bangi Gateway, Seksyen 15" }}
+             <MapPin class="w-3.5 h-3.5 md:w-3 md:h-3 flex-shrink-0 mt-0.5 md:mt-0" />
+             <span>{{ studioStore.studio?.address || "Bangi Gateway, Seksyen 15" }}</span>
            </a>
            <div
              v-else
-             class="text-[10px] font-bold uppercase tracking-widest text-gray-400"
+             class="flex items-start md:items-end gap-2 text-[11px] md:text-[10px] font-bold uppercase tracking-wide md:tracking-widest text-gray-500 md:text-gray-400"
            >
-             {{ studioStore.studio?.address || "Bangi Gateway, Seksyen 15" }}
+             <MapPin class="w-3.5 h-3.5 md:w-3 md:h-3 flex-shrink-0 mt-0.5 md:mt-0" />
+             <span class="leading-relaxed break-words">{{ studioStore.studio?.address || "Bangi Gateway, Seksyen 15" }}</span>
            </div>
-           <div
-             class="text-[10px] font-bold uppercase tracking-widest text-gray-400"
-           >
-            © {{ new Date().getFullYear() }}
-            {{ studioStore.studio?.name || "Lensa" }}
-          </div>
+           
+           <!-- Copyright & Contact -->
+           <div class="flex flex-col sm:flex-row items-start sm:items-end gap-2 sm:gap-4">
+             <div
+               class="text-[11px] md:text-[10px] font-bold uppercase tracking-wide md:tracking-widest text-gray-500 md:text-gray-400"
+             >
+              © {{ new Date().getFullYear() }}
+              {{ studioStore.studio?.name || "Lensa" }}
+            </div>
+            <a
+              v-if="studioStore.studio?.whatsapp"
+              :href="`https://wa.me/${studioStore.studio.whatsapp}`"
+              target="_blank"
+              class="flex items-center gap-1.5 text-[11px] md:text-[10px] font-bold uppercase tracking-wide md:tracking-widest text-gray-500 md:text-gray-400 hover:text-black transition-colors"
+            >
+              <MessageCircle class="w-3.5 h-3.5 md:w-3 md:h-3" />
+              <span>{{ t("contactUs") }}</span>
+            </a>
+           </div>
         </div>
       </div>
     </div>
@@ -710,5 +748,30 @@ const setStyle = (style: 'rustic' | 'luxe' | 'modern') => {
 
 .animate-slow-zoom {
   animation: slow-zoom 20s linear infinite alternate;
+}
+
+/* Prevent bounce/overscroll on mobile for Rustic style */
+.rustic-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: none;
+  touch-action: pan-y;
+}
+</style>
+
+<style>
+/* Prevent body scroll when rustic style is active - global style */
+body.rustic-active {
+  overflow: hidden !important;
+  position: fixed !important;
+  width: 100% !important;
+  height: 100% !important;
 }
 </style>

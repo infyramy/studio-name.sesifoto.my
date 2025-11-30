@@ -1,6 +1,6 @@
 /**
  * Extract studio slug from subdomain
- * Example: "najiahstudio.slotraya.com" => "najiahstudio"
+ * Example: "najiahstudio.sesifoto.my" => "najiahstudio"
  */
 export function getStudioSlugFromSubdomain(): string | null {
   const hostname = window.location.hostname;
@@ -19,7 +19,7 @@ export function getStudioSlugFromSubdomain(): string | null {
   }
 
   // Production: extract from subdomain
-  // Format: [slug].slotraya.com
+  // Format: [slug].sesifoto.my
   const parts = hostname.split('.');
 
   // Should have at least 3 parts: [slug, slotraya, com]
@@ -55,6 +55,6 @@ export function getStudioUrl(slug: string): string {
   }
 
   // Production
-  const domain = hostname.split('.').slice(-2).join('.'); // Get "slotraya.com"
+  const domain = hostname.split('.').slice(-2).join('.'); // Get "sesifoto.my"
   return `https://${slug}.${domain}`;
 }

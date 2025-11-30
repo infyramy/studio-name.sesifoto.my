@@ -26,6 +26,10 @@ const { t } = useTranslation();
 // Steps
 const currentStep = ref<number>(1);
 
+// Terms scroll tracking (declared early for use in watch)
+const termsScrolledToBottom = ref(false);
+const termsContainerRef = ref<HTMLElement | null>(null);
+
 // Background Images Setup
 const backgroundImages = [
   "https://plus.unsplash.com/premium_photo-1661963643348-e95c6387ee8a?q=80&w=2340&auto=format&fit=crop",
@@ -40,6 +44,11 @@ onMounted(() => {
   intervalId = setInterval(() => {
     currentImageIndex.value = (currentImageIndex.value + 1) % backgroundImages.length;
   }, 5000); // Change every 5 seconds
+  
+  // Check terms scroll on mount if on terms step
+  if (currentStep.value === 5) {
+    setTimeout(() => checkTermsScroll(), 100);
+  }
 });
 
 onUnmounted(() => {
@@ -47,8 +56,15 @@ onUnmounted(() => {
 });
 
 // Auto scroll to top on step change
-watch(currentStep, () => {
+watch(currentStep, (newStep) => {
   window.scrollTo({ top: 0, behavior: 'smooth' });
+  // Reset terms scroll state when leaving terms step
+  if (newStep !== 5) {
+    termsScrolledToBottom.value = false;
+  } else {
+    // Check scroll when entering terms step
+    setTimeout(() => checkTermsScroll(), 100);
+  }
 });
 
 const steps = computed(() => [
@@ -56,7 +72,8 @@ const steps = computed(() => [
   { id: 2, title: t('stepDateAndTime') },
   { id: 3, title: t('stepPaxAndAddons') },
   { id: 4, title: t('stepCustomerInformation') },
-  { id: 5, title: t('stepSummary') }
+  { id: 5, title: t('termsAndConditions') || 'Terms & Conditions' },
+  { id: 6, title: t('stepSummary') }
 ]);
 
 // Data Selections
@@ -112,7 +129,7 @@ const timeSlots = [
 const selectTheme = (theme: Theme) => {
   selectedTheme.value = theme;
   paxCount.value = theme.base_pax; // Reset/Set to base pax
-  nextStep();
+  // Don't auto-navigate - user must click next button
 };
 
 const selectDate = (dateStr: string) => {
@@ -135,8 +152,18 @@ const updateAddon = (addon: Addon, change: number) => {
   selectedAddons.value[addon.id] = next;
 };
 
+const checkTermsScroll = () => {
+  if (!termsContainerRef.value) return;
+  const container = termsContainerRef.value;
+  const scrollTop = container.scrollTop;
+  const scrollHeight = container.scrollHeight;
+  const clientHeight = container.clientHeight;
+  // Allow 50px threshold for easier scrolling
+  termsScrolledToBottom.value = scrollTop + clientHeight >= scrollHeight - 50;
+};
+
 const nextStep = async () => {
-  if (currentStep.value < 5) {
+  if (currentStep.value < 6) {
     currentStep.value++;
   } else {
     // Handle Payment and Booking Creation
@@ -340,7 +367,7 @@ const isSpecialDateSelected = computed(() => {
     <div class="h-1 bg-gray-200 w-full">
       <div 
         class="h-full bg-gray-900 transition-all duration-300 ease-out"
-        :style="{ width: `${(currentStep / 5) * 100}%` }"
+        :style="{ width: `${(currentStep / 6) * 100}%` }"
       ></div>
     </div>
 
@@ -371,9 +398,14 @@ const isSpecialDateSelected = computed(() => {
       <!-- Step 1: Themes -->
       <div v-if="currentStep === 1" class="space-y-6 animate-fade-in md:grid md:grid-cols-2 md:gap-6 md:space-y-0">
         <div v-for="theme in studioStore.themes" :key="theme.id" 
-          class="bg-white rounded-3xl overflow-hidden shadow-sm border border-gray-100 group cursor-pointer hover:shadow-xl hover:border-gray-200 transition-all duration-300"
+          class="bg-white rounded-3xl overflow-hidden shadow-sm border-2 group cursor-pointer hover:shadow-xl transition-all duration-300 relative"
+          :class="selectedTheme?.id === theme.id ? 'border-gray-900 ring-2 ring-gray-900/20 shadow-lg' : 'border-gray-100 hover:border-gray-200'"
           @click="selectTheme(theme)"
         >
+          <!-- Selected Indicator -->
+          <div v-if="selectedTheme?.id === theme.id" class="absolute top-4 left-4 z-30 bg-gray-900 text-white rounded-full p-2 shadow-lg">
+            <Check class="w-5 h-5" />
+          </div>
           <div class="aspect-[4/3] bg-gray-100 relative overflow-hidden group">
             <img :src="theme.images[activeImageIndices[theme.id] || 0]" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out" />
             
@@ -536,57 +568,57 @@ const isSpecialDateSelected = computed(() => {
         </div>
 
         <!-- Addons List -->
-        <div class="space-y-4">
-          <h3 class="font-bold font-serif text-xl px-1">{{ t('addOns') }}</h3>
+        <div class="space-y-3 sm:space-y-4">
+          <h3 class="font-bold font-serif text-lg sm:text-xl px-1">{{ t('addOns') }}</h3>
           <div v-for="addon in studioStore.addons" :key="addon.id" 
-            class="bg-white p-5 rounded-2xl border border-gray-100 flex gap-4 items-center transition-all hover:shadow-md"
+            class="bg-white p-4 sm:p-5 rounded-2xl border border-gray-100 flex flex-col sm:flex-row gap-3 sm:gap-4 items-start sm:items-center transition-all hover:shadow-md"
             :class="{ 'border-gray-900 ring-1 ring-gray-900 bg-gray-50/50': selectedAddons[addon.id] }"
           >
             <!-- Addon Image -->
-            <div v-if="addon.image" class="flex-shrink-0 w-20 h-20 rounded-xl overflow-hidden bg-gray-100">
+            <div v-if="addon.image" class="flex-shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded-xl overflow-hidden bg-gray-100">
               <img :src="addon.image" :alt="addon.name" class="w-full h-full object-cover" />
             </div>
-            <div v-else class="flex-shrink-0 w-20 h-20 rounded-xl bg-gray-100 flex items-center justify-center">
-              <Plus class="w-6 h-6 text-gray-400" />
+            <div v-else class="flex-shrink-0 w-16 h-16 sm:w-20 sm:h-20 rounded-xl bg-gray-100 flex items-center justify-center">
+              <Plus class="w-5 h-5 sm:w-6 sm:h-6 text-gray-400" />
             </div>
             
-            <div class="flex-1 min-w-0">
-              <div class="font-bold font-serif text-lg">{{ addon.name }}</div>
-              <div class="text-sm text-gray-500 font-sans mt-0.5">RM{{ addon.price }} <span v-if="addon.max_quantity !== 1" class="text-xs opacity-70">{{ t('perUnit') }}</span></div>
+            <div class="flex-1 min-w-0 w-full sm:w-auto">
+              <div class="font-bold font-serif text-base sm:text-lg">{{ addon.name }}</div>
+              <div class="text-xs sm:text-sm text-gray-500 font-sans mt-0.5">RM{{ addon.price }} <span v-if="addon.max_quantity !== 1" class="text-xs opacity-70">{{ t('perUnit') }}</span></div>
             </div>
             
-            <div v-if="addon.max_quantity === 1" class="flex items-center">
+            <div v-if="addon.max_quantity === 1" class="flex items-center self-end sm:self-auto">
                <button 
                 @click="updateAddon(addon, (selectedAddons[addon.id] ? -1 : 1))"
                 :class="[
-                  'w-8 h-8 rounded-full border flex items-center justify-center transition-all duration-300',
+                  'w-10 h-10 sm:w-8 sm:h-8 rounded-full border flex items-center justify-center transition-all duration-300',
                   selectedAddons[addon.id] 
                     ? 'bg-gray-900 border-gray-900 text-white shadow-md scale-110' 
                     : 'bg-white border-gray-300 hover:border-gray-400'
                 ]"
                >
-                 <Check v-if="selectedAddons[addon.id]" class="w-5 h-5" />
+                 <Check v-if="selectedAddons[addon.id]" class="w-5 h-5 sm:w-4 sm:h-4" />
                </button>
             </div>
-            <div v-else class="flex items-center gap-4 bg-gray-50 rounded-full p-1 border border-gray-200/50">
+            <div v-else class="flex items-center gap-3 sm:gap-4 bg-gray-50 rounded-full p-1 border border-gray-200/50 self-end sm:self-auto">
                <button 
                 @click="updateAddon(addon, -1)"
-                class="w-8 h-8 rounded-full bg-white shadow-sm border border-gray-100 flex items-center justify-center hover:bg-gray-50 disabled:opacity-50 transition-all active:scale-90"
+                class="w-9 h-9 sm:w-8 sm:h-8 rounded-full bg-white shadow-sm border border-gray-100 flex items-center justify-center hover:bg-gray-50 disabled:opacity-50 transition-all active:scale-90"
                 :disabled="!selectedAddons[addon.id]"
               >
-                <Minus class="w-3 h-3" />
+                <Minus class="w-4 h-4 sm:w-3 sm:h-3" />
               </button>
-              <span class="font-serif font-bold w-4 text-center">{{ selectedAddons[addon.id] || 0 }}</span>
+              <span class="font-serif font-bold w-6 sm:w-4 text-center text-base sm:text-sm">{{ selectedAddons[addon.id] || 0 }}</span>
               <button 
                 @click="updateAddon(addon, 1)"
-                class="w-8 h-8 rounded-full bg-white shadow-sm border border-gray-100 flex items-center justify-center hover:bg-gray-50 transition-all active:scale-90"
+                class="w-9 h-9 sm:w-8 sm:h-8 rounded-full bg-white shadow-sm border border-gray-100 flex items-center justify-center hover:bg-gray-50 transition-all active:scale-90"
               >
-                <Plus class="w-3 h-3" />
+                <Plus class="w-4 h-4 sm:w-3 sm:h-3" />
               </button>
             </div>
-                  </div>
-                </div>
-              </div>
+          </div>
+        </div>
+      </div>
 
       <!-- Step 4: Customer Information -->
       <div v-if="currentStep === 4" class="space-y-8 animate-fade-in">
@@ -635,8 +667,74 @@ const isSpecialDateSelected = computed(() => {
         </div>
       </div>
 
-      <!-- Step 5: Summary -->
-      <div v-if="currentStep === 5" class="space-y-8 animate-fade-in">
+      <!-- Step 5: Terms & Conditions -->
+      <div v-if="currentStep === 5" class="space-y-6 animate-fade-in">
+        <div class="space-y-4">
+          <h3 class="font-bold font-serif text-lg sm:text-xl px-1">{{ t('termsAndConditions') }}</h3>
+          
+          <!-- Scrollable Terms Container -->
+          <div 
+            ref="termsContainerRef"
+            @scroll="checkTermsScroll"
+            class="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-y-auto max-h-[60vh] sm:max-h-[65vh]"
+          >
+            <div class="p-6 space-y-6">
+              <!-- Terms Content -->
+              <div class="prose prose-sm sm:prose max-w-none font-sans text-gray-700 space-y-4">
+                <h4 class="font-bold font-serif text-lg text-gray-900">{{ t('bookingTerms') }}</h4>
+                
+                <div class="space-y-4 text-sm sm:text-base leading-relaxed">
+                  <p><strong>1. Pengesahan Tempahan</strong></p>
+                  <p>Tempahan anda akan disahkan setelah bayaran diterima. Anda akan menerima pengesahan melalui WhatsApp atau e-mel.</p>
+                  
+                  <p><strong>2. Dasar Pembatalan</strong></p>
+                  <p>Pembatalan yang dibuat 48 jam sebelum tarikh tempahan akan menerima bayaran balik penuh. Pembatalan yang dibuat dalam tempoh 48 jam akan dikenakan yuran pembatalan 50%.</p>
+                  
+                  <p><strong>3. Penjadualan Semula</strong></p>
+                  <p>Penjadualan semula dibenarkan sehingga 24 jam sebelum masa tempahan anda, tertakluk kepada ketersediaan. Permintaan penjadualan semula yang dibuat dalam tempoh 24 jam mungkin dikenakan caj tambahan.</p>
+                  
+                  <p><strong>4. Pembayaran</strong></p>
+                  <p>Pembayaran mesti diselesaikan untuk mengesahkan tempahan anda. Kami menerima pembayaran dalam talian melalui gateway pembayaran selamat kami.</p>
+                  
+                  <p><strong>5. Ketibaan Lewat</strong></p>
+                  <p>Sila hadir tepat pada masanya untuk sesi anda. Ketibaan lewat mungkin mengakibatkan masa sesi dikurangkan tanpa bayaran balik.</p>
+                  
+                  <p><strong>6. Peraturan Studio</strong></p>
+                  <p>Sila hormati ruang studio dan peralatan. Sebarang kerosakan yang disebabkan oleh kecuaian akan dikenakan bayaran sewajarnya.</p>
+                  
+                  <p><strong>7. Hak Fotografi</strong></p>
+                  <p>Studio berhak menggunakan gambar yang diambil semasa sesi untuk tujuan promosi melainkan dipersetujui sebaliknya.</p>
+                  
+                  <p><strong>8. Liabiliti</strong></p>
+                  <p>Studio tidak bertanggungjawab ke atas barang peribadi. Sila simpan barang berharga anda dengan selamat semasa sesi anda.</p>
+                  
+                  <p><strong>9. Permintaan Khas</strong></p>
+                  <p>Permintaan khas mesti disampaikan sekurang-kurangnya 48 jam sebelum tempahan anda. Kami akan berusaha sedaya upaya untuk menampungnya.</p>
+                  
+                  <p><strong>10. Maklumat Hubungan</strong></p>
+                  <p>Untuk sebarang pertanyaan atau kebimbangan, sila hubungi kami melalui WhatsApp di {{ studioStore.studio?.whatsapp || 'nombor yang disediakan' }}.</p>
+                </div>
+              </div>
+              
+              <!-- Scroll Indicator -->
+              <div v-if="!termsScrolledToBottom" class="sticky bottom-0 bg-gradient-to-t from-white via-white/90 to-transparent pt-8 pb-4 text-center">
+                <p class="text-xs text-gray-500 font-sans flex items-center justify-center gap-2">
+                  <span>{{ t('scrollToBottomToContinue') }}</span>
+                  <ArrowRight class="w-3 h-3 animate-pulse" />
+                </p>
+              </div>
+              <div v-else class="sticky bottom-0 bg-gradient-to-t from-green-50/80 via-green-50/50 to-transparent pt-8 pb-4 text-center">
+                <p class="text-xs text-green-600 font-sans flex items-center justify-center gap-2 font-medium">
+                  <span>{{ t('reachedBottomCanContinue') }}</span>
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 6: Summary -->
+      <div v-if="currentStep === 6" class="space-y-8 animate-fade-in">
         
         <!-- Booking Summary Card -->
         <div class="bg-white rounded-3xl shadow-lg shadow-gray-200/50 border border-gray-100 overflow-hidden">
@@ -705,11 +803,11 @@ const isSpecialDateSelected = computed(() => {
 
     <!-- Bottom Action Bar -->
     <div class="fixed bottom-0 left-0 right-0 pb-2 z-50 pointer-events-none">
-        <div class="max-w-4xl mx-auto px-4 pb-6 safe-area-bottom">
-            <div class="bg-white/80 backdrop-blur-md border border-white/40 p-4 rounded-3xl shadow-2xl shadow-black/5 flex items-center justify-between gap-4 pointer-events-auto">
-                <div class="flex flex-col pl-2">
-                <span class="text-[10px] text-gray-500 uppercase tracking-wider font-bold">{{ t('estimatedTotal') }}</span>
-                <span class="font-bold font-serif text-2xl text-gray-900">RM{{ grandTotal }}</span>
+        <div class="max-w-4xl mx-auto px-3 sm:px-4 pb-4 sm:pb-6 safe-area-bottom">
+            <div class="bg-white/90 sm:bg-white/80 backdrop-blur-md border border-white/40 p-3 sm:p-4 rounded-2xl sm:rounded-3xl shadow-2xl shadow-black/5 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4 pointer-events-auto">
+                <div class="flex flex-col pl-1 sm:pl-2">
+                <span class="text-[9px] sm:text-[10px] text-gray-500 uppercase tracking-wider font-bold">{{ t('estimatedTotal') }}</span>
+                <span class="font-bold font-serif text-xl sm:text-2xl text-gray-900">RM{{ grandTotal }}</span>
                 </div>
                 <button 
                 @click="nextStep" 
@@ -717,15 +815,16 @@ const isSpecialDateSelected = computed(() => {
                     (currentStep === 1 && !selectedTheme) || 
                     (currentStep === 2 && !selectedSlot) ||
                     (currentStep === 4 && (!customerInfo.name || !customerInfo.phone)) ||
+                    (currentStep === 5 && !termsScrolledToBottom) ||
                     isProcessingPayment
                 "
-                class="bg-gray-900 text-white px-8 py-4 rounded-2xl font-bold uppercase tracking-widest text-xs disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-3 transition-all duration-300 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98]"
+                class="bg-gray-900 text-white px-6 sm:px-8 py-3 sm:py-4 rounded-xl sm:rounded-2xl font-bold uppercase tracking-widest text-[10px] sm:text-xs disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 sm:gap-3 transition-all duration-300 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] w-full sm:w-auto"
                 >
                 <span v-if="isProcessingPayment">{{ t('processingPayment') }}</span>
-                <span v-else-if="currentStep === 5">{{ t('payNow') }}</span>
+                <span v-else-if="currentStep === 6">{{ t('payNow') }}</span>
                 <span v-else>{{ t('next') }}</span>
-                <ArrowRight v-if="!isProcessingPayment" class="w-4 h-4" />
-                <Loader2 v-else class="w-4 h-4 animate-spin" />
+                <ArrowRight v-if="!isProcessingPayment" class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                <Loader2 v-else class="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" />
                 </button>
         </div>
       </div>

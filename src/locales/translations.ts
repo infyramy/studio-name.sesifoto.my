@@ -263,6 +263,10 @@ export const translationsBM: Translations = {
   // Consent
   agreeToTerms: 'Saya bersetuju dengan Terma & Syarat',
   subscribeNewsletter: 'Saya ingin menerima kemaskini daripada studio',
+  scrollToBottomToContinue: 'Tatal ke bawah untuk teruskan',
+  reachedBottomCanContinue: '✓ Anda telah sampai ke bawah. Anda boleh teruskan sekarang.',
+  termsAndConditions: 'Terma & Syarat',
+  bookingTerms: 'Terma & Syarat Tempahan',
 };
 
 // English (EN)
@@ -528,6 +532,10 @@ export const translationsEN: Translations = {
   // Consent
   agreeToTerms: 'I agree to the Terms & Conditions',
   subscribeNewsletter: 'I would like to receive updates from the studio',
+  scrollToBottomToContinue: 'Scroll to the bottom to continue',
+  reachedBottomCanContinue: '✓ You\'ve reached the bottom. You can now continue.',
+  termsAndConditions: 'Terms & Conditions',
+  bookingTerms: 'Booking Terms & Conditions',
 };
 
 export const translations = {

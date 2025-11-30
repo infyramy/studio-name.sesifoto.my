@@ -259,6 +259,10 @@ export type TranslationKey =
 
   // Consent
   | 'agreeToTerms'
-  | 'subscribeNewsletter';
+  | 'subscribeNewsletter'
+  | 'scrollToBottomToContinue'
+  | 'reachedBottomCanContinue'
+  | 'termsAndConditions'
+  | 'bookingTerms';
 
 export type Translations = Record<TranslationKey, string>;
