@@ -1,4 +1,4 @@
-import type { Studio, Theme, Addon, WorkingHours, BlackoutDate, PricingRule } from '@/types';
+import type { Studio, Theme, Addon, WorkingHours, BlackoutDate, PricingRule, BreakTime, SlotConfiguration } from '@/types';
 
 // ============================================================================
 // STUDIO DETAILS
@@ -26,7 +26,9 @@ export const mockStudios: Record<string, Studio> = {
       cart_hold_duration: 10, // 10 minutes
       deposit_percentage: 50,
       payment_type: 'full', // Deposit only payment
-      booking_window_start: null, // Immediate booking allowed
+      booking_window_start: '2026-02-01', // Booking starts from February 1, 2026
+      booking_window_end: '2026-03-19', // End of Raya booking period
+      booking_open: true,
       buffer_minutes: 15,
       auto_cutoff_hours: 0, // Book until slot start time
     },
@@ -53,7 +55,9 @@ export const mockStudios: Record<string, Studio> = {
       cart_hold_duration: 15, // 15 minutes
       deposit_percentage: 50,
       payment_type: 'full', // Full payment required
-      booking_window_start: null,
+      booking_window_start: '2026-02-01', // Booking starts from February 1, 2026
+      booking_window_end: '2026-03-19', // End of Raya booking period
+      booking_open: true,
       buffer_minutes: 10,
       auto_cutoff_hours: 0,
     },
@@ -389,59 +393,148 @@ export const mockAddonsByTheme: Record<string, Record<string, string[]>> = {
 
 export const mockWorkingHours: Record<string, WorkingHours[]> = {
   'studio-001': [
-    // Monday - Thursday
-    ...[1, 2, 3, 4].map((day) => ({
-      id: `wh-001-${day}`,
+    // Sunday (0)
+    {
+      id: 'wh-001-0',
       studio_id: 'studio-001',
-      day_of_week: day,
-      time_windows: [
-        { start: '09:00', end: '12:00' },
-        { start: '14:00', end: '18:00' },
-      ],
+      day_of_week: 0,
+      active: true,
+      start: '08:00',
+      end: '19:00',
       created_at: '2024-12-05T09:00:00Z',
-    })),
-    // Friday (shorter hours)
+    },
+    // Monday (1)
+    {
+      id: 'wh-001-1',
+      studio_id: 'studio-001',
+      day_of_week: 1,
+      active: true,
+      start: '09:00',
+      end: '18:00',
+      created_at: '2024-12-05T09:00:00Z',
+    },
+    // Tuesday (2)
+    {
+      id: 'wh-001-2',
+      studio_id: 'studio-001',
+      day_of_week: 2,
+      active: true,
+      start: '09:00',
+      end: '18:00',
+      created_at: '2024-12-05T09:00:00Z',
+    },
+    // Wednesday (3)
+    {
+      id: 'wh-001-3',
+      studio_id: 'studio-001',
+      day_of_week: 3,
+      active: true,
+      start: '09:00',
+      end: '18:00',
+      created_at: '2024-12-05T09:00:00Z',
+    },
+    // Thursday (4)
+    {
+      id: 'wh-001-4',
+      studio_id: 'studio-001',
+      day_of_week: 4,
+      active: true,
+      start: '09:00',
+      end: '18:00',
+      created_at: '2024-12-05T09:00:00Z',
+    },
+    // Friday (5) - shorter hours
     {
       id: 'wh-001-5',
       studio_id: 'studio-001',
       day_of_week: 5,
-      time_windows: [{ start: '09:00', end: '12:00' }],
+      active: true,
+      start: '09:00',
+      end: '12:00',
       created_at: '2024-12-05T09:00:00Z',
     },
-    // Saturday - Sunday (extended hours)
-    ...[6, 0].map((day) => ({
-      id: `wh-001-${day}`,
+    // Saturday (6)
+    {
+      id: 'wh-001-6',
       studio_id: 'studio-001',
-      day_of_week: day,
-      time_windows: [
-        { start: '08:00', end: '13:00' },
-        { start: '15:00', end: '19:00' },
-      ],
+      day_of_week: 6,
+      active: true,
+      start: '08:00',
+      end: '19:00',
       created_at: '2024-12-05T09:00:00Z',
-    })),
+    },
   ],
   'studio-002': [
-    // Monday - Friday
-    ...[1, 2, 3, 4, 5].map((day) => ({
-      id: `wh-002-${day}`,
+    // Sunday (0)
+    {
+      id: 'wh-002-0',
       studio_id: 'studio-002',
-      day_of_week: day,
-      time_windows: [
-        { start: '10:00', end: '13:00' },
-        { start: '14:00', end: '20:00' },
-      ],
+      day_of_week: 0,
+      active: true,
+      start: '09:00',
+      end: '21:00',
       created_at: '2024-12-10T10:00:00Z',
-    })),
-    // Saturday - Sunday (full day)
-    ...[6, 0].map((day) => ({
-      id: `wh-002-${day}`,
+    },
+    // Monday (1)
+    {
+      id: 'wh-002-1',
       studio_id: 'studio-002',
-      day_of_week: day,
-      time_windows: [
-        { start: '09:00', end: '21:00' },
-      ],
+      day_of_week: 1,
+      active: true,
+      start: '10:00',
+      end: '20:00',
       created_at: '2024-12-10T10:00:00Z',
-    })),
+    },
+    // Tuesday (2)
+    {
+      id: 'wh-002-2',
+      studio_id: 'studio-002',
+      day_of_week: 2,
+      active: true,
+      start: '10:00',
+      end: '20:00',
+      created_at: '2024-12-10T10:00:00Z',
+    },
+    // Wednesday (3)
+    {
+      id: 'wh-002-3',
+      studio_id: 'studio-002',
+      day_of_week: 3,
+      active: true,
+      start: '10:00',
+      end: '20:00',
+      created_at: '2024-12-10T10:00:00Z',
+    },
+    // Thursday (4)
+    {
+      id: 'wh-002-4',
+      studio_id: 'studio-002',
+      day_of_week: 4,
+      active: true,
+      start: '10:00',
+      end: '20:00',
+      created_at: '2024-12-10T10:00:00Z',
+    },
+    // Friday (5)
+    {
+      id: 'wh-002-5',
+      studio_id: 'studio-002',
+      day_of_week: 5,
+      active: true,
+      start: '10:00',
+      end: '20:00',
+      created_at: '2024-12-10T10:00:00Z',
+    },
+    // Saturday (6)
+    {
+      id: 'wh-002-6',
+      studio_id: 'studio-002',
+      day_of_week: 6,
+      active: true,
+      start: '09:00',
+      end: '21:00',
+      created_at: '2024-12-10T10:00:00Z',
+    },
   ],
 };
 
@@ -457,30 +550,38 @@ export const mockBlackoutDates: Record<string, BlackoutDate[]> = {
     {
       id: 'blackout-001',
       studio_id: 'studio-001',
-      date: '2025-10-30',
-      reason: 'Studio Maintenance - Equipment upgrade and cleaning',
+      title: 'Studio Maintenance',
+      start_date: '2026-02-15',
+      end_date: null,
+      reason: 'Equipment upgrade and cleaning',
       created_at: '2025-01-05T09:00:00Z',
     },
     // Public Holidays
     {
       id: 'blackout-002',
       studio_id: 'studio-001',
-      date: '2025-11-01',
-      reason: 'Public Holiday - Deepavali',
+      title: 'Public Holiday - Chinese New Year',
+      start_date: '2026-02-08',
+      end_date: null,
+      reason: 'Public Holiday - Chinese New Year',
       created_at: '2025-01-05T09:00:00Z',
     },
     {
       id: 'blackout-003',
       studio_id: 'studio-001',
-      date: '2025-10-28',
-      reason: 'Public Holiday - Awal Muharram',
+      title: 'Public Holiday - Thaipusam',
+      start_date: '2026-02-11',
+      end_date: null,
+      reason: 'Public Holiday - Thaipusam',
       created_at: '2025-01-05T09:00:00Z',
     },
     // Special Events
     {
       id: 'blackout-004',
       studio_id: 'studio-001',
-      date: '2025-11-10',
+      title: 'Private Event',
+      start_date: '2026-03-05',
+      end_date: null,
       reason: 'Private Event - Corporate booking',
       created_at: '2025-01-10T14:00:00Z',
     },
@@ -490,26 +591,82 @@ export const mockBlackoutDates: Record<string, BlackoutDate[]> = {
     {
       id: 'blackout-005',
       studio_id: 'studio-002',
-      date: '2025-11-01',
-      reason: 'Public Holiday - Deepavali',
+      title: 'Public Holiday - Chinese New Year',
+      start_date: '2026-02-08',
+      end_date: null,
+      reason: 'Public Holiday - Chinese New Year',
       created_at: '2025-01-10T10:00:00Z',
     },
     {
       id: 'blackout-006',
       studio_id: 'studio-002',
-      date: '2025-10-28',
-      reason: 'Public Holiday - Awal Muharram',
+      title: 'Public Holiday - Thaipusam',
+      start_date: '2026-02-11',
+      end_date: null,
+      reason: 'Public Holiday - Thaipusam',
       created_at: '2025-01-10T10:00:00Z',
     },
     // Maintenance
     {
       id: 'blackout-007',
       studio_id: 'studio-002',
-      date: '2025-11-05',
-      reason: 'Studio Maintenance - Backdrop refresh',
+      title: 'Studio Maintenance',
+      start_date: '2026-02-20',
+      end_date: null,
+      reason: 'Backdrop refresh',
       created_at: '2025-01-15T11:00:00Z',
     },
   ],
+};
+
+// ============================================================================
+// BREAK TIMES
+// ============================================================================
+// Regular break times (e.g., lunch breaks) that apply to specific days
+
+export const mockBreakTimes: Record<string, BreakTime[]> = {
+  'studio-001': [
+    {
+      id: 'break-001',
+      studio_id: 'studio-001',
+      name: 'Lunch Break',
+      start_time: '13:00',
+      end_time: '14:00',
+      days_of_week: [1, 2, 3, 4, 5, 6], // Monday to Saturday
+      created_at: '2024-12-05T09:00:00Z',
+    },
+  ],
+  'studio-002': [
+    {
+      id: 'break-002',
+      studio_id: 'studio-002',
+      name: 'Lunch Break',
+      start_time: '13:00',
+      end_time: '14:00',
+      days_of_week: [1, 2, 3, 4, 5], // Monday to Friday
+      created_at: '2024-12-10T10:00:00Z',
+    },
+  ],
+};
+
+// ============================================================================
+// SLOT CONFIGURATION
+// ============================================================================
+// Default slot configuration for each studio
+
+export const mockSlotConfiguration: Record<string, SlotConfiguration> = {
+  'studio-001': {
+    studio_id: 'studio-001',
+    default_duration: 30, // minutes
+    buffer_time: 15, // minutes
+    max_slots_per_day: 12,
+  },
+  'studio-002': {
+    studio_id: 'studio-002',
+    default_duration: 30, // minutes
+    buffer_time: 10, // minutes
+    max_slots_per_day: 15,
+  },
 };
 
 // ============================================================================
@@ -525,8 +682,8 @@ export const mockPricingRules: Record<string, PricingRule[]> = {
       id: 'pricing-001',
       studio_id: 'studio-001',
       name: 'Raya Peak Premium Pricing',
-      date_range_start: '2025-11-02', // First day of Raya
-      date_range_end: '2025-11-04', // Third day of Raya
+      date_range_start: '2026-03-01', // First day of Raya
+      date_range_end: '2026-03-03', // Third day of Raya
       rule_type: 'percentage_increase',
       value: 50, // +50% increase
       applies_to_themes: 'all',
@@ -538,8 +695,8 @@ export const mockPricingRules: Record<string, PricingRule[]> = {
       id: 'pricing-002',
       studio_id: 'studio-001',
       name: 'Pre-Raya Weekend Premium',
-      date_range_start: '2025-10-25',
-      date_range_end: '2025-10-31',
+      date_range_start: '2026-02-20',
+      date_range_end: '2026-02-28',
       rule_type: 'percentage_increase',
       value: 20, // +20% increase on weekends
       applies_to_themes: 'all',
@@ -551,8 +708,8 @@ export const mockPricingRules: Record<string, PricingRule[]> = {
       id: 'pricing-003',
       studio_id: 'studio-001',
       name: 'Post-Raya Weekend Premium',
-      date_range_start: '2025-11-08',
-      date_range_end: '2025-11-30',
+      date_range_start: '2026-03-10',
+      date_range_end: '2026-03-19',
       rule_type: 'percentage_increase',
       value: 15, // +15% increase on weekends
       applies_to_themes: ['theme-001', 'theme-002'], // Only for basic themes
@@ -566,21 +723,21 @@ export const mockPricingRules: Record<string, PricingRule[]> = {
       id: 'pricing-004',
       studio_id: 'studio-002',
       name: 'Raya Peak Premium Pricing',
-      date_range_start: '2025-11-02',
-      date_range_end: '2025-11-04',
+      date_range_start: '2026-03-01',
+      date_range_end: '2026-03-03',
       rule_type: 'percentage_increase',
       value: 60, // +60% increase
       applies_to_themes: 'all',
       status: 'active',
       created_at: '2024-12-10T10:00:00Z',
     },
-    // Weekend Premium (all weekends in October)
+    // February Weekend Premium
     {
       id: 'pricing-005',
       studio_id: 'studio-002',
-      name: 'October Weekend Premium',
-      date_range_start: '2025-10-04',
-      date_range_end: '2025-10-31',
+      name: 'February Weekend Premium',
+      date_range_start: '2026-02-01',
+      date_range_end: '2026-02-28',
       rule_type: 'percentage_increase',
       value: 25, // +25% increase
       applies_to_themes: 'all',
@@ -605,7 +762,7 @@ export const mockBookingsData: Record<string, Booking> = {
     booking_number: 'RY2026-0142',
     theme_id: 'theme-001',
     theme: mockThemes['studio-001']?.[0]!, // Keluarga Bahagia
-    booking_date: '2025-11-03',
+    booking_date: '2026-03-02',
     start_time: '10:00',
     end_time: '10:30',
     pax_count: 6,
@@ -625,8 +782,8 @@ export const mockBookingsData: Record<string, Booking> = {
     payment_status: 'deposit_paid',
     booking_status: 'confirmed',
     cart_hold_expires_at: null,
-    created_at: '2025-10-20T10:00:00Z',
-    updated_at: '2025-10-20T10:00:00Z',
+    created_at: '2026-02-10T10:00:00Z',
+    updated_at: '2026-02-10T10:00:00Z',
     addons: [
       {
         addon: mockAddons['studio-001']?.[0]!, // Set Props Raya
@@ -641,7 +798,7 @@ export const mockBookingsData: Record<string, Booking> = {
     booking_number: 'RY2026-0289',
     theme_id: 'theme-002',
     theme: mockThemes['studio-001']?.[1]!, // Couple Raya
-    booking_date: '2025-11-15',
+    booking_date: '2026-03-12',
     start_time: '14:00',
     end_time: '14:20',
     pax_count: 4,
@@ -661,8 +818,8 @@ export const mockBookingsData: Record<string, Booking> = {
     payment_status: 'paid_full',
     booking_status: 'confirmed',
     cart_hold_expires_at: null,
-    created_at: '2025-10-25T14:30:00Z',
-    updated_at: '2025-10-25T15:00:00Z',
+    created_at: '2026-02-15T14:30:00Z',
+    updated_at: '2026-02-15T15:00:00Z',
     addons: [
       {
         addon: mockAddons['studio-001']?.[0]!, // Set Props Raya
@@ -682,7 +839,7 @@ export const mockBookingsData: Record<string, Booking> = {
     booking_number: 'RY2026-0051',
     theme_id: 'theme-004',
     theme: mockThemes['studio-002']?.[0]!, // Modern Minimalist
-    booking_date: '2025-11-20',
+    booking_date: '2026-03-15',
     start_time: '11:00',
     end_time: '11:30',
     pax_count: 2,

@@ -3,7 +3,8 @@ import { ref, computed, watch, onMounted, onUnmounted } from "vue";
 import { useRouter } from "vue-router";
 import { useStudioStore } from "@/stores/studio";
 import { useTranslation } from "@/composables/useTranslation";
-import { createBooking } from "@/services/api";
+import { createBooking, api } from "@/services/api";
+import { mockBlackoutDates, mockPricingRules, mockWorkingHours } from "@/services/mockData";
 import { 
   ChevronLeft, 
   Calendar, 
@@ -15,9 +16,11 @@ import {
   CreditCard,
   Info,
   Loader2,
-  ArrowRight
+  ArrowRight,
+  X,
+  AlertCircle
 } from 'lucide-vue-next';
-import type { Theme, Addon } from "@/types";
+import type { Theme, Addon, PricingRule } from "@/types";
 
 const router = useRouter();
 const studioStore = useStudioStore();
@@ -26,9 +29,8 @@ const { t } = useTranslation();
 // Steps
 const currentStep = ref<number>(1);
 
-// Terms scroll tracking (declared early for use in watch)
-const termsScrolledToBottom = ref(false);
-const termsContainerRef = ref<HTMLElement | null>(null);
+// Terms acceptance tracking
+const termsAccepted = ref(false);
 
 // Background Images Setup
 const backgroundImages = [
@@ -40,15 +42,20 @@ const backgroundImages = [
 const currentImageIndex = ref(0);
 let intervalId: any;
 
-onMounted(() => {
+onMounted(async () => {
   intervalId = setInterval(() => {
     currentImageIndex.value = (currentImageIndex.value + 1) % backgroundImages.length;
   }, 5000); // Change every 5 seconds
   
-  // Check terms scroll on mount if on terms step
-  if (currentStep.value === 5) {
-    setTimeout(() => checkTermsScroll(), 100);
-  }
+  // Simulate API call to fetch themes
+  loadingThemes.value = true;
+  await new Promise(resolve => setTimeout(resolve, 800 + Math.random() * 400));
+  loadingThemes.value = false;
+  
+  // Simulate API call to fetch dates/availability
+  loadingDates.value = true;
+  await new Promise(resolve => setTimeout(resolve, 500 + Math.random() * 300));
+  loadingDates.value = false;
 });
 
 onUnmounted(() => {
@@ -58,12 +65,9 @@ onUnmounted(() => {
 // Auto scroll to top on step change
 watch(currentStep, (newStep) => {
   window.scrollTo({ top: 0, behavior: 'smooth' });
-  // Reset terms scroll state when leaving terms step
+  // Reset terms acceptance when leaving terms step
   if (newStep !== 5) {
-    termsScrolledToBottom.value = false;
-  } else {
-    // Check scroll when entering terms step
-    setTimeout(() => checkTermsScroll(), 100);
+    termsAccepted.value = false;
   }
 });
 
@@ -91,39 +95,194 @@ const customerInfo = ref({
 
 const isProcessingPayment = ref(false);
 const activeImageIndices = ref<Record<string, number>>({});
+const loadingThemes = ref(true);
+const loadingDates = ref(true);
 
 const setActiveImage = (themeId: string, index: number) => {
   activeImageIndices.value[themeId] = index;
 };
 
-// Mock slots/dates for demo (replace with store actions later)
+// Get blackout dates and pricing rules
+const blackoutDates = computed(() => {
+  const studioId = studioStore.studio?.id || 'studio-001';
+  return mockBlackoutDates[studioId] || [];
+});
+
+const pricingRules = computed(() => {
+  const studioId = studioStore.studio?.id || 'studio-001';
+  return mockPricingRules[studioId] || [];
+});
+
+// Generate dates with blackout and special pricing info using mockData
 const dates = computed(() => {
-  // Generate next 14 days
-  const list: { date: string; day: number; month: string; weekday: string; isSpecial: boolean; priceModifier: number }[] = [];
+  const list: { 
+    date: string; 
+    day: number; 
+    month: string; 
+    weekday: string; 
+    isBlackout: boolean;
+    blackoutReason?: string;
+    isSpecial: boolean;
+    priceModifier: number;
+    specialLabel?: string;
+    specialType?: 'percentage_increase' | 'fixed_price';
+  }[] = [];
+  
   const today = new Date();
-  for (let i = 0; i < 14; i++) {
-    const d = new Date(today);
-    d.setDate(today.getDate() + i);
+  today.setHours(0, 0, 0, 0); // Normalize to start of day
+  const studioId = studioStore.studio?.id || 'studio-001';
+  const studio = studioStore.studio;
+  const workingHours = mockWorkingHours[studioId] || [];
+  
+  // Get booking window from studio settings
+  const bookingWindowStart = studio?.settings?.booking_window_start;
+  const bookingWindowEnd = studio?.settings?.booking_window_end;
+  
+  // Determine start date: use booking window start if set, otherwise use today
+  let startDate = new Date(today);
+  if (bookingWindowStart) {
+    const windowStart = new Date(bookingWindowStart);
+    windowStart.setHours(0, 0, 0, 0);
+    // Use the later of today or booking window start (can't book in the past)
+    startDate = windowStart > today ? windowStart : today;
+  }
+  
+  // Determine end date: use booking window end if set, otherwise limit to 14 days from start
+  let endDate = new Date(startDate);
+  if (bookingWindowEnd) {
+    const windowEnd = new Date(bookingWindowEnd);
+    windowEnd.setHours(0, 0, 0, 0);
+    // Don't show dates beyond booking window end
+    endDate = windowEnd;
+    
+    // If today is after booking window end, no dates available
+    if (today > windowEnd) {
+      return list;
+    }
+  } else {
+    // If no booking window end, limit to 14 days from start
+    endDate.setDate(startDate.getDate() + 13); // 14 days total (0-13 = 14 days)
+  }
+  
+  // If booking window end is before start date, no dates available
+  if (endDate < startDate) {
+    return list;
+  }
+  
+  // Generate dates within the booking window (limit to max 60 days for performance)
+  const dateList: Date[] = [];
+  const currentDate = new Date(startDate);
+  const maxDays = 60; // Maximum days to show
+  let dayCount = 0;
+  
+  while (currentDate <= endDate && dayCount < maxDays) {
+    dateList.push(new Date(currentDate));
+    currentDate.setDate(currentDate.getDate() + 1);
+    dayCount++;
+  }
+  
+  for (const d of dateList) {
+    const dateString = d.toISOString().slice(0, 10);
+    const dayOfWeek = d.getDay();
+    
+    // Check if date is before booking window start (shouldn't happen, but double-check)
+    const isBeforeBookingWindow = bookingWindowStart && dateString < bookingWindowStart;
+    
+    // Check if date is after booking window end (shouldn't happen, but double-check)
+    const isAfterBookingWindow = bookingWindowEnd && dateString > bookingWindowEnd;
+    
+    // Check if studio is open on this day (using working hours from mockData)
+    const dayHours = workingHours.find(wh => wh.day_of_week === dayOfWeek);
+    const isStudioClosed = !dayHours || !dayHours.active;
+    
+    // Check if blackout - handle both single date and date range
+    const isBlackout = blackoutDates.value.some(blackout => {
+      if (!blackout.end_date) {
+        return dateString === blackout.start_date;
+      }
+      return dateString >= blackout.start_date && dateString <= blackout.end_date;
+    }) || isStudioClosed || isBeforeBookingWindow || isAfterBookingWindow;
+    const blackoutInfo = blackoutDates.value.find(b => {
+      if (!b.end_date) {
+        return b.start_date === dateString;
+      }
+      return dateString >= b.start_date && dateString <= b.end_date;
+    });
+    
+    // Determine blackout reason
+    let blackoutReason = 'Tidak tersedia';
+    if (isBeforeBookingWindow) {
+      blackoutReason = 'Tempahan belum dibuka';
+    } else if (isAfterBookingWindow) {
+      blackoutReason = 'Tempahan sudah ditutup';
+    } else if (isStudioClosed) {
+      blackoutReason = 'Studio tutup pada hari ini';
+    } else if (blackoutInfo) {
+      blackoutReason = blackoutInfo.reason;
+    }
+    
+    if (isBlackout) {
+      list.push({
+        date: dateString,
+        day: d.getDate(),
+        month: d.toLocaleString('default', { month: 'short' }),
+        weekday: d.toLocaleString('default', { weekday: 'short' }),
+        isBlackout: true,
+        blackoutReason: blackoutReason,
+        isSpecial: false,
+        priceModifier: 1
+      });
+      continue;
+    }
+    
+    // Check for special pricing from mockData
+    let specialPricing: PricingRule | undefined;
+    for (const rule of pricingRules.value) {
+      if (rule.status === 'active' && 
+          dateString >= rule.date_range_start && 
+          dateString <= rule.date_range_end) {
+        // Check if applies to current theme or all themes
+        if (rule.applies_to_themes === 'all' || 
+            (selectedTheme.value && Array.isArray(rule.applies_to_themes) && 
+             rule.applies_to_themes.includes(selectedTheme.value.id))) {
+          specialPricing = rule;
+          break;
+        }
+      }
+    }
+    
+    const isSpecial = !!specialPricing;
+    let priceModifier = 1;
+    
+    if (specialPricing) {
+      if (specialPricing.rule_type === 'percentage_increase') {
+        priceModifier = 1 + (specialPricing.value / 100); // e.g., 1.5 for +50%
+      } else {
+        // For fixed_price, we'd need base price to calculate modifier
+        // For now, we'll show it differently
+        priceModifier = 1; // Will be handled separately
+      }
+    }
+    
     list.push({
-      date: d.toISOString().slice(0, 10),
+      date: dateString,
       day: d.getDate(),
       month: d.toLocaleString('default', { month: 'short' }),
       weekday: d.toLocaleString('default', { weekday: 'short' }),
-      isSpecial: i % 7 === 0 || i === 10, // Dummy logic
-      priceModifier: i % 7 === 0 ? 1.2 : 1
+      isBlackout: false,
+      isSpecial,
+      priceModifier,
+      specialLabel: specialPricing?.name,
+      specialType: specialPricing?.rule_type
     });
   }
+  
   return list;
 });
 
-// Updated timeSlots with start and end time
-const timeSlots = [
-  { id: 's1', start: '09:00 AM', end: '09:30 AM', available: true },
-  { id: 's2', start: '09:30 AM', end: '10:00 AM', available: false }, // Booked
-  { id: 's3', start: '10:00 AM', end: '10:30 AM', available: true },
-  { id: 's4', start: '02:00 PM', end: '02:30 PM', available: true },
-  { id: 's5', start: '02:30 PM', end: '03:00 PM', available: true },
-];
+// Time slots - will be loaded from API when date is selected
+const timeSlots = ref<any[]>([]);
+const loadingSlots = ref(false);
 
 // Helpers
 const selectTheme = (theme: Theme) => {
@@ -132,9 +291,48 @@ const selectTheme = (theme: Theme) => {
   // Don't auto-navigate - user must click next button
 };
 
-const selectDate = (dateStr: string) => {
+const selectDate = async (dateStr: string) => {
   selectedDate.value = dateStr;
   selectedSlot.value = null; // Reset slot
+  
+  // Load time slots for selected date
+  if (selectedTheme.value && studioStore.studio) {
+    loadingSlots.value = true;
+    try {
+      const slots = await api.getAvailableTimeSlots(
+        studioStore.studio.id,
+        selectedTheme.value.id,
+        dateStr
+      );
+      // Convert API format to component format
+      timeSlots.value = slots.map((slot, index) => ({
+        id: `slot-${index}`,
+        start: formatTimeForDisplay(slot.start || '09:00'),
+        end: formatTimeForDisplay(slot.end || '09:30'),
+        available: slot.status === 'available',
+        originalSlot: slot // Keep original for booking
+      }));
+    } catch (error) {
+      console.error('Failed to load time slots:', error);
+      timeSlots.value = [];
+    } finally {
+      loadingSlots.value = false;
+    }
+  }
+};
+
+// Helper to format time from "09:00" to "09:00 AM"
+const formatTimeForDisplay = (time: string): string => {
+  if (!time) return '09:00 AM';
+  const parts = time.split(':');
+  if (parts.length < 2) return '09:00 AM';
+  const hours = parts[0] || '09';
+  const minutes = parts[1] || '00';
+  const hour = parseInt(hours);
+  if (isNaN(hour)) return '09:00 AM';
+  const ampm = hour >= 12 ? 'PM' : 'AM';
+  const displayHour = hour % 12 || 12;
+  return `${displayHour}:${minutes} ${ampm}`;
 };
 
 const selectSlot = (slot: any) => {
@@ -152,15 +350,6 @@ const updateAddon = (addon: Addon, change: number) => {
   selectedAddons.value[addon.id] = next;
 };
 
-const checkTermsScroll = () => {
-  if (!termsContainerRef.value) return;
-  const container = termsContainerRef.value;
-  const scrollTop = container.scrollTop;
-  const scrollHeight = container.scrollHeight;
-  const clientHeight = container.clientHeight;
-  // Allow 50px threshold for easier scrolling
-  termsScrolledToBottom.value = scrollTop + clientHeight >= scrollHeight - 50;
-};
 
 const nextStep = async () => {
   if (currentStep.value < 6) {
@@ -207,8 +396,11 @@ const nextStep = async () => {
         return time;
       };
       
-      const startTime = parseTime(selectedSlot.value.start || '09:00 AM');
-      const endTime = parseTime(selectedSlot.value.end || '09:30 AM');
+      // Use original slot time if available, otherwise parse from display format
+      const slotStart = selectedSlot.value?.originalSlot?.start || selectedSlot.value?.start || '09:00';
+      const slotEnd = selectedSlot.value?.originalSlot?.end || selectedSlot.value?.end || '09:30';
+      const startTime = slotStart.includes('AM') || slotStart.includes('PM') ? parseTime(slotStart) : slotStart;
+      const endTime = slotEnd.includes('AM') || slotEnd.includes('PM') ? parseTime(slotEnd) : slotEnd;
       
       // Create booking request
       const bookingRequest = {
@@ -262,9 +454,15 @@ const addonsTotal = computed(() => {
   return total;
 });
 
+const datePriceModifier = computed(() => {
+  if (!selectedDateInfo.value || !selectedDateInfo.value.isSpecial) return 1;
+  return selectedDateInfo.value.priceModifier;
+});
+
 const grandTotal = computed(() => {
   if (!selectedTheme.value) return 0;
-  return selectedTheme.value.base_price + extraPaxCost.value + addonsTotal.value;
+  const baseTotal = selectedTheme.value.base_price + extraPaxCost.value + addonsTotal.value;
+  return baseTotal * datePriceModifier.value;
 });
 
 const paymentType = computed(() => {
@@ -287,10 +485,17 @@ const paymentAmount = computed(() => {
   return depositAmount.value;
 });
 
+const selectedDateInfo = computed(() => {
+  if (!selectedDate.value) return null;
+  return dates.value.find((d: any) => d.date === selectedDate.value);
+});
+
 const isSpecialDateSelected = computed(() => {
-  if (!selectedDate.value) return false;
-  const dateObj = dates.value.find((d: any) => d.date === selectedDate.value);
-  return dateObj ? dateObj.isSpecial : false;
+  return selectedDateInfo.value?.isSpecial || false;
+});
+
+const isBlackoutDateSelected = computed(() => {
+  return selectedDateInfo.value?.isBlackout || false;
 });
 
 </script>
@@ -319,7 +524,7 @@ const isSpecialDateSelected = computed(() => {
 
     <!-- Content Wrapper -->
     <div class="relative z-20">
-    <!-- Header -->
+      <!-- Header -->
       <header class="sticky top-0 z-40 bg-white/70 backdrop-blur-md border-b border-gray-200 px-4 py-4 flex items-center justify-between transition-all duration-300">
         <button
           @click="prevStep" 
@@ -334,44 +539,43 @@ const isSpecialDateSelected = computed(() => {
         <div class="w-8"></div> <!-- Spacer for centering -->
       </header>
 
-
-    <!-- Payment Processing Overlay -->
-    <Transition
-      enter-active-class="transition duration-300 ease-out"
-      enter-from-class="opacity-0"
-      enter-to-class="opacity-100"
-      leave-active-class="transition duration-200 ease-in"
-      leave-from-class="opacity-100"
-      leave-to-class="opacity-0"
-    >
-      <div 
-        v-if="isProcessingPayment" 
-        class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white/80 backdrop-blur-sm"
+      <!-- Payment Processing Overlay -->
+      <Transition
+        enter-active-class="transition duration-300 ease-out"
+        enter-from-class="opacity-0"
+        enter-to-class="opacity-100"
+        leave-active-class="transition duration-200 ease-in"
+        leave-from-class="opacity-100"
+        leave-to-class="opacity-0"
       >
-        <div class="bg-white p-8 rounded-3xl shadow-2xl border border-gray-100 flex flex-col items-center space-y-6 max-w-xs w-full mx-4">
-          <div class="relative">
-            <div class="w-16 h-16 border-4 border-gray-100 border-t-gray-900 rounded-full animate-spin"></div>
-            <div class="absolute inset-0 flex items-center justify-center">
-              <CreditCard class="w-6 h-6 text-gray-900" />
+        <div 
+          v-if="isProcessingPayment" 
+          class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white/80 backdrop-blur-sm"
+        >
+          <div class="bg-white p-8 rounded-3xl shadow-2xl border border-gray-100 flex flex-col items-center space-y-6 max-w-xs w-full mx-4">
+            <div class="relative">
+              <div class="w-16 h-16 border-4 border-gray-100 border-t-gray-900 rounded-full animate-spin"></div>
+              <div class="absolute inset-0 flex items-center justify-center">
+                <CreditCard class="w-6 h-6 text-gray-900" />
+              </div>
+            </div>
+            <div class="text-center space-y-2">
+              <h3 class="text-xl font-bold font-serif">{{ t('processingPayment') }}</h3>
+              <p class="text-sm text-gray-500">{{ t('pleaseWait') }}</p>
             </div>
           </div>
-          <div class="text-center space-y-2">
-            <h3 class="text-xl font-bold font-serif">{{ t('processingPayment') }}</h3>
-            <p class="text-sm text-gray-500">{{ t('pleaseWait') }}</p>
-          </div>
         </div>
+      </Transition>
+
+      <!-- Progress Bar -->
+      <div class="h-1 bg-gray-200 w-full">
+        <div 
+          class="h-full bg-gray-900 transition-all duration-300 ease-out"
+          :style="{ width: `${(currentStep / 6) * 100}%` }"
+        ></div>
       </div>
-    </Transition>
 
-    <!-- Progress Bar -->
-    <div class="h-1 bg-gray-200 w-full">
-      <div 
-        class="h-full bg-gray-900 transition-all duration-300 ease-out"
-        :style="{ width: `${(currentStep / 6) * 100}%` }"
-      ></div>
-    </div>
-
-    <main class="p-6 sm:p-8 max-w-4xl mx-auto space-y-8 pb-32">
+      <main class="p-6 sm:p-8 max-w-4xl mx-auto space-y-8 pb-32">
       
       <!-- Theme Overview (shown in steps 2-5) -->
       <div v-if="currentStep > 1 && selectedTheme" class="bg-white/90 backdrop-blur-sm rounded-2xl p-4 border border-gray-200 shadow-sm animate-fade-in">
@@ -397,7 +601,39 @@ const isSpecialDateSelected = computed(() => {
       
       <!-- Step 1: Themes -->
       <div v-if="currentStep === 1" class="space-y-6 animate-fade-in md:grid md:grid-cols-2 md:gap-6 md:space-y-0">
-        <div v-for="theme in studioStore.themes" :key="theme.id" 
+        <!-- Loading Skeleton -->
+        <template v-if="loadingThemes">
+          <div
+            v-for="i in 4"
+            :key="`skeleton-${i}`"
+            class="bg-white rounded-3xl overflow-hidden shadow-sm border-2 border-gray-100 animate-pulse"
+          >
+            <!-- Image skeleton -->
+            <div class="aspect-[4/3] bg-gray-200"></div>
+            
+            <!-- Content skeleton -->
+            <div class="p-6 space-y-4">
+              <!-- Title -->
+              <div class="h-8 bg-gray-200 rounded w-3/4"></div>
+              <!-- Description -->
+              <div class="space-y-2">
+                <div class="h-4 bg-gray-200 rounded"></div>
+                <div class="h-4 bg-gray-200 rounded w-5/6"></div>
+              </div>
+              <!-- Price and badges -->
+              <div class="flex items-center justify-between pt-2">
+                <div class="flex gap-2">
+                  <div class="h-6 bg-gray-200 rounded w-16"></div>
+                  <div class="h-6 bg-gray-200 rounded w-16"></div>
+                </div>
+                <div class="h-7 bg-gray-200 rounded w-20"></div>
+              </div>
+            </div>
+          </div>
+        </template>
+        
+        <!-- Themes -->
+        <div v-else v-for="theme in studioStore.themes" :key="theme.id" 
           class="bg-white rounded-3xl overflow-hidden shadow-sm border-2 group cursor-pointer hover:shadow-xl transition-all duration-300 relative"
           :class="selectedTheme?.id === theme.id ? 'border-gray-900 ring-2 ring-gray-900/20 shadow-lg' : 'border-gray-100 hover:border-gray-200'"
           @click="selectTheme(theme)"
@@ -466,33 +702,82 @@ const isSpecialDateSelected = computed(() => {
           
           <!-- Date Scroller -->
           <div class="flex gap-3 overflow-x-auto pb-4 pt-2 px-1 scrollbar-hide snap-x mask-fade">
+            <!-- Loading Skeleton -->
+            <template v-if="loadingDates">
+              <div
+                v-for="i in 7"
+                :key="`date-skeleton-${i}`"
+                class="snap-center flex-shrink-0 w-[4.5rem] h-24 rounded-2xl bg-gray-100 animate-pulse"
+              ></div>
+            </template>
+            
+            <!-- Dates -->
             <button 
+              v-else
               v-for="d in dates" 
               :key="d.date"
-              @click="selectDate(d.date)"
+              @click="!d.isBlackout && selectDate(d.date)"
+              :disabled="d.isBlackout"
               :class="[
                 'snap-center flex-shrink-0 w-[4.5rem] h-24 rounded-2xl flex flex-col items-center justify-center transition-all duration-300 relative overflow-hidden group',
-                selectedDate === d.date 
-                  ? 'bg-gray-900 text-white shadow-xl scale-105 ring-4 ring-gray-100' 
-                  : 'bg-white text-gray-900 border border-gray-100 hover:border-gray-300 hover:text-gray-600'
+                d.isBlackout
+                  ? 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed opacity-60'
+                  : selectedDate === d.date 
+                    ? 'bg-gray-900 text-white shadow-xl scale-105 ring-4 ring-gray-100' 
+                    : 'bg-white text-gray-900 border border-gray-100 hover:border-gray-300 hover:text-gray-600'
               ]"
             >
               <span class="text-[10px] uppercase font-sans tracking-widest font-medium mb-1">{{ d.month }}</span>
               <span class="text-2xl font-bold font-serif leading-none">{{ d.day }}</span>
               <span class="text-[10px] font-sans mt-1 opacity-80">{{ d.weekday }}</span>
               
-              <!-- Special Indicator -->
-              <div v-if="d.isSpecial" :class="['absolute top-2 right-2 w-1.5 h-1.5 rounded-full', selectedDate === d.date ? 'bg-white' : 'bg-amber-400']"></div>
+              <!-- Blackout Indicator -->
+              <div v-if="d.isBlackout" class="absolute top-2 right-2">
+                <X class="w-3 h-3 text-gray-400" />
+              </div>
+              
+              <!-- Special Pricing Indicator -->
+              <div v-else-if="d.isSpecial" class="absolute top-2 right-2 flex flex-col items-end gap-0.5">
+                <div :class="['w-1.5 h-1.5 rounded-full', selectedDate === d.date ? 'bg-white' : 'bg-amber-400']"></div>
+                <span v-if="d.specialType === 'percentage_increase'" 
+                      :class="['text-[8px] font-bold', selectedDate === d.date ? 'text-white' : 'text-amber-600']">
+                  +{{ Math.round((d.priceModifier - 1) * 100) }}%
+                </span>
+              </div>
             </button>
           </div>
-
-          <div v-if="isSpecialDateSelected" class="bg-amber-50/80 backdrop-blur-sm border border-amber-100/50 p-4 rounded-2xl flex items-center gap-3 text-amber-900 shadow-sm">
-            <div class="bg-amber-100 p-2 rounded-full">
-              <Info class="w-4 h-4" />
+          
+          <!-- Blackout Date Info -->
+          <div v-if="isBlackoutDateSelected && selectedDateInfo?.blackoutReason" 
+               class="bg-red-50/80 backdrop-blur-sm border border-red-100/50 p-4 rounded-2xl flex items-start gap-3 text-red-900 shadow-sm">
+            <div class="bg-red-100 p-2 rounded-full flex-shrink-0">
+              <AlertCircle class="w-4 h-4" />
             </div>
             <div class="text-xs font-sans leading-relaxed">
-              <span class="font-bold block uppercase tracking-wider text-[10px] mb-0.5 text-amber-700">{{ t('specialDate') }}</span>
-              {{ t('specialDatePriceNote') }}
+              <span class="font-bold block uppercase tracking-wider text-[10px] mb-0.5 text-red-700">{{ t('blackoutDate') }}</span>
+              {{ selectedDateInfo.blackoutReason }}
+            </div>
+          </div>
+
+          <!-- Special Date Info -->
+          <div v-if="isSpecialDateSelected && selectedDateInfo" 
+               class="bg-amber-50/80 backdrop-blur-sm border border-amber-100/50 p-4 rounded-2xl flex items-start gap-3 text-amber-900 shadow-sm">
+            <div class="bg-amber-100 p-2 rounded-full flex-shrink-0">
+              <Info class="w-4 h-4" />
+            </div>
+            <div class="text-xs font-sans leading-relaxed flex-1">
+              <span class="font-bold block uppercase tracking-wider text-[10px] mb-1 text-amber-700">{{ t('specialDate') }}</span>
+              <div class="space-y-1">
+                <p class="font-semibold">{{ selectedDateInfo.specialLabel }}</p>
+                <p v-if="selectedDateInfo.specialType === 'percentage_increase'" class="text-amber-800">
+                  {{ t('priceIncrease') || 'Harga meningkat' }}: 
+                  <span class="font-bold">+{{ Math.round((selectedDateInfo.priceModifier - 1) * 100) }}%</span>
+                  {{ t('fromBasePrice') || 'daripada harga asas' }}
+                </p>
+                <p v-else-if="selectedDateInfo.specialType === 'fixed_price'" class="text-amber-800">
+                  {{ t('specialFixedPrice') || 'Harga istimewa tetap' }}
+                </p>
+              </div>
             </div>
           </div>
           </div>
@@ -505,28 +790,40 @@ const isSpecialDateSelected = computed(() => {
               </h3>
               <span v-if="selectedDate" class="text-xs font-sans text-gray-400 uppercase tracking-wider">{{ selectedSlot ? t('oneSlotSelected') : t('selectOneSlot') }}</span>
             </div>
-          <div class="grid grid-cols-2 gap-3">
-            <button 
-              v-for="slot in timeSlots" 
-              :key="slot.id"
-              @click="selectSlot(slot)"
-              :disabled="!slot.available"
-              :class="[
-                'py-4 px-3 rounded-2xl text-sm font-sans font-medium text-center border transition-all duration-300 relative overflow-hidden flex items-center justify-center',
-                !slot.available 
-                  ? 'bg-gray-50 text-gray-300 border-transparent cursor-not-allowed' 
-                  : selectedSlot?.id === slot.id 
-                    ? 'bg-gray-900 text-white border-gray-900 shadow-lg' 
-                    : 'bg-white text-gray-600 border-gray-200 hover:border-gray-900 hover:text-gray-900'
-              ]"
-            >
-              <span class="font-bold text-sm">{{ slot.start }} - {{ slot.end }}</span>
-              
-              <div v-if="selectedSlot?.id === slot.id" class="absolute inset-0 bg-white/10"></div>
-            </button>
+            
+            <!-- Loading State -->
+            <div v-if="loadingSlots" class="flex items-center justify-center py-8">
+              <Loader2 class="w-6 h-6 animate-spin text-gray-400" />
+            </div>
+            
+            <!-- Time Slots Grid -->
+            <div v-else-if="timeSlots.length > 0" class="grid grid-cols-2 gap-3">
+              <button 
+                v-for="slot in timeSlots" 
+                :key="slot.id"
+                @click="selectSlot(slot)"
+                :disabled="!slot.available"
+                :class="[
+                  'py-4 px-3 rounded-2xl text-sm font-sans font-medium text-center border transition-all duration-300 relative overflow-hidden flex items-center justify-center',
+                  !slot.available 
+                    ? 'bg-gray-50 text-gray-300 border-transparent cursor-not-allowed' 
+                    : selectedSlot?.id === slot.id 
+                      ? 'bg-gray-900 text-white border-gray-900 shadow-lg' 
+                      : 'bg-white text-gray-600 border-gray-200 hover:border-gray-900 hover:text-gray-900'
+                ]"
+              >
+                <span class="font-bold text-sm">{{ slot.start }} - {{ slot.end }}</span>
+                
+                <div v-if="selectedSlot?.id === slot.id" class="absolute inset-0 bg-white/10"></div>
+              </button>
+            </div>
+            
+            <!-- No Slots Available -->
+            <div v-else-if="selectedDate && !loadingSlots" class="text-center py-8 text-gray-500 text-sm font-sans">
+              {{ t('noSlotsAvailable') || 'Tiada slot tersedia untuk tarikh ini' }}
+            </div>
         </div>
       </div>
-    </div>
 
       <!-- Step 3: Pax & Addons -->
       <div v-if="currentStep === 3" class="space-y-8 animate-fade-in">
@@ -674,9 +971,8 @@ const isSpecialDateSelected = computed(() => {
           
           <!-- Scrollable Terms Container -->
           <div 
-            ref="termsContainerRef"
-            @scroll="checkTermsScroll"
-            class="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-y-auto max-h-[60vh] sm:max-h-[65vh]"
+            class="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-y-auto"
+            style="max-height: 70vh;"
           >
             <div class="p-6 space-y-6">
               <!-- Terms Content -->
@@ -715,20 +1011,40 @@ const isSpecialDateSelected = computed(() => {
                   <p>Untuk sebarang pertanyaan atau kebimbangan, sila hubungi kami melalui WhatsApp di {{ studioStore.studio?.whatsapp || 'nombor yang disediakan' }}.</p>
                 </div>
               </div>
-              
-              <!-- Scroll Indicator -->
-              <div v-if="!termsScrolledToBottom" class="sticky bottom-0 bg-gradient-to-t from-white via-white/90 to-transparent pt-8 pb-4 text-center">
-                <p class="text-xs text-gray-500 font-sans flex items-center justify-center gap-2">
-                  <span>{{ t('scrollToBottomToContinue') }}</span>
-                  <ArrowRight class="w-3 h-3 animate-pulse" />
-                </p>
-              </div>
-              <div v-else class="sticky bottom-0 bg-gradient-to-t from-green-50/80 via-green-50/50 to-transparent pt-8 pb-4 text-center">
-                <p class="text-xs text-green-600 font-sans flex items-center justify-center gap-2 font-medium">
-                  <span>{{ t('reachedBottomCanContinue') }}</span>
-                </p>
-              </div>
             </div>
+          </div>
+          
+          <!-- Custom Checkbox -->
+          <div class="bg-gray-50 rounded-2xl p-4 sm:p-5 border border-gray-200 flex items-start gap-3 sm:gap-4 transition-all duration-300"
+               :class="termsAccepted ? 'border-gray-900 bg-gray-50/50' : 'hover:border-gray-300'">
+            <!-- Custom Checkbox Button -->
+            <button
+              @click="termsAccepted = !termsAccepted"
+              type="button"
+              class="flex-shrink-0 w-6 h-6 sm:w-7 sm:h-7 rounded-lg border-2 flex items-center justify-center transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-2"
+              :class="termsAccepted 
+                ? 'bg-gray-900 border-gray-900 shadow-md scale-105' 
+                : 'bg-white border-gray-300 hover:border-gray-400 active:scale-95'"
+            >
+              <Check 
+                v-if="termsAccepted"
+                class="w-4 h-4 sm:w-5 sm:h-5 text-white transition-all duration-200"
+                :class="termsAccepted ? 'scale-100' : 'scale-0'"
+              />
+            </button>
+            
+            <!-- Label -->
+            <label 
+              @click="termsAccepted = !termsAccepted"
+              class="flex-1 cursor-pointer select-none"
+            >
+              <span class="block text-sm sm:text-base font-bold font-sans text-gray-900 mb-1">
+                {{ t('agreeToTerms') }}
+              </span>
+              <span class="block text-xs sm:text-sm text-gray-600 font-sans leading-relaxed">
+                {{ t('termsAcceptanceNote') || 'Saya telah membaca dan memahami semua terma dan syarat di atas.' }}
+              </span>
+            </label>
           </div>
         </div>
       </div>
@@ -798,8 +1114,8 @@ const isSpecialDateSelected = computed(() => {
         </div>
 
       </div>
-
-    </main>
+      </main>
+    </div>
 
     <!-- Bottom Action Bar -->
     <div class="fixed bottom-0 left-0 right-0 pb-2 z-50 pointer-events-none">
@@ -815,7 +1131,7 @@ const isSpecialDateSelected = computed(() => {
                     (currentStep === 1 && !selectedTheme) || 
                     (currentStep === 2 && !selectedSlot) ||
                     (currentStep === 4 && (!customerInfo.name || !customerInfo.phone)) ||
-                    (currentStep === 5 && !termsScrolledToBottom) ||
+                    (currentStep === 5 && !termsAccepted) ||
                     isProcessingPayment
                 "
                 class="bg-gray-900 text-white px-6 sm:px-8 py-3 sm:py-4 rounded-xl sm:rounded-2xl font-bold uppercase tracking-widest text-[10px] sm:text-xs disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 sm:gap-3 transition-all duration-300 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] w-full sm:w-auto"
@@ -828,8 +1144,6 @@ const isSpecialDateSelected = computed(() => {
                 </button>
         </div>
       </div>
-    </div>
-
     </div>
   </div>
 </template>

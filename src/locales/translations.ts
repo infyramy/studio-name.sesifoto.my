@@ -61,6 +61,10 @@ export const translationsBM: Translations = {
   selectDateAndTimeDescription: 'Sila pilih tarikh dan masa slot untuk sesi fotografi anda.',
   specialDate: 'Tarikh Istimewa',
   specialDatePriceNote: 'Harga mungkin sedikit berbeza pada tarikh ini.',
+  blackoutDate: 'Tarikh Tidak Tersedia',
+  priceIncrease: 'Peningkatan Harga',
+  fromBasePrice: 'daripada harga asas',
+  specialFixedPrice: 'Harga Istimewa Tetap',
   selectTime: 'Pilih Masa',
   oneSlotSelected: '1 Masa Dipilih',
   selectOneSlot: 'Pilih 1 Slot',
@@ -267,6 +271,7 @@ export const translationsBM: Translations = {
   reachedBottomCanContinue: '✓ Anda telah sampai ke bawah. Anda boleh teruskan sekarang.',
   termsAndConditions: 'Terma & Syarat',
   bookingTerms: 'Terma & Syarat Tempahan',
+  termsAcceptanceNote: 'Saya telah membaca dan memahami semua terma dan syarat di atas.',
 };
 
 // English (EN)
@@ -330,6 +335,10 @@ export const translationsEN: Translations = {
   selectDateAndTimeDescription: 'Please select date and time slot for your photography session.',
   specialDate: 'Special Date',
   specialDatePriceNote: 'Price may vary slightly on this date.',
+  blackoutDate: 'Unavailable Date',
+  priceIncrease: 'Price Increase',
+  fromBasePrice: 'from base price',
+  specialFixedPrice: 'Special Fixed Price',
   selectTime: 'Select Time',
   oneSlotSelected: '1 Time Selected',
   selectOneSlot: 'Select 1 Slot',
@@ -536,6 +545,7 @@ export const translationsEN: Translations = {
   reachedBottomCanContinue: '✓ You\'ve reached the bottom. You can now continue.',
   termsAndConditions: 'Terms & Conditions',
   bookingTerms: 'Booking Terms & Conditions',
+  termsAcceptanceNote: 'I have read and understood all the terms and conditions above.',
 };
 
 export const translations = {

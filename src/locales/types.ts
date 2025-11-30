@@ -58,6 +58,10 @@ export type TranslationKey =
   | 'selectDateAndTimeDescription'
   | 'specialDate'
   | 'specialDatePriceNote'
+  | 'blackoutDate'
+  | 'priceIncrease'
+  | 'fromBasePrice'
+  | 'specialFixedPrice'
   | 'selectTime'
   | 'oneSlotSelected'
   | 'selectOneSlot'
@@ -263,6 +267,7 @@ export type TranslationKey =
   | 'scrollToBottomToContinue'
   | 'reachedBottomCanContinue'
   | 'termsAndConditions'
-  | 'bookingTerms';
+  | 'bookingTerms'
+  | 'termsAcceptanceNote';
 
 export type Translations = Record<TranslationKey, string>;

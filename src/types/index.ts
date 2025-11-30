@@ -25,6 +25,8 @@ export interface StudioSettings {
   deposit_percentage: number; // 50 for 50%
   payment_type: 'deposit' | 'full'; // 'deposit' = deposit only, 'full' = full payment required
   booking_window_start: string | null; // ISO date or null for immediate
+  booking_window_end: string | null; // ISO date or null for no end date
+  booking_open: boolean; // Whether booking is currently open
   buffer_minutes: number; // default buffer between slots
   auto_cutoff_hours: number; // 0 for slot start time
 }
@@ -54,11 +56,14 @@ export interface WorkingHours {
   id: string;
   studio_id: string;
   day_of_week: number; // 0 = Sunday, 6 = Saturday
-  time_windows: TimeWindow[];
+  active: boolean; // Whether this day is open for business
+  start: string; // "09:00" - single start time
+  end: string;   // "18:00" - single end time
   applies_to_date_range?: DateRange;
   created_at: string;
 }
 
+// Legacy TimeWindow interface kept for backward compatibility if needed
 export interface TimeWindow {
   start: string; // "09:00"
   end: string;   // "12:00"
@@ -73,7 +78,9 @@ export interface DateRange {
 export interface BlackoutDate {
   id: string;
   studio_id: string;
-  date: string; // YYYY-MM-DD
+  title: string; // e.g., "Public Holiday", "Studio Maintenance"
+  start_date: string; // YYYY-MM-DD
+  end_date: string | null; // YYYY-MM-DD or null for single-day blackouts
   reason: string;
   created_at: string;
 }
@@ -90,6 +97,25 @@ export interface PricingRule {
   applies_to_themes: string[] | 'all';
   status: 'active' | 'inactive';
   created_at: string;
+}
+
+// Break Times
+export interface BreakTime {
+  id: string;
+  studio_id: string;
+  name: string; // e.g., "Lunch Break"
+  start_time: string; // "13:00"
+  end_time: string;   // "14:00"
+  days_of_week: number[]; // [1, 2, 3, 4, 5] for Mon-Fri (0 = Sunday, 6 = Saturday)
+  created_at: string;
+}
+
+// Slot Configuration
+export interface SlotConfiguration {
+  studio_id: string;
+  default_duration: number; // minutes
+  buffer_time: number; // minutes
+  max_slots_per_day: number;
 }
 
 // Add-ons

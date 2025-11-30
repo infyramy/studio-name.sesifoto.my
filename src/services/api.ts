@@ -19,6 +19,8 @@ import {
   mockBlackoutDates,
   mockPricingRules,
   mockBookingsData,
+  mockBreakTimes,
+  mockSlotConfiguration,
 } from './mockData';
 
 // Simulated API delay
@@ -128,8 +130,15 @@ export const api = {
       const dateString = d.toISOString().split('T')[0];
       const dayOfWeek = d.getDay();
 
-      // Check if blackout
-      if (blackoutDateStrings.includes(dateString)) {
+      // Check if blackout - handle both single date and date range
+      const isBlackout = blackouts.some((blackout) => {
+        if (!blackout.end_date) {
+          return dateString === blackout.start_date;
+        }
+        return dateString >= blackout.start_date && dateString <= blackout.end_date;
+      });
+      
+      if (isBlackout) {
         dates.push({
           date: dateString,
           status: 'blackout',
@@ -191,7 +200,12 @@ export const api = {
 
     // Find working hours for this day
     const dayHours = workingHours.find((wh) => wh.day_of_week === dayOfWeek);
-    if (!dayHours) return [];
+    if (!dayHours || !dayHours.active) return [];
+
+    // Get break times for this day
+    const breakTimes = (mockBreakTimes[studioId] || []).filter(
+      (bt) => bt.days_of_week.includes(dayOfWeek)
+    );
 
     // Generate time slots
     const slots: TimeSlot[] = [];
@@ -199,18 +213,27 @@ export const api = {
     const buffer = theme.buffer_minutes || 15; // Use theme buffer or default
     const slotInterval = duration + buffer;
 
-    for (const window of dayHours.time_windows) {
-      let currentTime = this.parseTime(window.start);
-      const endTime = this.parseTime(window.end);
+    let currentTime = this.parseTime(dayHours.start);
+    const endTime = this.parseTime(dayHours.end);
 
-      while (currentTime < endTime) {
-        const slotEnd = currentTime + duration;
+    while (currentTime < endTime) {
+      const slotEnd = currentTime + duration;
 
-        // Only add if slot ends before window ends
-        if (slotEnd <= endTime) {
-          const startStr = this.formatTime(currentTime);
-          const endStr = this.formatTime(slotEnd);
+      // Only add if slot ends before day ends
+      if (slotEnd <= endTime) {
+        const startStr = this.formatTime(currentTime);
+        const endStr = this.formatTime(slotEnd);
 
+        // Check if slot overlaps with any break time
+        const overlapsBreak = breakTimes.some((bt) => {
+          const breakStart = this.parseTime(bt.start_time);
+          const breakEnd = this.parseTime(bt.end_time);
+          // Slot overlaps if it starts before break ends and ends after break starts
+          return currentTime < breakEnd && slotEnd > breakStart;
+        });
+
+        // Skip slots that overlap with break times
+        if (!overlapsBreak) {
           // Simulate random availability (for demo)
           const isBooked = Math.random() > 0.7; // 30% chance of being booked
 
@@ -220,7 +243,7 @@ export const api = {
           let isSpecialPricing = false;
 
           for (const rule of pricingRules) {
-            if (date >= rule.date_range_start && date <= rule.date_range_end) {
+            if (rule.status === 'active' && date >= rule.date_range_start && date <= rule.date_range_end) {
               if (rule.rule_type === 'percentage_increase') {
                 price = price * (1 + rule.value / 100);
               } else if (rule.rule_type === 'fixed_price') {
@@ -240,9 +263,9 @@ export const api = {
             special_pricing_label: isSpecialPricing ? '*' : undefined,
           });
         }
-
-        currentTime += slotInterval;
       }
+
+      currentTime += slotInterval;
     }
 
     return slots;
