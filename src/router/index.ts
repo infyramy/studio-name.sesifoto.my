@@ -126,7 +126,7 @@ router.beforeEach(async (to, from, next) => {
 
   // Skip studio check for studio-not-found and not-found pages
   if (to.name === 'studio-not-found' || to.name === 'not-found') {
-    document.title = to.meta.title as string || 'SlotRaya';
+    document.title = to.meta.title as string || 'SESIFOTO';
     next();
     return;
   }
@@ -150,7 +150,7 @@ router.beforeEach(async (to, from, next) => {
   }
 
   // Set page title
-  const defaultTitle = studioStore.studio?.name || 'SlotRaya';
+  const defaultTitle = studioStore.studio?.name || 'SESIFOTO';
   document.title = to.meta.title ? `${to.meta.title} | ${defaultTitle}` : defaultTitle;
 
   next();

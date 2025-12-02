@@ -22,7 +22,7 @@ export function getStudioSlugFromSubdomain(): string | null {
   // Format: [slug].sesifoto.my
   const parts = hostname.split('.');
 
-  // Should have at least 3 parts: [slug, slotraya, com]
+  // Should have at least 3 parts: [slug, SESIFOTO, com]
   if (parts.length >= 3) {
     const slug = parts[0];
 

@@ -139,6 +139,12 @@ export type TranslationKey =
   | 'fieldRequired'
   | 'invalidEmail'
   | 'invalidPhone'
+  | 'preferWhatsApp'
+  | 'emailConfirmationNote'
+  | 'fillDetailsNote'
+  | 'enterPaxNote'
+  | 'note'
+  | 'important'
 
   // Pricing
   | 'base'
@@ -170,6 +176,16 @@ export type TranslationKey =
   | 'slotHeld'
   | 'timeRemaining'
   | 'payNow'
+  | 'yourSessions'
+  | 'addAnotherSession'
+  | 'paymentSummary'
+  | 'totalSessions'
+  | 'cartTotal'
+  | 'cartReview'
+  | 'addSession'
+  | 'multipleSessions'
+  | 'editAddons'
+  | 'editDetails'
 
   // Booking Summary
   | 'summary'

@@ -142,6 +142,12 @@ export const translationsBM: Translations = {
   fieldRequired: 'Ruangan ini diperlukan',
   invalidEmail: 'Alamat emel tidak sah',
   invalidPhone: 'Nombor telefon tidak sah',
+  preferWhatsApp: 'Lebih baik jika nombor mempunyai WhatsApp',
+  emailConfirmationNote: 'Pengesahan tempahan akan dihantar ke emel ini',
+  fillDetailsNote: 'Sila isi maklumat anda di bawah untuk pengesahan tempahan.',
+  enterPaxNote: 'Sila masukkan bilangan pax untuk sesi anda di bawah.',
+  note: 'Nota',
+  important: 'Penting',
 
   // Pricing
   base: 'Asas',
@@ -173,6 +179,16 @@ export const translationsBM: Translations = {
   slotHeld: 'Slot ditahan',
   timeRemaining: 'Masa berbaki',
   payNow: 'Bayar Sekarang',
+  yourSessions: 'Sesi Anda',
+  addAnotherSession: 'Tambah Sesi Lain',
+  paymentSummary: 'Ringkasan Bayaran',
+  totalSessions: 'Jumlah Sesi',
+  cartTotal: 'Jumlah Troli',
+  cartReview: 'Semakan Troli',
+  addSession: 'Tambah Sesi',
+  multipleSessions: 'Pelbagai Sesi',
+  editAddons: 'Edit Tambahan',
+  editDetails: 'Edit Butiran',
 
   // Booking Summary
   summary: 'Ringkasan',
@@ -416,6 +432,12 @@ export const translationsEN: Translations = {
   fieldRequired: 'This field is required',
   invalidEmail: 'Invalid email address',
   invalidPhone: 'Invalid phone number',
+  preferWhatsApp: 'Prefer has WhatsApp',
+  emailConfirmationNote: 'Booking confirmation will be sent to this email',
+  fillDetailsNote: 'Please fill in your details below for booking confirmation.',
+  enterPaxNote: 'Please enter the number of pax for your session below.',
+  note: 'Note',
+  important: 'Important',
 
   // Pricing
   base: 'Base',
@@ -447,6 +469,16 @@ export const translationsEN: Translations = {
   slotHeld: 'Slot held',
   timeRemaining: 'Time remaining',
   payNow: 'Pay Now',
+  yourSessions: 'Your Sessions',
+  addAnotherSession: 'Add Another Session',
+  paymentSummary: 'Payment Summary',
+  totalSessions: 'Total Sessions',
+  cartTotal: 'Cart Total',
+  cartReview: 'Cart Review',
+  addSession: 'Add Session',
+  multipleSessions: 'Multiple Sessions',
+  editAddons: 'Edit Addons',
+  editDetails: 'Edit Details',
 
   // Booking Summary
   summary: 'Summary',
