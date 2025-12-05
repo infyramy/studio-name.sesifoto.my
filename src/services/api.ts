@@ -10,6 +10,7 @@ import type {
   BookingRequest,
   Booking,
   BookingAddon,
+  Coupon,
 } from '@/types';
 import {
   mockStudios,
@@ -21,6 +22,7 @@ import {
   mockBookingsData,
   mockBreakTimes,
   mockSlotConfiguration,
+  mockCoupons,
 } from './mockData';
 
 // Simulated API delay
@@ -271,6 +273,35 @@ export const api = {
     return slots;
   },
 
+  // ===== Coupon APIs =====
+  async validateCoupon(code: string): Promise<Coupon> {
+    await delay(300);
+
+    const coupon = mockCoupons.find(
+      (c) => c.code === code && c.status === 'active'
+    );
+
+    if (!coupon) {
+      throw new Error('Invalid coupon code');
+    }
+
+    // Check validity dates
+    const today = new Date().toISOString().split('T')[0];
+    if (coupon.valid_from && today < coupon.valid_from) {
+      throw new Error('Coupon not yet valid');
+    }
+    if (coupon.valid_until && today > coupon.valid_until) {
+      throw new Error('Coupon expired');
+    }
+
+    // Check usage limits
+    if (coupon.usage_limit && coupon.usage_count >= coupon.usage_limit) {
+      throw new Error('Coupon usage limit reached');
+    }
+
+    return coupon;
+  },
+
   // ===== Booking APIs =====
   async createBooking(request: BookingRequest): Promise<Booking> {
     await delay(500);
@@ -318,6 +349,8 @@ export const api = {
       extra_pax_fee: Math.max(0, request.pax_count - theme.base_pax) * theme.extra_pax_price,
       addons_total: addonsTotal,
       special_pricing_applied: 0, // Calculate from pricing rules
+      coupon_code: request.coupon_code,
+      discount_amount: request.discount_amount || 0,
       total_amount: 0, // Will be calculated
       deposit_amount: 0, // 50% of total
       balance_amount: 0, // Remaining 50%
@@ -330,7 +363,8 @@ export const api = {
     };
 
     // Calculate totals
-    booking.total_amount = booking.base_price + booking.extra_pax_fee + booking.addons_total;
+    const subtotal = booking.base_price + booking.extra_pax_fee + booking.addons_total;
+    booking.total_amount = Math.max(0, subtotal - (booking.discount_amount || 0));
     booking.deposit_amount = Math.round(booking.total_amount * 0.5);
     booking.balance_amount = booking.total_amount - booking.deposit_amount;
 

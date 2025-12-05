@@ -149,6 +149,15 @@ router.beforeEach(async (to, from, next) => {
     return;
   }
 
+  // Store studio slug in sessionStorage to preserve context across navigation
+  if (studioStore.studio?.slug) {
+    try {
+      sessionStorage.setItem('current_studio_slug', studioStore.studio.slug);
+    } catch (error) {
+      console.error('Failed to store studio slug in sessionStorage:', error);
+    }
+  }
+
   // Set page title
   const defaultTitle = studioStore.studio?.name || 'SESIFOTO';
   document.title = to.meta.title ? `${to.meta.title} | ${defaultTitle}` : defaultTitle;

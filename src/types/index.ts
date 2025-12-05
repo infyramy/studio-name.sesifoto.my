@@ -99,6 +99,21 @@ export interface PricingRule {
   created_at: string;
 }
 
+// Coupons
+export interface Coupon {
+  id: string;
+  code: string;
+  type: 'percentage' | 'fixed';
+  value: number; // Percentage (e.g. 10 for 10%) or Fixed Amount (e.g. 50 for RM50)
+  valid_from: string | null; // ISO date or null
+  valid_until: string | null; // ISO date or null
+  usage_limit: number | null; // null for unlimited
+  usage_count: number;
+  min_spend: number | null;
+  status: 'active' | 'inactive';
+  created_at: string;
+}
+
 // Break Times
 export interface BreakTime {
   id: string;
@@ -163,6 +178,8 @@ export interface BookingRequest {
   consent_tc: boolean;
   consent_marketing: boolean;
   selected_addons: SelectedAddon[];
+  coupon_code?: string;
+  discount_amount?: number;
 }
 
 export interface SelectedAddon {
@@ -190,6 +207,8 @@ export interface Booking {
   extra_pax_fee: number;
   addons_total: number;
   special_pricing_applied: number;
+  coupon_code?: string;
+  discount_amount?: number;
   total_amount: number;
   deposit_amount: number;
   balance_amount: number;
@@ -220,6 +239,8 @@ export interface CartItem {
   extra_pax_fee: number;
   addons_total: number;
   special_pricing_applied: number;
+  coupon_code?: string;
+  discount_amount?: number;
   total_amount: number;
 }
 
