@@ -133,7 +133,7 @@ const refreshPage = () => {
           @click="goToMainSite"
           class="w-full sm:w-auto px-6 py-3 rounded-lg bg-stone-900 text-white text-sm font-medium hover:bg-stone-800 transition-all shadow-lg shadow-stone-900/10 active:scale-95 flex items-center justify-center gap-2 group"
         >
-          <span>{{ t("visitSesifoto") || "Visit SESIFOTO" }}</span>
+          <span>{{ t("visitSesifoto") || "Visit Sesifoto" }}</span>
           <ArrowRight
             class="w-4 h-4 group-hover:translate-x-0.5 transition-transform"
           />
