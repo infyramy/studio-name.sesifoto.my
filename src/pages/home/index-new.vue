@@ -141,14 +141,6 @@ onUnmounted(() => {
   document.body.classList.remove("rustic-active");
 });
 
-// Update interval when style changes
-const updateInterval = () => {
-  if (intervalId) clearInterval(intervalId);
-  intervalId = setInterval(() => {
-    currentImageIndex.value =
-      (currentImageIndex.value + 1) % backgroundImages.value.length;
-  }, imageInterval.value);
-};
 const adjustOpacity = (color: string | undefined, opacity: number) => {
   if (!color) return undefined;
   if (color.startsWith("#")) {
