@@ -6,14 +6,17 @@ export interface Studio {
   owner_name: string;
   whatsapp: string;
   instagram?: string;
+  facebook?: string;
+  tiktok?: string;
+  pinterest?: string;
   address: string;
   maps_link: string;
   logo_url: string;
   brand_color: string;
-  default_language: 'BM' | 'EN';
+  default_language: "BM" | "EN";
   timezone: string;
   currency: string;
-  status: 'trial' | 'active' | 'suspended';
+  status: "trial" | "active" | "suspended";
   settings: StudioSettings;
   created_at: string;
   updated_at: string;
@@ -23,12 +26,41 @@ export interface StudioSettings {
   cart_mode_enabled: boolean;
   cart_hold_duration: number; // minutes
   deposit_percentage: number; // 50 for 50%
-  payment_type: 'deposit' | 'full'; // 'deposit' = deposit only, 'full' = full payment required
+  payment_type: "deposit" | "full"; // 'deposit' = deposit only, 'full' = full payment required
   booking_window_start: string | null; // ISO date or null for immediate
   booking_window_end: string | null; // ISO date or null for no end date
   booking_open: boolean; // Whether booking is currently open
   buffer_minutes: number; // default buffer between slots
   auto_cutoff_hours: number; // 0 for slot start time
+}
+
+// Hero Style Configuration (from backend)
+export interface HeroStyleConfig {
+  styleKey: "rustic" | "modern" | "luxe";
+  heading: string;
+  headingColor: string;
+  highlightText?: string;
+  highlightColor?: string;
+  testimonial?: string;
+  supportingColor?: string;
+  buttonBgColor: string;
+  buttonTextColor: string;
+  cardOpacity?: number;
+  backgroundColor?: string;
+  primaryTextColor?: string;
+  invertTheme?: boolean;
+  backgroundImages: string[];
+}
+
+// Website Settings (from backend)
+export interface WebsiteSettings {
+  bookingOpen: boolean;
+  defaultLanguage: "BM" | "EN";
+  paymentType: "deposit" | "full";
+  cartModeEnabled: boolean;
+  cartHoldDuration: number;
+  selectedStyle: "rustic" | "modern" | "luxe";
+  heroConfig?: HeroStyleConfig;
 }
 
 // Theme Types
@@ -44,7 +76,7 @@ export interface Theme {
   extra_pax_price: number;
   duration_minutes: number;
   buffer_minutes: number | null; // null uses studio default
-  status: 'active' | 'inactive';
+  status: "active" | "inactive";
   sort_order: number;
   created_at: string;
   updated_at: string;
@@ -58,7 +90,7 @@ export interface WorkingHours {
   day_of_week: number; // 0 = Sunday, 6 = Saturday
   active: boolean; // Whether this day is open for business
   start: string; // "09:00" - single start time
-  end: string;   // "18:00" - single end time
+  end: string; // "18:00" - single end time
   applies_to_date_range?: DateRange;
   created_at: string;
 }
@@ -66,12 +98,12 @@ export interface WorkingHours {
 // Legacy TimeWindow interface kept for backward compatibility if needed
 export interface TimeWindow {
   start: string; // "09:00"
-  end: string;   // "12:00"
+  end: string; // "12:00"
 }
 
 export interface DateRange {
   start: string; // YYYY-MM-DD
-  end: string;   // YYYY-MM-DD
+  end: string; // YYYY-MM-DD
 }
 
 // Blackout Dates
@@ -91,11 +123,11 @@ export interface PricingRule {
   studio_id: string;
   name: string;
   date_range_start: string; // YYYY-MM-DD
-  date_range_end: string;   // YYYY-MM-DD
-  rule_type: 'percentage_increase' | 'fixed_price';
+  date_range_end: string; // YYYY-MM-DD
+  rule_type: "percentage_increase" | "fixed_price";
   value: number; // 50 for +50% or 280 for RM280
-  applies_to_themes: string[] | 'all';
-  status: 'active' | 'inactive';
+  applies_to_themes: string[] | "all";
+  status: "active" | "inactive";
   created_at: string;
 }
 
@@ -103,14 +135,14 @@ export interface PricingRule {
 export interface Coupon {
   id: string;
   code: string;
-  type: 'percentage' | 'fixed';
+  type: "percentage" | "fixed";
   value: number; // Percentage (e.g. 10 for 10%) or Fixed Amount (e.g. 50 for RM50)
   valid_from: string | null; // ISO date or null
   valid_until: string | null; // ISO date or null
   usage_limit: number | null; // null for unlimited
   usage_count: number;
   min_spend: number | null;
-  status: 'active' | 'inactive';
+  status: "active" | "inactive";
   created_at: string;
 }
 
@@ -120,7 +152,7 @@ export interface BreakTime {
   studio_id: string;
   name: string; // e.g., "Lunch Break"
   start_time: string; // "13:00"
-  end_time: string;   // "14:00"
+  end_time: string; // "14:00"
   days_of_week: number[]; // [1, 2, 3, 4, 5] for Mon-Fri (0 = Sunday, 6 = Saturday)
   created_at: string;
 }
@@ -140,7 +172,7 @@ export interface Addon {
   name: string;
   price: number;
   max_quantity: number | null; // null = unlimited
-  status: 'active' | 'inactive';
+  status: "active" | "inactive";
   sort_order: number;
   image?: string; // Optional image URL
   created_at: string;
@@ -149,8 +181,8 @@ export interface Addon {
 // Slot Types
 export interface TimeSlot {
   start: string; // "09:00"
-  end: string;   // "09:30"
-  status: 'available' | 'booked' | 'held';
+  end: string; // "09:30"
+  status: "available" | "booked" | "held";
   price: number;
   is_special_pricing: boolean;
   special_pricing_label?: string; // "Harga Istimewa Raya"
@@ -158,7 +190,7 @@ export interface TimeSlot {
 
 export interface DateSlotInfo {
   date: string; // YYYY-MM-DD
-  status: 'available' | 'fully_booked' | 'blackout' | 'special_pricing';
+  status: "available" | "fully_booked" | "blackout" | "special_pricing";
   slots_available: number;
   slots_total: number;
   special_pricing_label?: string;
@@ -168,8 +200,8 @@ export interface DateSlotInfo {
 export interface BookingRequest {
   theme_id: string;
   booking_date: string; // YYYY-MM-DD
-  start_time: string;   // "09:00"
-  end_time: string;     // "09:30"
+  start_time: string; // "09:00"
+  end_time: string; // "09:30"
   pax_count: number;
   customer_name: string;
   customer_phone: string;
@@ -212,8 +244,13 @@ export interface Booking {
   total_amount: number;
   deposit_amount: number;
   balance_amount: number;
-  payment_status: 'pending' | 'deposit_paid' | 'paid_full' | 'refunded';
-  booking_status: 'cart_hold' | 'confirmed' | 'completed' | 'cancelled';
+  payment_status: "pending" | "partially_paid" | "paid" | "refunded";
+  booking_status:
+    | "cart_hold"
+    | "confirmed"
+    | "undelivered"
+    | "completed"
+    | "cancelled";
   cart_hold_expires_at: string | null;
   created_at: string;
   updated_at: string;
@@ -248,7 +285,7 @@ export interface CartItem {
 export interface PaymentRequest {
   booking_id: string;
   amount: number;
-  payment_method: 'FPX' | 'card' | 'ewallet';
+  payment_method: "FPX" | "card" | "ewallet";
 }
 
 export interface PaymentResponse {
@@ -258,7 +295,7 @@ export interface PaymentResponse {
 }
 
 // Language Types
-export type Language = 'BM' | 'EN';
+export type Language = "BM" | "EN";
 
 // API Response Types
 export interface ApiResponse<T> {

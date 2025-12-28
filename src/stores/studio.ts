@@ -1,24 +1,35 @@
-import { defineStore } from 'pinia';
-import { ref, computed } from 'vue';
-import type { Studio, Theme, Addon, Language } from '@/types';
-import { api } from '@/services/api';
-import { getStudioSlugFromSubdomain } from '@/utils/slug';
+import { defineStore } from "pinia";
+import { ref, computed } from "vue";
+import type { Studio, Theme, Addon, Language, WebsiteSettings } from "@/types";
+import { api } from "@/services/api";
+import { getStudioSlugFromSubdomain } from "@/utils/slug";
 
-export const useStudioStore = defineStore('studio', () => {
+export const useStudioStore = defineStore("studio", () => {
   // State
   const studio = ref<Studio | null>(null);
   const themes = ref<Theme[]>([]);
   const addons = ref<Addon[]>([]);
-  const currentLanguage = ref<Language>('BM');
+  const websiteSettings = ref<WebsiteSettings | null>(null);
+  const currentLanguage = ref<Language>("BM");
   const loading = ref(false);
   const error = ref<string | null>(null);
 
   // Computed
   const isLoaded = computed(() => studio.value !== null);
   const studioSlug = computed(() => studio.value?.slug || null);
-  const brandColor = computed(() => studio.value?.brand_color || '#A8DADC');
-  const activeThemes = computed(() => themes.value.filter((t) => t.status === 'active'));
-  const activeAddons = computed(() => addons.value.filter((a) => a.status === 'active'));
+  const brandColor = computed(() => studio.value?.brand_color || "#A8DADC");
+  const activeThemes = computed(() =>
+    themes.value.filter((t) => t.status === "active")
+  );
+  const activeAddons = computed(() =>
+    addons.value.filter((a) => a.status === "active")
+  );
+
+  // Hero config from website settings
+  const heroConfig = computed(() => websiteSettings.value?.heroConfig || null);
+  const selectedStyle = computed(
+    () => websiteSettings.value?.selectedStyle || "rustic"
+  );
 
   // Actions
   async function loadStudio(slug?: string) {
@@ -30,19 +41,26 @@ export const useStudioStore = defineStore('studio', () => {
       const studioSlug = slug || getStudioSlugFromSubdomain();
 
       if (!studioSlug) {
-        throw new Error('Studio tidak dijumpai. Sila semak URL anda.');
+        throw new Error("Studio tidak dijumpai. Sila semak URL anda.");
       }
 
-      // Fetch studio data
-      studio.value = await api.getStudioBySlug(studioSlug);
+      // Fetch studio data and website settings in parallel
+      const [studioData, settingsData] = await Promise.all([
+        api.getStudioBySlug(studioSlug),
+        api.getWebsiteSettings(studioSlug),
+      ]);
 
-      // Set default language
-      currentLanguage.value = studio.value.default_language;
+      studio.value = studioData;
+      websiteSettings.value = settingsData;
+
+      // Set default language from website settings (takes precedence)
+      currentLanguage.value =
+        settingsData?.defaultLanguage || studioData.default_language;
 
       // Fetch related data in parallel
       const [themesData, addonsData] = await Promise.all([
-        api.getThemesByStudio(studio.value.id),
-        api.getAddonsByStudio(studio.value.id),
+        api.getThemesByStudio(studioData.id),
+        api.getAddonsByStudio(studioData.id),
       ]);
 
       themes.value = themesData;
@@ -50,7 +68,8 @@ export const useStudioStore = defineStore('studio', () => {
 
       return studio.value;
     } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Ralat tidak diketahui';
+      error.value =
+        err instanceof Error ? err.message : "Ralat tidak diketahui";
       throw err;
     } finally {
       loading.value = false;
@@ -62,7 +81,7 @@ export const useStudioStore = defineStore('studio', () => {
   }
 
   function toggleLanguage() {
-    currentLanguage.value = currentLanguage.value === 'BM' ? 'EN' : 'BM';
+    currentLanguage.value = currentLanguage.value === "BM" ? "EN" : "BM";
   }
 
   function getThemeById(themeId: string): Theme | undefined {
@@ -77,7 +96,8 @@ export const useStudioStore = defineStore('studio', () => {
     studio.value = null;
     themes.value = [];
     addons.value = [];
-    currentLanguage.value = 'BM';
+    websiteSettings.value = null;
+    currentLanguage.value = "BM";
     loading.value = false;
     error.value = null;
   }
@@ -87,6 +107,7 @@ export const useStudioStore = defineStore('studio', () => {
     studio,
     themes,
     addons,
+    websiteSettings,
     currentLanguage,
     loading,
     error,
@@ -97,6 +118,8 @@ export const useStudioStore = defineStore('studio', () => {
     brandColor,
     activeThemes,
     activeAddons,
+    heroConfig,
+    selectedStyle,
 
     // Actions
     loadStudio,
