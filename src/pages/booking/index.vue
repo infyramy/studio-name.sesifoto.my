@@ -121,7 +121,9 @@ onMounted(async () => {
   }
 
   // Simulate API call to fetch themes
-  await new Promise(resolve => setTimeout(resolve, 800 + Math.random() * 400));
+  await new Promise((resolve) =>
+    setTimeout(resolve, 800 + Math.random() * 400)
+  );
   loadingThemes.value = false;
 
   const themeId = route.params.themeId as string | undefined;
@@ -522,12 +524,14 @@ const proceedToCheckout = () => router.push("/cart/checkout");
             <span
               class="font-medium text-[10px] sm:text-xs uppercase tracking-wider"
               :style="{ color: colorTheme.secondary }"
-              >{{ t('back') }}</span
+              >{{ t("back") }}</span
             >
           </button>
 
           <!-- Studio Info -->
-          <div class="flex items-center gap-2 flex-1 justify-center sm:justify-start sm:flex-initial">
+          <div
+            class="flex items-center gap-2 flex-1 justify-center sm:justify-start sm:flex-initial"
+          >
             <img
               v-if="studioStore.studio?.logo_url"
               :src="studioStore.studio.logo_url"
@@ -540,7 +544,9 @@ const proceedToCheckout = () => router.push("/cart/checkout");
               }"
             />
             <div class="hidden sm:block">
-              <div class="text-xs text-gray-500 font-medium">{{ t('bookingAt') }}</div>
+              <div class="text-xs text-gray-500 font-medium">
+                {{ t("bookingAt") }}
+              </div>
               <div class="text-sm font-semibold text-gray-900">
                 {{ studioStore.studio?.name }}
               </div>
@@ -640,7 +646,7 @@ const proceedToCheckout = () => router.push("/cart/checkout");
                 color: currentStep >= 1 ? colorTheme.secondary : '#9CA3AF',
               }"
             >
-              {{ t('dateAndTime') }}
+              {{ t("dateAndTime") }}
             </span>
           </div>
 
@@ -671,7 +677,7 @@ const proceedToCheckout = () => router.push("/cart/checkout");
                 color: currentStep >= 2 ? colorTheme.secondary : '#9CA3AF',
               }"
             >
-              {{ t('customizeSession') }}
+              {{ t("customizeSession") }}
             </span>
           </div>
 
@@ -704,7 +710,7 @@ const proceedToCheckout = () => router.push("/cart/checkout");
                   color: currentStep >= 3 ? colorTheme.secondary : '#9CA3AF',
                 }"
               >
-                {{ t('customerInformation') }}
+                {{ t("customerInformation") }}
               </span>
             </div>
           </template>
@@ -724,15 +730,18 @@ const proceedToCheckout = () => router.push("/cart/checkout");
               <h2
                 class="text-2xl sm:text-3xl font-extralight text-gray-900 mb-2"
               >
-                {{ t('selectThemeTitle') }}
+                {{ t("selectThemeTitle") }}
               </h2>
               <p class="text-sm sm:text-base text-gray-600 font-light">
-                {{ t('selectThemeSubtitle') }}
+                {{ t("selectThemeSubtitle") }}
               </p>
             </div>
 
             <!-- Loading Skeleton -->
-            <div v-if="loadingThemes" class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
+            <div
+              v-if="loadingThemes"
+              class="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5"
+            >
               <div
                 v-for="i in 3"
                 :key="i"
@@ -740,7 +749,7 @@ const proceedToCheckout = () => router.push("/cart/checkout");
               >
                 <!-- Image skeleton -->
                 <div class="aspect-[4/3] bg-gray-200"></div>
-                
+
                 <!-- Content skeleton -->
                 <div class="p-4 sm:p-5 space-y-3">
                   <!-- Title -->
@@ -751,7 +760,9 @@ const proceedToCheckout = () => router.push("/cart/checkout");
                     <div class="h-4 bg-gray-200 rounded w-5/6"></div>
                   </div>
                   <!-- Price and button -->
-                  <div class="flex items-center justify-between pt-3 border-t border-gray-100">
+                  <div
+                    class="flex items-center justify-between pt-3 border-t border-gray-100"
+                  >
                     <div class="space-y-2">
                       <div class="h-3 bg-gray-200 rounded w-20"></div>
                       <div class="h-7 bg-gray-200 rounded w-16"></div>
@@ -809,7 +820,7 @@ const proceedToCheckout = () => router.push("/cart/checkout");
                       <div
                         class="text-[10px] uppercase tracking-wider text-gray-500 mb-1 font-medium"
                       >
-                        {{ t('startingFrom') }}
+                        {{ t("startingFrom") }}
                       </div>
                       <div
                         class="text-xl sm:text-2xl font-medium"
@@ -825,8 +836,9 @@ const proceedToCheckout = () => router.push("/cart/checkout");
                         color: colorTheme.secondary,
                       }"
                     >
-                      <span class="text-xs font-medium uppercase tracking-wider"
-                        >{{ t('select') }}</span
+                      <span
+                        class="text-xs font-medium uppercase tracking-wider"
+                        >{{ t("select") }}</span
                       >
                       <svg
                         class="w-4 h-4 transition-transform group-hover:translate-x-1"
@@ -854,10 +866,10 @@ const proceedToCheckout = () => router.push("/cart/checkout");
               <h2
                 class="text-2xl sm:text-3xl font-extralight text-gray-900 mb-2"
               >
-                {{ t('chooseDateTimeTitle') }}
+                {{ t("chooseDateTimeTitle") }}
               </h2>
               <p class="text-sm sm:text-base text-gray-600 font-light">
-                {{ t('chooseDateTimeSubtitle') }}
+                {{ t("chooseDateTimeSubtitle") }}
               </p>
             </div>
 
@@ -967,7 +979,7 @@ const proceedToCheckout = () => router.push("/cart/checkout");
               <h3
                 class="text-base sm:text-lg font-medium mb-3 sm:mb-4 flex items-center gap-2"
               >
-                {{ t('selectTimeSlot') }}
+                {{ t("selectTimeSlot") }}
                 <svg
                   v-if="loadingSlots"
                   class="animate-spin w-4 h-4"
@@ -1015,7 +1027,7 @@ const proceedToCheckout = () => router.push("/cart/checkout");
                     ></path>
                   </svg>
                   <p class="text-sm text-gray-600">
-                    {{ t('loadingSlots') }}
+                    {{ t("loadingSlots") }}
                   </p>
                 </div>
               </div>
@@ -1025,11 +1037,14 @@ const proceedToCheckout = () => router.push("/cart/checkout");
                 v-else-if="availableSlots.length === 0"
                 class="text-center py-6 sm:py-8 text-gray-500 text-sm sm:text-base"
               >
-                {{ t('noSlotsAvailable') }}
+                {{ t("noSlotsAvailable") }}
               </div>
 
               <!-- Slots Grid -->
-              <div v-else class="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
+              <div
+                v-else
+                class="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3"
+              >
                 <button
                   v-for="slot in availableSlots"
                   :key="slot.start"
@@ -1099,7 +1114,7 @@ const proceedToCheckout = () => router.push("/cart/checkout");
                 <p
                   class="text-xs font-medium uppercase tracking-wider text-gray-500 mb-2"
                 >
-                  {{ t('legend') }}
+                  {{ t("legend") }}
                 </p>
                 <div
                   class="flex flex-wrap gap-3 text-xs text-gray-600 font-light"
@@ -1109,15 +1124,15 @@ const proceedToCheckout = () => router.push("/cart/checkout");
                       class="w-3 h-3 rounded"
                       :style="{ backgroundColor: colorTheme.primary + '40' }"
                     ></div>
-                    <span>{{ t('available') }}</span>
+                    <span>{{ t("available") }}</span>
                   </div>
                   <div class="flex items-center gap-1.5">
                     <div class="w-2 h-2 bg-red-500 rounded-full"></div>
-                    <span>{{ t('booked') }}</span>
+                    <span>{{ t("booked") }}</span>
                   </div>
                   <div class="flex items-center gap-1.5">
                     <div class="w-2 h-2 bg-yellow-500 rounded-full"></div>
-                    <span>{{ t('held') }}</span>
+                    <span>{{ t("held") }}</span>
                   </div>
                   <div class="flex items-center gap-1.5">
                     <div
@@ -1125,7 +1140,7 @@ const proceedToCheckout = () => router.push("/cart/checkout");
                     >
                       +
                     </div>
-                    <span>{{ t('specialPrice') }}</span>
+                    <span>{{ t("specialPrice") }}</span>
                   </div>
                 </div>
               </div>
@@ -1137,7 +1152,7 @@ const proceedToCheckout = () => router.push("/cart/checkout");
                 @click="goToStep(0)"
                 class="flex-1 py-3 sm:py-3.5 px-4 sm:px-6 font-medium text-xs sm:text-sm uppercase tracking-wider transition-all active:scale-95 touch-manipulation bg-gray-100 text-gray-900 min-h-[48px]"
               >
-                {{ t('back') }}
+                {{ t("back") }}
               </button>
               <button
                 @click="goToStep(2)"
@@ -1145,7 +1160,7 @@ const proceedToCheckout = () => router.push("/cart/checkout");
                 class="flex-1 py-3 sm:py-3.5 px-4 sm:px-6 font-medium text-xs sm:text-sm uppercase tracking-wider transition-all active:scale-95 touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed text-white min-h-[48px]"
                 :style="{ backgroundColor: colorTheme.secondary }"
               >
-                {{ t('continue') }}
+                {{ t("continue") }}
               </button>
             </div>
           </div>
@@ -1156,10 +1171,10 @@ const proceedToCheckout = () => router.push("/cart/checkout");
               <h2
                 class="text-2xl sm:text-3xl font-extralight text-gray-900 mb-2"
               >
-                {{ t('customizeSessionTitle') }}
+                {{ t("customizeSessionTitle") }}
               </h2>
               <p class="text-sm sm:text-base text-gray-600 font-light">
-                {{ t('customizeSessionSubtitle') }}
+                {{ t("customizeSessionSubtitle") }}
               </p>
             </div>
 
@@ -1168,15 +1183,17 @@ const proceedToCheckout = () => router.push("/cart/checkout");
               <div class="flex items-center justify-between mb-3 sm:mb-4">
                 <div>
                   <h3 class="text-base sm:text-lg font-medium">
-                    {{ t('numberOfPeople') }}
+                    {{ t("numberOfPeople") }}
                   </h3>
                   <p class="text-xs sm:text-sm text-gray-500 mt-1">
-                    {{ t('base') }}: {{ selectedTheme?.base_pax }} {{ t('pax') }} ({{ t('baseIncluded') }})
+                    {{ t("base") }}: {{ selectedTheme?.base_pax }}
+                    {{ t("pax") }} ({{ t("baseIncluded") }})
                     <span
                       v-if="paxCount > (selectedTheme?.base_pax || 0)"
                       class="text-orange-600"
                     >
-                      + {{ paxCount - (selectedTheme?.base_pax || 0) }} {{ t('extra') }}
+                      + {{ paxCount - (selectedTheme?.base_pax || 0) }}
+                      {{ t("extra") }}
                     </span>
                   </p>
                 </div>
@@ -1230,7 +1247,7 @@ const proceedToCheckout = () => router.push("/cart/checkout");
                 class="text-sm text-gray-700 p-3 font-light"
                 :style="{ backgroundColor: colorTheme.primary + '15' }"
               >
-                <span class="font-medium">{{ t('extraPaxFee') }}</span> RM{{
+                <span class="font-medium">{{ t("extraPaxFee") }}</span> RM{{
                   (
                     (paxCount - (selectedTheme?.base_pax || 0)) *
                     (selectedTheme?.extra_pax_price || 0)
@@ -1242,7 +1259,7 @@ const proceedToCheckout = () => router.push("/cart/checkout");
             <!-- Add-ons -->
             <div v-if="availableAddons.length > 0" class="card p-4 sm:p-6">
               <h3 class="text-base sm:text-lg font-medium mb-3 sm:mb-4">
-                {{ t('optionalAddons') }}
+                {{ t("optionalAddons") }}
               </h3>
               <div class="space-y-2 sm:space-y-3">
                 <button
@@ -1318,7 +1335,7 @@ const proceedToCheckout = () => router.push("/cart/checkout");
                     @click="goToStep(1)"
                     class="w-full py-3 px-6 font-medium text-sm uppercase tracking-wider transition-all hover:shadow-lg bg-gray-100 text-gray-900"
                   >
-                    {{ t('back') }}
+                    {{ t("back") }}
                   </button>
                   <button
                     @click="addToCart"
@@ -1340,7 +1357,7 @@ const proceedToCheckout = () => router.push("/cart/checkout");
                         d="M12 4v16m8-8H4"
                       />
                     </svg>
-                    {{ t('addToCart') }}
+                    {{ t("addToCart") }}
                   </button>
                 </div>
               </template>
@@ -1352,14 +1369,14 @@ const proceedToCheckout = () => router.push("/cart/checkout");
                     @click="goToStep(1)"
                     class="flex-1 py-3 px-6 font-medium text-sm uppercase tracking-wider transition-all hover:shadow-lg bg-gray-100 text-gray-900"
                   >
-                    {{ t('back') }}
+                    {{ t("back") }}
                   </button>
                   <button
                     @click="goToStep(3)"
                     class="flex-1 py-3 px-6 font-medium text-sm uppercase tracking-wider transition-all hover:shadow-lg text-white"
                     :style="{ backgroundColor: colorTheme.secondary }"
                   >
-                    {{ t('continue') }}
+                    {{ t("continue") }}
                   </button>
                 </div>
               </template>
@@ -1375,10 +1392,10 @@ const proceedToCheckout = () => router.push("/cart/checkout");
               <h2
                 class="text-2xl sm:text-3xl font-extralight text-gray-900 mb-2"
               >
-                {{ t('customerInfoTitle') }}
+                {{ t("customerInfoTitle") }}
               </h2>
               <p class="text-sm sm:text-base text-gray-600 font-light">
-                {{ t('customerInfoSubtitle') }}
+                {{ t("customerInfoSubtitle") }}
               </p>
             </div>
 
@@ -1387,7 +1404,7 @@ const proceedToCheckout = () => router.push("/cart/checkout");
               <div>
                 <label
                   class="block text-xs uppercase tracking-wider text-gray-500 mb-2 font-medium"
-                  >{{ t('fullName') }} *</label
+                  >{{ t("fullName") }} *</label
                 >
                 <input
                   v-model="customerForm.name"
@@ -1411,7 +1428,7 @@ const proceedToCheckout = () => router.push("/cart/checkout");
               <div>
                 <label
                   class="block text-xs uppercase tracking-wider text-gray-500 mb-2 font-medium"
-                  >{{ t('whatsappNumber') }} *</label
+                  >{{ t("whatsappNumber") }} *</label
                 >
                 <input
                   v-model="customerForm.phone"
@@ -1436,7 +1453,7 @@ const proceedToCheckout = () => router.push("/cart/checkout");
               <div>
                 <label
                   class="block text-xs uppercase tracking-wider text-gray-500 mb-2 font-medium"
-                  >{{ t('emailAddress') }} *</label
+                  >{{ t("emailAddress") }} *</label
                 >
                 <input
                   v-model="customerForm.email"
@@ -1461,7 +1478,7 @@ const proceedToCheckout = () => router.push("/cart/checkout");
               <div>
                 <label
                   class="block text-xs uppercase tracking-wider text-gray-500 mb-2 font-medium"
-                  >{{ t('notesOptional') }}</label
+                  >{{ t("notesOptional") }}</label
                 >
                 <textarea
                   v-model="customerForm.notes"
@@ -1527,7 +1544,7 @@ const proceedToCheckout = () => router.push("/cart/checkout");
                       d="M12 4v16m8-8H4"
                     />
                   </svg>
-                  {{ t('addToCart') }}
+                  {{ t("addToCart") }}
                 </button>
                 <button
                   @click="submitBooking"
@@ -1536,7 +1553,7 @@ const proceedToCheckout = () => router.push("/cart/checkout");
                     backgroundColor: colorTheme.secondary,
                   }"
                 >
-                  {{ t('payNow') }} - RM{{ calculatedTotal.toFixed(2) }}
+                  {{ t("payNow") }} - RM{{ calculatedTotal.toFixed(2) }}
                 </button>
               </template>
 
@@ -1549,7 +1566,7 @@ const proceedToCheckout = () => router.push("/cart/checkout");
                     backgroundColor: colorTheme.secondary,
                   }"
                 >
-                  {{ t('payNow') }} - RM{{ calculatedTotal.toFixed(2) }}
+                  {{ t("payNow") }} - RM{{ calculatedTotal.toFixed(2) }}
                 </button>
               </template>
 
@@ -1557,7 +1574,7 @@ const proceedToCheckout = () => router.push("/cart/checkout");
                 @click="goToStep(2)"
                 class="w-full py-3 px-6 font-medium text-sm uppercase tracking-wider transition-all hover:shadow-lg bg-gray-100 text-gray-900"
               >
-                {{ t('back') }}
+                {{ t("back") }}
               </button>
             </div>
           </div>
@@ -1567,7 +1584,7 @@ const proceedToCheckout = () => router.push("/cart/checkout");
         <div class="lg:col-span-1" v-if="selectedTheme && currentStep > 0">
           <div class="card sticky top-20 sm:top-24 space-y-3 sm:space-y-4">
             <h3 class="text-base sm:text-lg font-medium text-gray-900">
-              {{ t('summary') }}
+              {{ t("summary") }}
             </h3>
             <div class="space-y-2 sm:space-y-3 text-xs sm:text-sm">
               <div class="pb-2 sm:pb-3 border-b border-gray-200">
@@ -1603,9 +1620,9 @@ const proceedToCheckout = () => router.push("/cart/checkout");
                       clip-rule="evenodd"
                     />
                   </svg>
-                  <span class="font-medium text-xs sm:text-sm"
-                    >{{ t('dateAndTime') }}</span
-                  >
+                  <span class="font-medium text-xs sm:text-sm">{{
+                    t("dateAndTime")
+                  }}</span>
                 </div>
                 <div class="text-gray-900 text-xs sm:text-sm font-light">
                   {{ format(selectedDate, "dd MMM yyyy") }} @
@@ -1616,7 +1633,8 @@ const proceedToCheckout = () => router.push("/cart/checkout");
                 <div class="flex justify-between items-start">
                   <div class="flex-1">
                     <span class="text-gray-600"
-                      >{{ t('base') }} ({{ selectedTheme.base_pax }} {{ t('pax') }})</span
+                      >{{ t("base") }} ({{ selectedTheme.base_pax }}
+                      {{ t("pax") }})</span
                     >
                     <div
                       v-if="
@@ -1650,7 +1668,8 @@ const proceedToCheckout = () => router.push("/cart/checkout");
                   class="flex justify-between mt-2"
                 >
                   <span class="text-gray-600 font-light"
-                    >{{ t('extra') }} {{ paxCount - selectedTheme.base_pax }} {{ t('pax') }}</span
+                    >{{ t("extra") }} {{ paxCount - selectedTheme.base_pax }}
+                    {{ t("pax") }}</span
                   >
                   <span class="font-medium">RM{{ extraPaxFee }}</span>
                 </div>
@@ -1678,14 +1697,16 @@ const proceedToCheckout = () => router.push("/cart/checkout");
                 <div
                   class="flex justify-between text-base sm:text-lg font-medium"
                 >
-                  <span class="uppercase tracking-wider text-xs">{{ t('total') }}</span>
+                  <span class="uppercase tracking-wider text-xs">{{
+                    t("total")
+                  }}</span>
                   <span class="text-primary-600">RM{{ totalAmount }}</span>
                 </div>
               </div>
               <div class="bg-primary-50 p-2 sm:p-3">
                 <div class="flex justify-between text-xs sm:text-sm mb-1">
                   <span class="text-gray-600 font-light"
-                    >{{ t('deposit') }} ({{
+                    >{{ t("deposit") }} ({{
                       studioStore.studio?.settings?.deposit_percentage || 50
                     }}%)</span
                   >
@@ -1694,7 +1715,9 @@ const proceedToCheckout = () => router.push("/cart/checkout");
                   >
                 </div>
                 <div class="flex justify-between text-xs sm:text-sm">
-                  <span class="text-gray-600 font-light">{{ t('balance') }}</span>
+                  <span class="text-gray-600 font-light">{{
+                    t("balance")
+                  }}</span>
                   <span class="font-medium text-gray-900"
                     >RM{{ balanceAmount }}</span
                   >
@@ -1735,10 +1758,14 @@ const proceedToCheckout = () => router.push("/cart/checkout");
               :style="{ borderColor: colorTheme.primary + '30' }"
             >
               <div>
-                <h3 class="text-lg sm:text-xl font-light text-gray-900">{{ t('yourCart') }}</h3>
+                <h3 class="text-lg sm:text-xl font-light text-gray-900">
+                  {{ t("yourCart") }}
+                </h3>
                 <p class="text-xs sm:text-sm text-gray-500 mt-1 font-light">
                   {{ bookingStore.cartCount }}
-                  {{ bookingStore.cartCount === 1 ? t('booking') : t('bookings') }}
+                  {{
+                    bookingStore.cartCount === 1 ? t("booking") : t("bookings")
+                  }}
                 </p>
               </div>
               <button
@@ -1779,7 +1806,7 @@ const proceedToCheckout = () => router.push("/cart/checkout");
                 />
               </svg>
               <p class="text-gray-500 text-center font-light">
-                {{ t('cartEmptyMessage') }}
+                {{ t("cartEmptyMessage") }}
               </p>
               <button
                 @click="showCartSidebar = false"
@@ -1789,7 +1816,7 @@ const proceedToCheckout = () => router.push("/cart/checkout");
                   color: colorTheme.secondary,
                 }"
               >
-                {{ t('startBooking') }}
+                {{ t("startBooking") }}
               </button>
             </div>
 
@@ -1904,7 +1931,7 @@ const proceedToCheckout = () => router.push("/cart/checkout");
                 <div
                   class="flex justify-between text-xs sm:text-sm text-gray-600 font-light"
                 >
-                  <span>{{ t('subtotal') }}</span>
+                  <span>{{ t("subtotal") }}</span>
                   <span class="font-medium"
                     >RM{{ bookingStore.cartTotal.toFixed(2) }}</span
                   >
@@ -1912,15 +1939,16 @@ const proceedToCheckout = () => router.push("/cart/checkout");
                 <div
                   class="flex justify-between text-sm sm:text-base font-medium text-gray-900"
                 >
-                  <span class="text-[10px] sm:text-xs uppercase tracking-wider"
-                    >{{ t('depositRequired') }}</span
+                  <span
+                    class="text-[10px] sm:text-xs uppercase tracking-wider"
+                    >{{ t("depositRequired") }}</span
                   >
                   <span :style="{ color: colorTheme.secondary }"
                     >RM{{ bookingStore.cartDepositTotal.toFixed(2) }}</span
                   >
                 </div>
                 <p class="text-xs text-gray-500 font-light">
-                  {{ t('payNowBalanceAtStudio') }}
+                  {{ t("payNowBalanceAtStudio") }}
                 </p>
               </div>
               <button
@@ -1930,7 +1958,7 @@ const proceedToCheckout = () => router.push("/cart/checkout");
                   backgroundColor: colorTheme.secondary,
                 }"
               >
-                {{ t('proceedToCheckout') }}
+                {{ t("proceedToCheckout") }}
               </button>
             </div>
           </div>

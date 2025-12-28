@@ -3,12 +3,8 @@ import { ref, computed, watch, onMounted, onUnmounted } from "vue";
 import { useRouter } from "vue-router";
 import { useStudioStore } from "@/stores/studio";
 import { useTranslation } from "@/composables/useTranslation";
+import { useCurrency } from "@/composables/useCurrency";
 import { createBooking, api } from "@/services/api";
-import {
-  mockBlackoutDates,
-  mockPricingRules,
-  mockWorkingHours,
-} from "@/services/mockData";
 import {
   ChevronLeft,
   Calendar,
@@ -33,39 +29,43 @@ import Modal from "@/components/Modal.vue";
 const router = useRouter();
 const studioStore = useStudioStore();
 const { t } = useTranslation();
+const { formatPriceWhole } = useCurrency();
 
 // ============================================
 // Session Management
 // ============================================
 function getSessionId(): string {
-  let sessionId = localStorage.getItem('booking_session_id');
+  let sessionId = localStorage.getItem("booking_session_id");
   if (!sessionId) {
-    sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    localStorage.setItem('booking_session_id', sessionId);
+    sessionId = `session_${Date.now()}_${Math.random()
+      .toString(36)
+      .substr(2, 9)}`;
+    localStorage.setItem("booking_session_id", sessionId);
   }
   return sessionId;
 }
 
 function initializeSession(): void {
-  const sessionTimestamp = localStorage.getItem('booking_session_timestamp');
+  const sessionTimestamp = localStorage.getItem("booking_session_timestamp");
   const now = Date.now();
-  
+
   if (sessionTimestamp) {
-    const hoursSinceSession = (now - parseInt(sessionTimestamp)) / (1000 * 60 * 60);
+    const hoursSinceSession =
+      (now - parseInt(sessionTimestamp)) / (1000 * 60 * 60);
     if (hoursSinceSession > 24) {
       clearSession();
     }
   } else {
-    localStorage.setItem('booking_session_timestamp', now.toString());
+    localStorage.setItem("booking_session_timestamp", now.toString());
   }
-  
+
   getSessionId();
 }
 
 function clearSession(): void {
-  localStorage.removeItem('booking_session_id');
-  localStorage.removeItem('booking_session_timestamp');
-  localStorage.removeItem('booking_state');
+  localStorage.removeItem("booking_session_id");
+  localStorage.removeItem("booking_session_timestamp");
+  localStorage.removeItem("booking_state");
 }
 
 // Cart Mode Detection
@@ -106,38 +106,40 @@ let intervalId: any;
 onMounted(async () => {
   // Initialize session
   initializeSession();
-  
+
   // Wait for studio to be loaded before attempting recovery
   // This ensures isCartModeEnabled computed property works correctly
   let waitCount = 0;
   while (!studioStore.studio && waitCount < 20) {
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 50));
     waitCount++;
   }
-  
+  loadingThemes.value = false;
+
   // Clean up any invalid saved state (no meaningful progress) immediately
   try {
-    const savedState = localStorage.getItem('booking_state');
+    const savedState = localStorage.getItem("booking_state");
     if (savedState) {
       const state = JSON.parse(savedState);
-      const hasMeaningfulProgress = state.selectedTheme || 
-                                     state.currentStep > 1 || 
-                                     (state.cartItems && state.cartItems.length > 0);
-      
+      const hasMeaningfulProgress =
+        state.selectedTheme ||
+        state.currentStep > 1 ||
+        (state.cartItems && state.cartItems.length > 0);
+
       if (!hasMeaningfulProgress) {
-        localStorage.removeItem('booking_state');
+        localStorage.removeItem("booking_state");
       }
     }
   } catch (error) {
-    console.error('Failed to clean up saved state:', error);
+    console.error("Failed to clean up saved state:", error);
   }
-  
+
   // Check for saved state after studio is loaded
   await attemptStateRecovery();
-  
+
   // Clean expired holds
   cleanExpiredHolds();
-  
+
   intervalId = setInterval(() => {
     currentImageIndex.value =
       (currentImageIndex.value + 1) % backgroundImages.length;
@@ -147,26 +149,12 @@ onMounted(async () => {
   setInterval(() => {
     cleanExpiredHolds();
   }, 60000); // Every minute
-
-  // Simulate API call to fetch themes
-  loadingThemes.value = true;
-  await new Promise((resolve) =>
-    setTimeout(resolve, 800 + Math.random() * 400)
-  );
-  loadingThemes.value = false;
-
-  // Simulate API call to fetch dates/availability
-  loadingDates.value = true;
-  await new Promise((resolve) =>
-    setTimeout(resolve, 500 + Math.random() * 300)
-  );
-  loadingDates.value = false;
 });
 
 onUnmounted(() => {
   if (intervalId) clearInterval(intervalId);
   if (holdCountdownInterval) clearInterval(holdCountdownInterval);
-  
+
   // Clear all cart item timers
   cartItemTimers.forEach((timer) => clearInterval(timer));
   cartItemTimers.clear();
@@ -176,49 +164,48 @@ onUnmounted(() => {
 // Page Refresh Recovery
 // ============================================
 async function attemptStateRecovery() {
-  const savedState = localStorage.getItem('booking_state');
+  const savedState = localStorage.getItem("booking_state");
   if (!savedState) return;
-  
+
   try {
     const state = JSON.parse(savedState);
     const savedAt = new Date(state.savedAt);
     const minutesAgo = (new Date().getTime() - savedAt.getTime()) / (1000 * 60);
-    
+
     // Only recover if saved within 30 minutes
     if (minutesAgo > 30) {
-      localStorage.removeItem('booking_state');
+      localStorage.removeItem("booking_state");
       return;
     }
-    
+
     // Don't show recovery if still at step 1 without theme selection
     // (user just browsing, nothing meaningful to recover)
     if (state.currentStep === 1 && !state.selectedTheme) {
       return; // Don't show dialog, but keep state in case they select theme
     }
-    
+
     // Verify we're on the same studio
     // (Studio slug should already be correct due to early detection in slug.ts)
     if (state.studioSlug && studioStore.studio?.slug !== state.studioSlug) {
       // Different studio - clear state
-      localStorage.removeItem('booking_state');
+      localStorage.removeItem("booking_state");
       return;
     }
-    
+
     recoveryState.value = state;
     showRecoveryDialog.value = true;
-    
   } catch (error) {
-    console.error('Recovery failed:', error);
-    localStorage.removeItem('booking_state');
+    console.error("Recovery failed:", error);
+    localStorage.removeItem("booking_state");
   }
 }
 
 function clearBookingState() {
   try {
-    localStorage.removeItem('booking_state');
-    localStorage.removeItem('booking_session_id');
+    localStorage.removeItem("booking_state");
+    localStorage.removeItem("booking_session_id");
   } catch (error) {
-    console.error('Failed to clear booking state:', error);
+    console.error("Failed to clear booking state:", error);
   }
 }
 
@@ -230,20 +217,26 @@ function dismissRecoveryDialog() {
 
 async function restoreBookingState(state: any) {
   isRecovering.value = true;
-  
+
   try {
     // Restore basic selections
-    if (state.selectedTheme) selectedTheme.value = state.selectedTheme;
+    if (state.selectedTheme) {
+      selectedTheme.value = state.selectedTheme;
+      // Fetch dates for the restored theme
+      fetchAvailableDates();
+    }
     if (state.selectedDate) selectedDate.value = state.selectedDate;
     if (state.paxCount) paxCount.value = state.paxCount;
     if (state.selectedAddons) selectedAddons.value = state.selectedAddons;
     if (state.customerInfo) customerInfo.value = state.customerInfo;
-    
+
     // Validate and restore holds
-    if (state.mode === 'single' && state.confirmedSlot?.hold?.holdId) {
+    if (state.mode === "single" && state.confirmedSlot?.hold?.holdId) {
       const holds = getActiveHolds();
-      const hold = holds.find(h => h.holdId === state.confirmedSlot.hold.holdId);
-      
+      const hold = holds.find(
+        (h) => h.holdId === state.confirmedSlot.hold.holdId
+      );
+
       if (hold) {
         // Hold still valid
         confirmedSlot.value = state.confirmedSlot;
@@ -251,7 +244,7 @@ async function restoreBookingState(state: any) {
         holdExpiresAt.value = new Date(hold.expiresAt);
         startHoldCountdown();
         currentStep.value = state.currentStep || 3;
-        
+
         // Load time slots if needed
         if (selectedTheme.value && studioStore.studio && selectedDate.value) {
           loadingSlots.value = true;
@@ -279,21 +272,21 @@ async function restoreBookingState(state: any) {
         selectedSlot.value = state.selectedSlot;
         currentStep.value = 2; // Back to time selection
         showModal({
-          title: t('reservationExpired'),
-          message: t('reservationExpiredMessage'),
-          type: 'warning',
-          confirmText: t('ok')
+          title: t("reservationExpired"),
+          message: t("reservationExpiredMessage"),
+          type: "warning",
+          confirmText: t("ok"),
         });
       }
-    } else if (state.mode === 'single' && state.currentStep === 2) {
+    } else if (state.mode === "single" && state.currentStep === 2) {
       // Restore step 2 (time slot selection)
       currentStep.value = 2;
-      
+
       // Restore selected slot if exists
       if (state.selectedSlot) {
         selectedSlot.value = state.selectedSlot;
       }
-      
+
       // Load time slots if date and theme are selected
       if (selectedTheme.value && studioStore.studio && selectedDate.value) {
         loadingSlots.value = true;
@@ -316,15 +309,15 @@ async function restoreBookingState(state: any) {
           loadingSlots.value = false;
         }
       }
-    } else if (state.mode === 'cart' && state.currentStep === 2) {
+    } else if (state.mode === "cart" && state.currentStep === 2) {
       // Restore cart mode step 2 (time slot selection for adding to cart)
       currentStep.value = 2;
-      
+
       // Restore selected slot if exists
       if (state.selectedSlot) {
         selectedSlot.value = state.selectedSlot;
       }
-      
+
       // Load time slots if date and theme are selected
       if (selectedTheme.value && studioStore.studio && selectedDate.value) {
         loadingSlots.value = true;
@@ -347,15 +340,15 @@ async function restoreBookingState(state: any) {
           loadingSlots.value = false;
         }
       }
-    } else if (state.mode === 'cart' && state.currentStep === 3) {
+    } else if (state.mode === "cart" && state.currentStep === 3) {
       // Restore cart mode step 3 (Pax & Addons - before adding to cart)
       currentStep.value = 3;
-      
+
       // Restore selected slot (needed for Add to Cart button to work)
       if (state.selectedSlot) {
         selectedSlot.value = state.selectedSlot;
       }
-      
+
       // Load time slots in background for when user goes back
       if (selectedTheme.value && studioStore.studio && selectedDate.value) {
         loadingSlots.value = true;
@@ -378,7 +371,7 @@ async function restoreBookingState(state: any) {
           loadingSlots.value = false;
         }
       }
-    } else if (state.mode === 'cart' && state.cartItems?.length > 0) {
+    } else if (state.mode === "cart" && state.cartItems?.length > 0) {
       // Restore cart items with valid holds
       await restoreCartItems(state.cartItems);
       currentStep.value = state.currentStep || 4;
@@ -386,9 +379,8 @@ async function restoreBookingState(state: any) {
       // No holds, just restore step
       currentStep.value = state.currentStep || 1;
     }
-    
+
     showRecoveryDialog.value = false;
-    
   } finally {
     isRecovering.value = false;
   }
@@ -397,49 +389,52 @@ async function restoreBookingState(state: any) {
 async function restoreCartItems(savedCartItems: any[]) {
   const restoredItems = [];
   const expiredItems = [];
-  
+
   for (const item of savedCartItems) {
     if (!item.hold?.holdId) continue;
-    
+
     const holds = getActiveHolds();
-    const hold = holds.find(h => h.holdId === item.hold.holdId);
-    
+    const hold = holds.find((h) => h.holdId === item.hold.holdId);
+
     if (hold) {
       // Hold still active
       const restoredItem = {
         ...item,
-        hold: hold
+        hold: hold,
       };
       restoredItems.push(restoredItem);
     } else {
       expiredItems.push(item);
     }
   }
-  
+
   cart.value = restoredItems;
-  
+
   // Start timers for restored items
   restoredItems.forEach((_, index) => {
     startCartItemHoldTimer(index);
   });
-  
+
   // Show summary
   if (restoredItems.length > 0) {
-    const message = expiredItems.length > 0
-      ? `${restoredItems.length} ${t('restoredItems')}. ${expiredItems.length} ${t('itemsExpired')}.`
-      : `${restoredItems.length} ${t('restoredItems')}!`;
+    const message =
+      expiredItems.length > 0
+        ? `${restoredItems.length} ${t("restoredItems")}. ${
+            expiredItems.length
+          } ${t("itemsExpired")}.`
+        : `${restoredItems.length} ${t("restoredItems")}!`;
     showModal({
-      title: t('success'),
+      title: t("success"),
       message: message,
-      type: 'success',
-      confirmText: t('ok')
+      type: "success",
+      confirmText: t("ok"),
     });
   } else if (expiredItems.length > 0) {
     showModal({
-      title: t('reservationExpired'),
-      message: t('allItemsExpired'),
-      type: 'warning',
-      confirmText: t('ok')
+      title: t("reservationExpired"),
+      message: t("allItemsExpired"),
+      type: "warning",
+      confirmText: t("ok"),
     });
   }
 }
@@ -507,11 +502,13 @@ const customerInfo = ref({
 // ============================================
 const confirmedSlot = ref<any | null>(null); // Slot with active hold
 const holdExpiresAt = ref<Date | null>(null); // Hold expiry timestamp
-const holdCountdown = ref<string>('10:00'); // Display countdown
+const holdCountdown = ref<string>("10:00"); // Display countdown
 const isCreatingHold = ref(false); // Loading state for hold creation
 
 // Cart mode: holds for each cart item
-const cartItemHolds = ref<Map<string, { expiresAt: Date, countdown: string }>>(new Map());
+const cartItemHolds = ref<Map<string, { expiresAt: Date; countdown: string }>>(
+  new Map()
+);
 
 // Page refresh recovery
 const isRecovering = ref(false);
@@ -523,20 +520,20 @@ const recoveryState = ref<any | null>(null);
 // ============================================
 const modalState = ref({
   show: false,
-  title: '',
-  message: '',
-  type: 'info' as 'info' | 'success' | 'error' | 'warning',
-  confirmText: '',
-  cancelText: '',
+  title: "",
+  message: "",
+  type: "info" as "info" | "success" | "error" | "warning",
+  confirmText: "",
+  cancelText: "",
   showCancel: false,
   onConfirm: () => {},
-  onCancel: () => {}
+  onCancel: () => {},
 });
 
 function showModal(config: {
   title: string;
   message: string;
-  type?: 'info' | 'success' | 'error' | 'warning';
+  type?: "info" | "success" | "error" | "warning";
   confirmText?: string;
   cancelText?: string;
   showCancel?: boolean;
@@ -546,9 +543,9 @@ function showModal(config: {
       show: true,
       title: config.title,
       message: config.message,
-      type: config.type || 'info',
-      confirmText: config.confirmText || t('ok'),
-      cancelText: config.cancelText || t('cancel'),
+      type: config.type || "info",
+      confirmText: config.confirmText || t("ok"),
+      cancelText: config.cancelText || t("cancel"),
       showCancel: config.showCancel || false,
       onConfirm: () => {
         modalState.value.show = false;
@@ -557,7 +554,7 @@ function showModal(config: {
       onCancel: () => {
         modalState.value.show = false;
         resolve(false);
-      }
+      },
     };
   });
 }
@@ -633,25 +630,13 @@ const isValidatingCoupon = ref(false);
 const couponError = ref("");
 const selectedCouponItemIndex = ref<number | null>(null); // For cart mode: which item to apply to
 
-
 const setActiveImage = (themeId: string, index: number) => {
   activeImageIndices.value[themeId] = index;
 };
 
-// Get blackout dates and pricing rules
-const blackoutDates = computed(() => {
-  const studioId = studioStore.studio?.id || "studio-001";
-  return mockBlackoutDates[studioId] || [];
-});
-
-const pricingRules = computed(() => {
-  const studioId = studioStore.studio?.id || "studio-001";
-  return mockPricingRules[studioId] || [];
-});
-
-// Generate dates with blackout and special pricing info using mockData
-const dates = computed(() => {
-  const list: {
+// Available dates fetched from backend API
+const dates = ref<
+  {
     date: string;
     day: number;
     month: string;
@@ -659,174 +644,96 @@ const dates = computed(() => {
     isBlackout: boolean;
     blackoutReason?: string;
     isSpecial: boolean;
-    priceModifier: number;
+    slotsAvailable?: number;
+    slotsTotal?: number;
     specialLabel?: string;
-    specialType?: "percentage_increase" | "fixed_price";
-  }[] = [];
+  }[]
+>([]);
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0); // Normalize to start of day
-  const studioId = studioStore.studio?.id || "studio-001";
-  const studio = studioStore.studio;
-  const workingHours = mockWorkingHours[studioId] || [];
+const dateRangeStart = ref<string>("");
+const dateRangeEnd = ref<string>("");
 
-  // Get booking window from studio settings
-  const bookingWindowStart = studio?.settings?.booking_window_start;
-  const bookingWindowEnd = studio?.settings?.booking_window_end;
-
-  // Determine start date: use booking window start if set, otherwise use today
-  let startDate = new Date(today);
-  if (bookingWindowStart) {
-    const windowStart = new Date(bookingWindowStart);
-    windowStart.setHours(0, 0, 0, 0);
-    // Use the later of today or booking window start (can't book in the past)
-    startDate = windowStart > today ? windowStart : today;
+// Fetch available dates from backend
+async function fetchAvailableDates() {
+  if (!selectedTheme.value || !studioStore.studio) {
+    dates.value = [];
+    return;
   }
 
-  // Determine end date: use booking window end if set, otherwise limit to 14 days from start
-  let endDate = new Date(startDate);
-  if (bookingWindowEnd) {
-    const windowEnd = new Date(bookingWindowEnd);
-    windowEnd.setHours(0, 0, 0, 0);
-    // Don't show dates beyond booking window end
-    endDate = windowEnd;
+  loadingDates.value = true;
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const studio = studioStore.studio;
 
-    // If today is after booking window end, no dates available
-    if (today > windowEnd) {
-      return list;
-    }
-  } else {
-    // If no booking window end, limit to 14 days from start
-    endDate.setDate(startDate.getDate() + 13); // 14 days total (0-13 = 14 days)
-  }
+    const websiteSettings = studioStore.websiteSettings;
 
-  // If booking window end is before start date, no dates available
-  if (endDate < startDate) {
-    return list;
-  }
-
-  // Generate dates within the booking window (limit to max 60 days for performance)
-  const dateList: Date[] = [];
-  const currentDate = new Date(startDate);
-  const maxDays = 60; // Maximum days to show
-  let dayCount = 0;
-
-  while (currentDate <= endDate && dayCount < maxDays) {
-    dateList.push(new Date(currentDate));
-    currentDate.setDate(currentDate.getDate() + 1);
-    dayCount++;
-  }
-
-  for (const d of dateList) {
-    const dateString = d.toISOString().slice(0, 10);
-    const dayOfWeek = d.getDay();
-
-    // Check if date is before booking window start (shouldn't happen, but double-check)
-    const isBeforeBookingWindow =
-      bookingWindowStart && dateString < bookingWindowStart;
-
-    // Check if date is after booking window end (shouldn't happen, but double-check)
-    const isAfterBookingWindow =
-      bookingWindowEnd && dateString > bookingWindowEnd;
-
-    // Check if studio is open on this day (using working hours from mockData)
-    const dayHours = workingHours.find((wh) => wh.day_of_week === dayOfWeek);
-    const isStudioClosed = !dayHours || !dayHours.active;
-
-    // Check if blackout - handle both single date and date range
-    const isBlackout =
-      blackoutDates.value.some((blackout) => {
-        if (!blackout.end_date) {
-          return dateString === blackout.start_date;
-        }
-        return (
-          dateString >= blackout.start_date && dateString <= blackout.end_date
-        );
-      }) ||
-      isStudioClosed ||
-      isBeforeBookingWindow ||
-      isAfterBookingWindow;
-    const blackoutInfo = blackoutDates.value.find((b) => {
-      if (!b.end_date) {
-        return b.start_date === dateString;
-      }
-      return dateString >= b.start_date && dateString <= b.end_date;
-    });
-
-    // Determine blackout reason
-    let blackoutReason = "Tidak tersedia";
-    if (isBeforeBookingWindow) {
-      blackoutReason = "Tempahan belum dibuka";
-    } else if (isAfterBookingWindow) {
-      blackoutReason = "Tempahan sudah ditutup";
-    } else if (isStudioClosed) {
-      blackoutReason = "Studio tutup pada hari ini";
-    } else if (blackoutInfo) {
-      blackoutReason = blackoutInfo.reason;
+    // Determine start date: use booking window start if set, otherwise use today
+    let startDate = new Date(today);
+    if (websiteSettings?.bookingWindowStart) {
+      const windowStart = new Date(websiteSettings.bookingWindowStart);
+      windowStart.setHours(0, 0, 0, 0);
+      startDate = windowStart > today ? windowStart : today;
     }
 
-    if (isBlackout) {
-      list.push({
-        date: dateString,
+    // Determine end date: use booking window end if set, otherwise limit to 30 days from start
+    let endDate = new Date(startDate);
+    if (websiteSettings?.bookingWindowEnd) {
+      const windowEnd = new Date(websiteSettings.bookingWindowEnd);
+      windowEnd.setHours(0, 0, 0, 0);
+      endDate = windowEnd;
+    } else {
+      endDate.setDate(startDate.getDate() + 29); // 30 days total
+    }
+
+    // Format dates for API call
+    const startDateStr = startDate.toISOString().slice(0, 10);
+    const endDateStr = endDate.toISOString().slice(0, 10);
+
+    // Store range for reference
+    dateRangeStart.value = startDateStr;
+    dateRangeEnd.value = endDateStr;
+
+    // Fetch from backend
+    const dateInfos = await api.getAvailableDates(
+      studio.id,
+      selectedTheme.value.id,
+      startDateStr,
+      endDateStr
+    );
+
+    // Transform backend response to frontend format
+    dates.value = dateInfos.map((info) => {
+      const d = new Date(info.date + "T00:00:00"); // Parse as local date
+      return {
+        date: info.date,
         day: d.getDate(),
         month: d.toLocaleString("default", { month: "short" }),
         weekday: d.toLocaleString("default", { weekday: "short" }),
-        isBlackout: true,
-        blackoutReason: blackoutReason,
-        isSpecial: false,
-        priceModifier: 1,
-      });
-      continue;
-    }
-
-    // Check for special pricing from mockData
-    let specialPricing: PricingRule | undefined;
-    for (const rule of pricingRules.value) {
-      if (
-        rule.status === "active" &&
-        dateString >= rule.date_range_start &&
-        dateString <= rule.date_range_end
-      ) {
-        // Check if applies to current theme or all themes
-        if (
-          rule.applies_to_themes === "all" ||
-          (selectedTheme.value &&
-            Array.isArray(rule.applies_to_themes) &&
-            rule.applies_to_themes.includes(selectedTheme.value.id))
-        ) {
-          specialPricing = rule;
-          break;
-        }
-      }
-    }
-
-    const isSpecial = !!specialPricing;
-    let priceModifier = 1;
-
-    if (specialPricing) {
-      if (specialPricing.rule_type === "percentage_increase") {
-        priceModifier = 1 + specialPricing.value / 100; // e.g., 1.5 for +50%
-      } else {
-        // For fixed_price, we'd need base price to calculate modifier
-        // For now, we'll show it differently
-        priceModifier = 1; // Will be handled separately
-      }
-    }
-
-    list.push({
-      date: dateString,
-      day: d.getDate(),
-      month: d.toLocaleString("default", { month: "short" }),
-      weekday: d.toLocaleString("default", { weekday: "short" }),
-      isBlackout: false,
-      isSpecial,
-      priceModifier,
-      specialLabel: specialPricing?.name,
-      specialType: specialPricing?.rule_type,
+        isBlackout: info.status === "blackout",
+        blackoutReason:
+          info.status === "blackout" ? "Tidak tersedia" : undefined,
+        isSpecial: info.status === "special_pricing",
+        slotsAvailable: info.slots_available,
+        slotsTotal: info.slots_total,
+        specialLabel: info.special_pricing_label,
+      };
     });
+  } catch (error) {
+    console.error("Failed to fetch available dates:", error);
+    dates.value = [];
+  } finally {
+    loadingDates.value = false;
   }
+}
 
-  return list;
+// Watch for theme changes to reload dates
+watch(selectedTheme, () => {
+  if (selectedTheme.value) {
+    fetchAvailableDates();
+  } else {
+    dates.value = [];
+  }
 });
 
 // Time slots - will be loaded from API when date is selected
@@ -911,7 +818,7 @@ const updateAddon = (addon: Addon, change: number) => {
 // ============================================
 // Simulated Cart Hold API
 // ============================================
-const CART_HOLDS_KEY = 'booking_cart_holds';
+const CART_HOLDS_KEY = "booking_cart_holds";
 
 interface CartHold {
   holdId: string;
@@ -926,10 +833,15 @@ interface CartHold {
 }
 
 // Simulate delay for API calls
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // Check if two time ranges overlap
-function timeRangesOverlap(start1: string, end1: string, start2: string, end2: string): boolean {
+function timeRangesOverlap(
+  start1: string,
+  end1: string,
+  start2: string,
+  end2: string
+): boolean {
   const s1 = parseTimeToMinutes(start1);
   const e1 = parseTimeToMinutes(end1);
   const s2 = parseTimeToMinutes(start2);
@@ -938,25 +850,31 @@ function timeRangesOverlap(start1: string, end1: string, start2: string, end2: s
 }
 
 function parseTimeToMinutes(time: string): number {
-  const [hours, minutes] = time.split(':').map(Number);
+  const [hours, minutes] = time.split(":").map(Number);
   return hours * 60 + minutes;
 }
 
 async function createCartHold(slotData: any): Promise<CartHold> {
   await delay(300);
-  
+
   const holds = getActiveHolds();
-  const conflict = holds.find(h => 
-    h.studioId === slotData.studioId &&
-    h.date === slotData.date &&
-    h.sessionId !== getSessionId() && // Allow same session
-    timeRangesOverlap(h.startTime, h.endTime, slotData.startTime, slotData.endTime)
+  const conflict = holds.find(
+    (h) =>
+      h.studioId === slotData.studioId &&
+      h.date === slotData.date &&
+      h.sessionId !== getSessionId() && // Allow same session
+      timeRangesOverlap(
+        h.startTime,
+        h.endTime,
+        slotData.startTime,
+        slotData.endTime
+      )
   );
-  
+
   if (conflict) {
-    throw new Error('SLOT_NO_LONGER_AVAILABLE');
+    throw new Error("SLOT_NO_LONGER_AVAILABLE");
   }
-  
+
   const hold: CartHold = {
     holdId: `hold-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
     sessionId: getSessionId(),
@@ -966,27 +884,27 @@ async function createCartHold(slotData: any): Promise<CartHold> {
     startTime: slotData.startTime,
     endTime: slotData.endTime,
     expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
   };
-  
+
   holds.push(hold);
   localStorage.setItem(CART_HOLDS_KEY, JSON.stringify(holds));
-  
+
   return hold;
 }
 
 async function releaseCartHold(holdId: string): Promise<void> {
   await delay(100);
-  const holds = getActiveHolds().filter(h => h.holdId !== holdId);
+  const holds = getActiveHolds().filter((h) => h.holdId !== holdId);
   localStorage.setItem(CART_HOLDS_KEY, JSON.stringify(holds));
 }
 
 function getActiveHolds(): CartHold[] {
   try {
-    const holds = JSON.parse(localStorage.getItem(CART_HOLDS_KEY) || '[]');
+    const holds = JSON.parse(localStorage.getItem(CART_HOLDS_KEY) || "[]");
     return holds.filter((h: CartHold) => new Date(h.expiresAt) > new Date());
   } catch (error) {
-    console.error('Error reading cart holds:', error);
+    console.error("Error reading cart holds:", error);
     return [];
   }
 }
@@ -1003,27 +921,27 @@ let holdCountdownInterval: any = null;
 
 function startHoldCountdown() {
   if (holdCountdownInterval) clearInterval(holdCountdownInterval);
-  
+
   holdCountdownInterval = setInterval(() => {
     if (!holdExpiresAt.value) {
       clearInterval(holdCountdownInterval);
       return;
     }
-    
+
     const now = new Date();
     const timeLeft = holdExpiresAt.value.getTime() - now.getTime();
-    
+
     if (timeLeft <= 0) {
       clearInterval(holdCountdownInterval);
       handleHoldExpiry();
     } else {
       const minutes = Math.floor(timeLeft / 60000);
       const seconds = Math.floor((timeLeft % 60000) / 1000);
-      holdCountdown.value = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-      
+      holdCountdown.value = `${minutes}:${seconds.toString().padStart(2, "0")}`;
+
       // Warning at 2 minutes
       if (timeLeft < 120000 && timeLeft > 119000) {
-        console.warn('Hold expires in 2 minutes!');
+        console.warn("Hold expires in 2 minutes!");
       }
     }
   }, 1000);
@@ -1031,20 +949,20 @@ function startHoldCountdown() {
 
 async function handleHoldExpiry() {
   const expiredHoldId = confirmedSlot.value?.hold?.holdId;
-  
+
   confirmedSlot.value = null;
   holdExpiresAt.value = null;
-  holdCountdown.value = '10:00';
-  
+  holdCountdown.value = "10:00";
+
   await showModal({
-    title: t('reservationExpired'),
-    message: t('reservationExpiredMessage'),
-    type: 'warning',
-    confirmText: t('ok')
+    title: t("reservationExpired"),
+    message: t("reservationExpiredMessage"),
+    type: "warning",
+    confirmText: t("ok"),
   });
-  
+
   currentStep.value = 2; // Back to date & time selection
-  
+
   // Release hold from storage
   if (expiredHoldId) {
     releaseCartHold(expiredHoldId);
@@ -1053,14 +971,14 @@ async function handleHoldExpiry() {
 
 async function handleChangeSlot() {
   const confirmChange = await showModal({
-    title: t('changeSlotConfirm'),
-    message: t('changeSlotMessage'),
-    type: 'warning',
-    confirmText: t('yes'),
-    cancelText: t('no'),
-    showCancel: true
+    title: t("changeSlotConfirm"),
+    message: t("changeSlotMessage"),
+    type: "warning",
+    confirmText: t("yes"),
+    cancelText: t("no"),
+    showCancel: true,
   });
-  
+
   if (confirmChange) {
     if (confirmedSlot.value?.hold?.holdId) {
       releaseCartHold(confirmedSlot.value.hold.holdId);
@@ -1078,34 +996,34 @@ const cartItemTimers = new Map<string, any>();
 function startCartItemHoldTimer(index: number) {
   const item = cart.value[index];
   if (!item?.hold) return;
-  
+
   const itemId = item.id;
-  
+
   // Clear existing timer
   if (cartItemTimers.has(itemId)) {
     clearInterval(cartItemTimers.get(itemId));
   }
-  
+
   const timer = setInterval(() => {
     const expiresAt = new Date(item.hold.expiresAt);
     const now = new Date();
     const timeLeft = expiresAt.getTime() - now.getTime();
-    
+
     if (timeLeft <= 0) {
       clearInterval(timer);
       cartItemTimers.delete(itemId);
-      
+
       // Remove expired item from cart
-      const currentIndex = cart.value.findIndex(c => c.id === itemId);
+      const currentIndex = cart.value.findIndex((c) => c.id === itemId);
       if (currentIndex >= 0) {
         cart.value.splice(currentIndex, 1);
         showModal({
-          title: t('reservationExpired'),
-          message: `${item.slot.start} ${t('itemExpiredRemoved')}`,
-          type: 'warning',
-          confirmText: t('ok')
+          title: t("reservationExpired"),
+          message: `${item.slot.start} ${t("itemExpiredRemoved")}`,
+          type: "warning",
+          confirmText: t("ok"),
         });
-        
+
         if (cart.value.length === 0 && isCartModeEnabled.value) {
           currentStep.value = 1;
         }
@@ -1115,44 +1033,48 @@ function startCartItemHoldTimer(index: number) {
       const seconds = Math.floor((timeLeft % 60000) / 1000);
       cartItemHolds.value.set(itemId, {
         expiresAt: expiresAt,
-        countdown: `${minutes}:${seconds.toString().padStart(2, '0')}`
+        countdown: `${minutes}:${seconds.toString().padStart(2, "0")}`,
       });
     }
   }, 1000);
-  
+
   cartItemTimers.set(itemId, timer);
 }
 
 function showHoldConfirmationDialog(): Promise<boolean> {
   return showModal({
-    title: t('reserveThisSlot'),
-    message: `${selectedSlot.value.start} - ${selectedSlot.value.end}\n\n${t('reserveSlotMessage')}`,
-    type: 'info',
-    confirmText: t('yes'),
-    cancelText: t('no'),
-    showCancel: true
+    title: t("reserveThisSlot"),
+    message: `${selectedSlot.value.start} - ${selectedSlot.value.end}\n\n${t(
+      "reserveSlotMessage"
+    )}`,
+    type: "info",
+    confirmText: t("yes"),
+    cancelText: t("no"),
+    showCancel: true,
   });
 }
 
 function showAddToCartConfirmationDialog(): Promise<boolean> {
-  const themeName = selectedTheme.value?.name || '';
+  const themeName = selectedTheme.value?.name || "";
   const slotTime = `${selectedSlot.value.start} - ${selectedSlot.value.end}`;
   const pax = paxCount.value;
-  
+
   return showModal({
-    title: t('addToCartConfirm'),
-    message: `${themeName}\n${slotTime}\n${pax} ${t('pax')}\n\n${t('addToCartMessage')}`,
-    type: 'info',
-    confirmText: t('addToCart'),
-    cancelText: t('cancel'),
-    showCancel: true
+    title: t("addToCartConfirm"),
+    message: `${themeName}\n${slotTime}\n${pax} ${t("pax")}\n\n${t(
+      "addToCartMessage"
+    )}`,
+    type: "info",
+    confirmText: t("addToCart"),
+    cancelText: t("cancel"),
+    showCancel: true,
   });
 }
 
 // Coupon Functions
 const handleApplyCoupon = async () => {
   if (!couponCode.value.trim()) return;
-  
+
   isValidatingCoupon.value = true;
   couponError.value = "";
   validatedCoupon.value = null;
@@ -1161,7 +1083,7 @@ const handleApplyCoupon = async () => {
   try {
     const coupon = await api.validateCoupon(couponCode.value);
     validatedCoupon.value = coupon;
-    
+
     // Auto-select item if only 1 item in cart (Cart Mode) or in Single Mode
     if (isCartModeEnabled.value && cart.value.length === 1) {
       selectedCouponItemIndex.value = 0;
@@ -1172,7 +1094,7 @@ const handleApplyCoupon = async () => {
     // If multiple items in cart, user must select
   } catch (error: any) {
     console.error("Coupon validation failed:", error);
-    couponError.value = error.message || t('invalidCoupon');
+    couponError.value = error.message || t("invalidCoupon");
     validatedCoupon.value = null;
   } finally {
     isValidatingCoupon.value = false;
@@ -1202,7 +1124,7 @@ const addToCart = async () => {
       themeId: selectedTheme.value.id,
       date: selectedDate.value,
       startTime: parseTime(selectedSlot.value.start),
-      endTime: parseTime(selectedSlot.value.end)
+      endTime: parseTime(selectedSlot.value.end),
     });
 
     // Calculate item total with date price modifier
@@ -1220,7 +1142,8 @@ const addToCart = async () => {
       }
     }
 
-    const baseTotal = selectedTheme.value.base_price + extraPaxCost + addonsTotal;
+    const baseTotal =
+      selectedTheme.value.base_price + extraPaxCost + addonsTotal;
     const dateModifier = datePriceModifier.value;
     const itemTotal = baseTotal * dateModifier;
 
@@ -1235,7 +1158,7 @@ const addToCart = async () => {
       addons: { ...selectedAddons.value },
       total: itemTotal,
       dateInfo: dateInfo,
-      hold: hold // Store hold info
+      hold: hold, // Store hold info
     };
 
     cart.value.push(cartItem);
@@ -1251,19 +1174,19 @@ const addToCart = async () => {
     selectedAddons.value = {};
     timeSlots.value = [];
   } catch (error: any) {
-    if (error.message === 'SLOT_NO_LONGER_AVAILABLE') {
+    if (error.message === "SLOT_NO_LONGER_AVAILABLE") {
       await showModal({
-        title: t('slotNoLongerAvailable'),
-        message: t('failedToAddToCart'),
-        type: 'error',
-        confirmText: t('ok')
+        title: t("slotNoLongerAvailable"),
+        message: t("failedToAddToCart"),
+        type: "error",
+        confirmText: t("ok"),
       });
     } else {
       await showModal({
-        title: t('error'),
-        message: t('failedToAddToCart'),
-        type: 'error',
-        confirmText: t('ok')
+        title: t("error"),
+        message: t("failedToAddToCart"),
+        type: "error",
+        confirmText: t("ok"),
       });
     }
   }
@@ -1271,28 +1194,31 @@ const addToCart = async () => {
 
 const removeCartItem = async (index: number) => {
   const item = cart.value[index];
-  
+
   // Release hold if exists
   if (item.hold?.holdId) {
     await releaseCartHold(item.hold.holdId);
-    
+
     // Clear timer
     if (cartItemTimers.has(item.id)) {
       clearInterval(cartItemTimers.get(item.id));
       cartItemTimers.delete(item.id);
     }
   }
-  
+
   cart.value.splice(index, 1);
-  
+
   // Reset coupon selection if cart changes
   if (selectedCouponItemIndex.value === index) {
     selectedCouponItemIndex.value = null; // Selected item removed
-  } else if (selectedCouponItemIndex.value !== null && selectedCouponItemIndex.value > index) {
+  } else if (
+    selectedCouponItemIndex.value !== null &&
+    selectedCouponItemIndex.value > index
+  ) {
     selectedCouponItemIndex.value--; // Shift index if needed
   }
-  
-  // If only 1 item left and coupon is valid, auto-select it? 
+
+  // If only 1 item left and coupon is valid, auto-select it?
   // Maybe better to just let user select to avoid confusion.
   // But if cart becomes empty, step resets anyway.
 
@@ -1357,38 +1283,37 @@ const nextStep = async () => {
   // ============================================
   if (currentStep.value === 2 && !isCartModeEnabled.value) {
     if (!selectedSlot.value) return;
-    
+
     const confirmed = await showHoldConfirmationDialog();
-    
+
     if (confirmed) {
       try {
         isCreatingHold.value = true;
-        
+
         const hold = await createCartHold({
           studioId: studioStore.studio!.id,
           themeId: selectedTheme.value!.id,
           date: selectedDate.value!,
           startTime: parseTime(selectedSlot.value.start),
-          endTime: parseTime(selectedSlot.value.end)
+          endTime: parseTime(selectedSlot.value.end),
         });
-        
+
         confirmedSlot.value = {
           ...selectedSlot.value,
-          hold: hold
+          hold: hold,
         };
         holdExpiresAt.value = new Date(hold.expiresAt);
-        
+
         startHoldCountdown();
-        
+
         currentStep.value++;
-        
       } catch (error: any) {
-        if (error.message === 'SLOT_NO_LONGER_AVAILABLE') {
+        if (error.message === "SLOT_NO_LONGER_AVAILABLE") {
           await showModal({
-            title: t('slotNoLongerAvailable'),
-            message: t('slotNoLongerAvailableMessage'),
-            type: 'error',
-            confirmText: t('ok')
+            title: t("slotNoLongerAvailable"),
+            message: t("slotNoLongerAvailableMessage"),
+            type: "error",
+            confirmText: t("ok"),
           });
           // Refresh time slots
           if (selectedTheme.value && studioStore.studio && selectedDate.value) {
@@ -1435,7 +1360,7 @@ const nextStep = async () => {
     if (isCartModeEnabled.value && currentStep.value === 3) {
       // Show confirmation dialog before adding to cart
       const confirmed = await showAddToCartConfirmationDialog();
-      
+
       if (confirmed) {
         await addToCart();
         currentStep.value = 4;
@@ -1459,7 +1384,7 @@ const nextStep = async () => {
         // Create bookings for each cart item
         for (let i = 0; i < (cart.value || []).length; i++) {
           const item = cart.value[i];
-          
+
           // Prepare addons array
           const selectedAddonsArray = Object.entries(item.addons)
             .filter(([_, qty]) => qty > 0)
@@ -1483,7 +1408,8 @@ const nextStep = async () => {
               : slotEnd;
 
           // Check if coupon applies to this item
-          const isCouponApplied = validatedCoupon.value && selectedCouponItemIndex.value === i;
+          const isCouponApplied =
+            validatedCoupon.value && selectedCouponItemIndex.value === i;
 
           // Create booking request
           const bookingRequest = {
@@ -1499,7 +1425,9 @@ const nextStep = async () => {
             consent_tc: termsAccepted.value,
             consent_marketing: false,
             selected_addons: selectedAddonsArray,
-            coupon_code: isCouponApplied ? validatedCoupon.value?.code : undefined,
+            coupon_code: isCouponApplied
+              ? validatedCoupon.value?.code
+              : undefined,
             discount_amount: isCouponApplied ? discountAmount.value : undefined,
           };
 
@@ -1510,7 +1438,7 @@ const nextStep = async () => {
 
         // Clear booking state after successful creation
         clearBookingState();
-        
+
         // Redirect to success page with first booking number
         router.push(`/success/${bookingNumbers[0]}`);
       } catch (error) {
@@ -1567,7 +1495,8 @@ const nextStep = async () => {
           consent_marketing: false,
           selected_addons: selectedAddonsArray,
           coupon_code: validatedCoupon.value?.code,
-          discount_amount: discountAmount.value > 0 ? discountAmount.value : undefined,
+          discount_amount:
+            discountAmount.value > 0 ? discountAmount.value : undefined,
         };
 
         // Create booking
@@ -1575,7 +1504,7 @@ const nextStep = async () => {
 
         // Clear booking state after successful creation
         clearBookingState();
-        
+
         // Redirect to success page with booking number
         router.push(`/success/${createdBooking.booking_number}`);
       } catch (error) {
@@ -1590,18 +1519,22 @@ const prevStep = async () => {
   if (currentStep.value > 1) {
     // If going back from step 3 (Pax & Addons) to step 2 (Time) in single mode with active hold
     // ONLY show warning when going from step 3 to step 2
-    if (currentStep.value === 3 && !isCartModeEnabled.value && confirmedSlot.value) {
+    if (
+      currentStep.value === 3 &&
+      !isCartModeEnabled.value &&
+      confirmedSlot.value
+    ) {
       const confirmGoBack = await showModal({
-        title: t('goingBackWillRelease'),
-        message: t('goingBackMessage'),
-        type: 'warning',
-        confirmText: t('yes'),
-        cancelText: t('no'),
-        showCancel: true
+        title: t("goingBackWillRelease"),
+        message: t("goingBackMessage"),
+        type: "warning",
+        confirmText: t("yes"),
+        cancelText: t("no"),
+        showCancel: true,
       });
-      
+
       if (!confirmGoBack) return;
-      
+
       // Release hold
       if (confirmedSlot.value?.hold?.holdId) {
         await releaseCartHold(confirmedSlot.value.hold.holdId);
@@ -1610,7 +1543,7 @@ const prevStep = async () => {
       holdExpiresAt.value = null;
       if (holdCountdownInterval) clearInterval(holdCountdownInterval);
     }
-    
+
     currentStep.value--;
     // In cart mode, if going back from step 4 and cart is empty, go to step 1
     if (
@@ -1648,7 +1581,9 @@ const addonsTotal = computed(() => {
 
 const datePriceModifier = computed(() => {
   if (!selectedDateInfo.value || !selectedDateInfo.value.isSpecial) return 1;
-  return selectedDateInfo.value.priceModifier;
+  // Note: Special pricing is now handled by the backend when fetching time slots
+  // The backend returns the correct price for each slot based on active pricing rules
+  return 1;
 });
 
 // Current item total (for cart mode)
@@ -1672,31 +1607,38 @@ const cartItemCount = computed(() => {
 
 const discountAmount = computed(() => {
   if (!validatedCoupon.value) return 0;
-  
+
   let targetTotal = 0;
-  
+
   if (isCartModeEnabled.value) {
     // Check if item selected
-    if (selectedCouponItemIndex.value === null || selectedCouponItemIndex.value < 0 || selectedCouponItemIndex.value >= cart.value.length) {
-      return 0; 
+    if (
+      selectedCouponItemIndex.value === null ||
+      selectedCouponItemIndex.value < 0 ||
+      selectedCouponItemIndex.value >= cart.value.length
+    ) {
+      return 0;
     }
     targetTotal = cart.value[selectedCouponItemIndex.value].total;
   } else {
     targetTotal = currentItemTotal.value;
   }
-  
+
   // Check min spend
-  if (validatedCoupon.value.min_spend && targetTotal < validatedCoupon.value.min_spend) {
+  if (
+    validatedCoupon.value.min_spend &&
+    targetTotal < validatedCoupon.value.min_spend
+  ) {
     return 0; // Min spend not met
   }
-  
+
   let discount = 0;
-  if (validatedCoupon.value.type === 'percentage') {
+  if (validatedCoupon.value.type === "percentage") {
     discount = targetTotal * (validatedCoupon.value.value / 100);
   } else {
     discount = validatedCoupon.value.value;
   }
-  
+
   // Cap discount at target total
   return Math.min(discount, targetTotal);
 });
@@ -1750,27 +1692,38 @@ const isBlackoutDateSelected = computed(() => {
 // Auto-Save Booking State
 // ============================================
 watch(
-  [selectedTheme, selectedDate, selectedSlot, confirmedSlot, cart, customerInfo, currentStep, paxCount, selectedAddons],
+  [
+    selectedTheme,
+    selectedDate,
+    selectedSlot,
+    confirmedSlot,
+    cart,
+    customerInfo,
+    currentStep,
+    paxCount,
+    selectedAddons,
+  ],
   () => {
     if (!studioStore.studio) return;
-    
+
     // Only save if there's meaningful progress to recover
-    const hasMeaningfulProgress = selectedTheme.value || 
-                                   currentStep.value > 1 || 
-                                   (cart.value && cart.value.length > 0);
-    
+    const hasMeaningfulProgress =
+      selectedTheme.value ||
+      currentStep.value > 1 ||
+      (cart.value && cart.value.length > 0);
+
     if (!hasMeaningfulProgress) {
       // Clear saved state if no meaningful progress
       try {
-        localStorage.removeItem('booking_state');
+        localStorage.removeItem("booking_state");
       } catch (error) {
-        console.error('Failed to clear booking state:', error);
+        console.error("Failed to clear booking state:", error);
       }
       return;
     }
-    
+
     const state = {
-      mode: isCartModeEnabled.value ? 'cart' : 'single',
+      mode: isCartModeEnabled.value ? "cart" : "single",
       sessionId: getSessionId(),
       studioSlug: studioStore.studio.slug,
       selectedTheme: selectedTheme.value,
@@ -1782,13 +1735,13 @@ watch(
       cartItems: cart.value,
       customerInfo: customerInfo.value,
       currentStep: currentStep.value,
-      savedAt: new Date().toISOString()
+      savedAt: new Date().toISOString(),
     };
-    
+
     try {
-      localStorage.setItem('booking_state', JSON.stringify(state));
+      localStorage.setItem("booking_state", JSON.stringify(state));
     } catch (error) {
-      console.error('Failed to save booking state:', error);
+      console.error("Failed to save booking state:", error);
     }
   },
   { deep: true }
@@ -1852,15 +1805,21 @@ watch(
       </header>
 
       <!-- Hold Status Banner (shown when hold is active) -->
-      <div 
-        v-if="confirmedSlot && holdExpiresAt && currentStep > 2 && !isCartModeEnabled"
+      <div
+        v-if="
+          confirmedSlot &&
+          holdExpiresAt &&
+          currentStep > 2 &&
+          !isCartModeEnabled
+        "
         class="sticky top-16 z-30 bg-amber-50 border-b border-amber-200 px-4 py-3"
       >
         <div class="max-w-4xl mx-auto flex items-center justify-between">
           <div class="flex items-center gap-2">
             <Clock class="w-4 h-4 text-amber-600" />
             <span class="text-sm font-medium text-amber-900">
-              {{ t('reserved') }}: {{ selectedSlot?.start }} - {{ selectedSlot?.end }}
+              {{ t("reserved") }}: {{ selectedSlot?.start }} -
+              {{ selectedSlot?.end }}
             </span>
           </div>
           <div class="flex items-center gap-3">
@@ -1871,7 +1830,7 @@ watch(
               @click="handleChangeSlot"
               class="text-xs text-amber-700 hover:text-amber-900 underline"
             >
-              {{ t('changeTime') }}
+              {{ t("changeTime") }}
             </button>
           </div>
         </div>
@@ -1920,42 +1879,45 @@ watch(
         leave-from-class="opacity-100"
         leave-to-class="opacity-0"
       >
-        <div 
+        <div
           v-if="showRecoveryDialog && recoveryState"
           class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
         >
           <div class="bg-white rounded-3xl p-8 max-w-md mx-4 shadow-2xl">
             <h3 class="text-2xl font-bold font-serif mb-4">
-              {{ t('restoreYourBooking') }}
+              {{ t("restoreYourBooking") }}
             </h3>
             <p class="text-sm text-gray-600 mb-6">
-              {{ t('restoreBookingMessage') }}
+              {{ t("restoreBookingMessage") }}
             </p>
-            
+
             <div class="space-y-2 text-sm mb-6 bg-gray-50 p-4 rounded-xl">
               <div v-if="recoveryState.selectedTheme">
-                <span class="font-bold">{{ t('theme') }}:</span> {{ recoveryState.selectedTheme.name }}
+                <span class="font-bold">{{ t("theme") }}:</span>
+                {{ recoveryState.selectedTheme.name }}
               </div>
               <div v-if="recoveryState.selectedDate">
-                <span class="font-bold">{{ t('date') }}:</span> {{ recoveryState.selectedDate }}
+                <span class="font-bold">{{ t("date") }}:</span>
+                {{ recoveryState.selectedDate }}
               </div>
               <div v-if="recoveryState.selectedSlot">
-                <span class="font-bold">{{ t('time') }}:</span> {{ recoveryState.selectedSlot.start }}
+                <span class="font-bold">{{ t("time") }}:</span>
+                {{ recoveryState.selectedSlot.start }}
               </div>
             </div>
-            
+
             <div class="flex gap-3">
               <button
                 @click="restoreBookingState(recoveryState)"
                 class="flex-1 bg-gray-900 text-white py-3 rounded-xl font-bold text-sm uppercase tracking-wider"
               >
-                {{ t('yes') }}, {{ t('continue') }}
+                {{ t("yes") }}, {{ t("continue") }}
               </button>
               <button
                 @click="dismissRecoveryDialog"
                 class="flex-1 bg-gray-100 text-gray-900 py-3 rounded-xl font-bold text-sm uppercase tracking-wider"
               >
-                {{ t('startFresh') }}
+                {{ t("startFresh") }}
               </button>
             </div>
           </div>
@@ -2010,7 +1972,7 @@ watch(
                   {{ t("people") }}
                 </span>
                 <span class="font-bold text-gray-900"
-                  >RM{{ selectedTheme.base_price }}</span
+                  >RM{{ formatPriceWhole(selectedTheme.base_price) }}</span
                 >
               </div>
             </div>
@@ -2119,7 +2081,7 @@ watch(
                     </span>
                   </div>
                   <span class="text-2xl font-bold font-serif text-white"
-                    >RM{{ theme.base_price }}</span
+                    >RM{{ formatPriceWhole(theme.base_price) }}</span
                   >
                 </div>
               </div>
@@ -2223,7 +2185,7 @@ watch(
                       ]"
                     ></div>
                     <span
-                      v-if="d.specialType === 'percentage_increase'"
+                      v-if="d.isSpecial"
                       :class="[
                         'text-[8px] font-bold',
                         selectedDate === d.date
@@ -2231,7 +2193,7 @@ watch(
                           : 'text-amber-600',
                       ]"
                     >
-                      +{{ Math.round((d.priceModifier - 1) * 100) }}%
+                      Special
                     </span>
                   </div>
                 </button>
@@ -2272,25 +2234,8 @@ watch(
                   <p class="font-semibold">
                     {{ selectedDateInfo.specialLabel }}
                   </p>
-                  <p
-                    v-if="
-                      selectedDateInfo.specialType === 'percentage_increase'
-                    "
-                    class="text-amber-800"
-                  >
-                    {{ t("priceIncrease") || "Harga meningkat" }}:
-                    <span class="font-bold"
-                      >+{{
-                        Math.round((selectedDateInfo.priceModifier - 1) * 100)
-                      }}%</span
-                    >
-                    {{ t("fromBasePrice") || "daripada harga asas" }}
-                  </p>
-                  <p
-                    v-else-if="selectedDateInfo.specialType === 'fixed_price'"
-                    class="text-amber-800"
-                  >
-                    {{ t("specialFixedPrice") || "Harga istimewa tetap" }}
+                  <p class="text-amber-800">
+                    {{ t("specialPriceApply") || "Harga istimewa dikenakan" }}
                   </p>
                 </div>
               </div>
@@ -2436,7 +2381,7 @@ watch(
                 >
               </div>
               <span class="font-bold text-gray-900"
-                >+ RM{{ extraPaxCost }}</span
+                >+ RM{{ formatPriceWhole(extraPaxCost) }}</span
               >
             </div>
           </div>
@@ -2478,7 +2423,7 @@ watch(
                   {{ addon.name }}
                 </div>
                 <div class="text-xs sm:text-sm text-gray-500 font-sans mt-0.5">
-                  RM{{ addon.price }}
+                  RM{{ formatPriceWhole(addon.price) }}
                   <span
                     v-if="addon.max_quantity !== 1"
                     class="text-xs opacity-70"
@@ -2587,8 +2532,8 @@ watch(
                     {{ t("pax") || "Pax" }}
                   </div>
                   <!-- Hold countdown for this item -->
-                  <div 
-                    v-if="cartItemHolds.get(item.id)" 
+                  <div
+                    v-if="cartItemHolds.get(item.id)"
                     class="flex items-center gap-2 text-amber-600 bg-amber-50 px-2 py-1 rounded-md w-fit"
                   >
                     <Clock class="w-3 h-3" />
@@ -2598,7 +2543,7 @@ watch(
                   </div>
                 </div>
                 <div class="mt-3 font-bold font-serif text-gray-900">
-                  RM{{ item.total }}
+                  RM{{ formatPriceWhole(item.total) }}
                 </div>
               </div>
             </div>
@@ -2627,7 +2572,9 @@ watch(
                     cartItemCount
                   }})</span
                 >
-                <span class="font-medium">RM{{ cartTotal }}</span>
+                <span class="font-medium"
+                  >RM{{ formatPriceWhole(cartTotal) }}</span
+                >
               </div>
               <div
                 class="flex justify-between items-center pt-4 border-t border-gray-100"
@@ -2640,7 +2587,7 @@ watch(
                   }}
                 </span>
                 <span class="font-bold font-serif text-2xl text-gray-900"
-                  >RM{{ paymentAmount }}</span
+                  >RM{{ formatPriceWhole(paymentAmount) }}</span
                 >
               </div>
             </div>
@@ -3325,7 +3272,9 @@ watch(
               <div class="bg-gray-50 rounded-xl p-4 space-y-4">
                 <div class="flex items-center gap-2 mb-2">
                   <Ticket class="w-4 h-4 text-gray-900" />
-                  <span class="font-bold font-serif text-sm">{{ t("haveCoupon") }}</span>
+                  <span class="font-bold font-serif text-sm">{{
+                    t("haveCoupon")
+                  }}</span>
                 </div>
 
                 <div v-if="!validatedCoupon" class="flex gap-2">
@@ -3341,50 +3290,99 @@ watch(
                     :disabled="!couponCode.trim() || isValidatingCoupon"
                     class="px-4 py-2 bg-gray-900 text-white rounded-lg text-xs font-bold uppercase tracking-wider disabled:opacity-50"
                   >
-                    {{ isValidatingCoupon ? '...' : t("apply") }}
+                    {{ isValidatingCoupon ? "..." : t("apply") }}
                   </button>
                 </div>
-                
-                <p v-if="couponError" class="text-xs text-red-500 font-sans mt-1">{{ couponError }}</p>
+
+                <p
+                  v-if="couponError"
+                  class="text-xs text-red-500 font-sans mt-1"
+                >
+                  {{ couponError }}
+                </p>
 
                 <!-- Coupon Applied State -->
-                <div v-if="validatedCoupon" class="bg-white p-3 rounded-lg border border-green-100 flex items-start justify-between">
+                <div
+                  v-if="validatedCoupon"
+                  class="bg-white p-3 rounded-lg border border-green-100 flex items-start justify-between"
+                >
                   <div>
                     <div class="flex items-center gap-2">
-                      <span class="font-bold text-green-700 font-sans">{{ validatedCoupon.code }}</span>
-                      <span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold">{{ t('applied') }}</span>
+                      <span class="font-bold text-green-700 font-sans">{{
+                        validatedCoupon.code
+                      }}</span>
+                      <span
+                        class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold"
+                        >{{ t("applied") }}</span
+                      >
                     </div>
                     <p class="text-xs text-gray-500 mt-1">
-                      {{ validatedCoupon.type === 'percentage' ? `${validatedCoupon.value}% off` : `RM${validatedCoupon.value} off` }}
-                      <span v-if="isCartModeEnabled && cartItemCount > 1">{{ t('selectedSession') }}</span>
+                      {{
+                        validatedCoupon.type === "percentage"
+                          ? `${validatedCoupon.value}% off`
+                          : `RM${validatedCoupon.value} off`
+                      }}
+                      <span v-if="isCartModeEnabled && cartItemCount > 1">{{
+                        t("selectedSession")
+                      }}</span>
                     </p>
                   </div>
-                  <button @click="removeCoupon" class="text-gray-400 hover:text-red-500">
+                  <button
+                    @click="removeCoupon"
+                    class="text-gray-400 hover:text-red-500"
+                  >
                     <X class="w-4 h-4" />
                   </button>
                 </div>
 
                 <!-- Cart Item Selector for Coupon -->
-                <div v-if="validatedCoupon && isCartModeEnabled && cartItemCount > 1" class="space-y-2 mt-2">
-                  <p class="text-xs font-bold text-gray-700 uppercase tracking-wider">{{ t('selectSessionForDiscount') }}</p>
+                <div
+                  v-if="
+                    validatedCoupon && isCartModeEnabled && cartItemCount > 1
+                  "
+                  class="space-y-2 mt-2"
+                >
+                  <p
+                    class="text-xs font-bold text-gray-700 uppercase tracking-wider"
+                  >
+                    {{ t("selectSessionForDiscount") }}
+                  </p>
                   <div class="space-y-2">
-                    <div 
-                      v-for="(item, idx) in cart" 
+                    <div
+                      v-for="(item, idx) in cart"
                       :key="item.id"
                       @click="selectCouponItem(idx)"
                       class="flex items-center gap-3 p-2 rounded-lg border cursor-pointer transition-all"
-                      :class="selectedCouponItemIndex === idx ? 'border-green-500 bg-green-50' : 'border-gray-200 hover:border-gray-300'"
+                      :class="
+                        selectedCouponItemIndex === idx
+                          ? 'border-green-500 bg-green-50'
+                          : 'border-gray-200 hover:border-gray-300'
+                      "
                     >
-                      <div class="w-4 h-4 rounded-full border flex items-center justify-center"
-                        :class="selectedCouponItemIndex === idx ? 'border-green-600 bg-green-600' : 'border-gray-300'"
+                      <div
+                        class="w-4 h-4 rounded-full border flex items-center justify-center"
+                        :class="
+                          selectedCouponItemIndex === idx
+                            ? 'border-green-600 bg-green-600'
+                            : 'border-gray-300'
+                        "
                       >
-                        <Check v-if="selectedCouponItemIndex === idx" class="w-3 h-3 text-white" />
+                        <Check
+                          v-if="selectedCouponItemIndex === idx"
+                          class="w-3 h-3 text-white"
+                        />
                       </div>
                       <div class="flex-1 min-w-0">
-                        <p class="text-xs font-bold truncate">{{ item.theme.name }}</p>
-                        <p class="text-[10px] text-gray-500">{{ item.date }} • {{ item.slot.start }}</p>
+                        <p class="text-xs font-bold truncate">
+                          {{ item.theme.name }}
+                        </p>
+                        <p class="text-[10px] text-gray-500">
+                          {{ item.date }} • {{ item.slot.start }}
+                        </p>
                       </div>
-                      <div class="text-xs font-bold">RM{{ item.total }}</div>
+                      <div class="text-xs font-bold">
+                        RM{{ formatPriceWhole(item.total) }}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -3398,13 +3396,18 @@ watch(
                     >{{ t("grandTotal") }}</span
                   >
                   <span class="text-2xl font-bold font-serif"
-                    >RM{{ cartTotal }}</span
+                    >RM{{ formatPriceWhole(cartTotal) }}</span
                   >
                 </div>
-                
-                <div v-if="discountAmount > 0" class="flex justify-between items-center text-green-600">
+
+                <div
+                  v-if="discountAmount > 0"
+                  class="flex justify-between items-center text-green-600"
+                >
                   <span class="text-sm font-medium">{{ t("discount") }}</span>
-                  <span class="font-bold">-RM{{ discountAmount.toFixed(2) }}</span>
+                  <span class="font-bold"
+                    >-RM{{ formatPriceWhole(discountAmount) }}</span
+                  >
                 </div>
 
                 <div
@@ -3418,7 +3421,7 @@ watch(
                     }}
                   </span>
                   <span class="font-bold font-sans text-lg text-gray-900"
-                    >RM{{ paymentAmount }}</span
+                    >RM{{ formatPriceWhole(paymentAmount) }}</span
                   >
                 </div>
               </div>
@@ -3475,7 +3478,7 @@ watch(
                   </div>
                 </div>
                 <div class="font-bold font-sans">
-                  RM{{ selectedTheme?.base_price }}
+                  RM{{ formatPriceWhole(selectedTheme?.base_price || 0) }}
                 </div>
               </div>
 
@@ -3487,7 +3490,9 @@ watch(
                       paxCount - (selectedTheme!.base_pax || 0)
                     }})</span
                   >
-                  <span class="font-medium">+ RM{{ extraPaxCost }}</span>
+                  <span class="font-medium"
+                    >+ RM{{ formatPriceWhole(extraPaxCost) }}</span
+                  >
                 </div>
 
                 <!-- Addons -->
@@ -3505,8 +3510,10 @@ watch(
                     >
                     <span class="font-medium"
                       >+ RM{{
-                        (studioStore.addons.find((a) => a.id === id)?.price ||
-                          0) * qty
+                        formatPriceWhole(
+                          (studioStore.addons.find((a) => a.id === id)?.price ||
+                            0) * qty
+                        )
                       }}</span
                     >
                   </template>
@@ -3563,7 +3570,9 @@ watch(
               <div class="bg-gray-50 rounded-xl p-4 space-y-4">
                 <div class="flex items-center gap-2 mb-2">
                   <Ticket class="w-4 h-4 text-gray-900" />
-                  <span class="font-bold font-serif text-sm">{{ t("haveCoupon") }}</span>
+                  <span class="font-bold font-serif text-sm">{{
+                    t("haveCoupon")
+                  }}</span>
                 </div>
 
                 <div v-if="!validatedCoupon" class="flex gap-2">
@@ -3579,24 +3588,44 @@ watch(
                     :disabled="!couponCode.trim() || isValidatingCoupon"
                     class="px-4 py-2 bg-gray-900 text-white rounded-lg text-xs font-bold uppercase tracking-wider disabled:opacity-50"
                   >
-                    {{ isValidatingCoupon ? '...' : t("apply") }}
+                    {{ isValidatingCoupon ? "..." : t("apply") }}
                   </button>
                 </div>
-                
-                <p v-if="couponError" class="text-xs text-red-500 font-sans mt-1">{{ couponError }}</p>
+
+                <p
+                  v-if="couponError"
+                  class="text-xs text-red-500 font-sans mt-1"
+                >
+                  {{ couponError }}
+                </p>
 
                 <!-- Coupon Applied State -->
-                <div v-if="validatedCoupon" class="bg-white p-3 rounded-lg border border-green-100 flex items-start justify-between">
+                <div
+                  v-if="validatedCoupon"
+                  class="bg-white p-3 rounded-lg border border-green-100 flex items-start justify-between"
+                >
                   <div>
                     <div class="flex items-center gap-2">
-                      <span class="font-bold text-green-700 font-sans">{{ validatedCoupon.code }}</span>
-                      <span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold">{{ t('applied') }}</span>
+                      <span class="font-bold text-green-700 font-sans">{{
+                        validatedCoupon.code
+                      }}</span>
+                      <span
+                        class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold"
+                        >{{ t("applied") }}</span
+                      >
                     </div>
                     <p class="text-xs text-gray-500 mt-1">
-                      {{ validatedCoupon.type === 'percentage' ? `${validatedCoupon.value}% off` : `RM${validatedCoupon.value} off` }}
+                      {{
+                        validatedCoupon.type === "percentage"
+                          ? `${validatedCoupon.value}% off`
+                          : `RM${validatedCoupon.value} off`
+                      }}
                     </p>
                   </div>
-                  <button @click="removeCoupon" class="text-gray-400 hover:text-red-500">
+                  <button
+                    @click="removeCoupon"
+                    class="text-gray-400 hover:text-red-500"
+                  >
                     <X class="w-4 h-4" />
                   </button>
                 </div>
@@ -3613,13 +3642,18 @@ watch(
                   <!-- Actually, for single mode, grandTotal uses currentItemTotal. I modified grandTotal to include discount. -->
                   <!-- So to show original, I need to show currentItemTotal -->
                   <span class="text-2xl font-bold font-serif"
-                    >RM{{ currentItemTotal }}</span
+                    >RM{{ formatPriceWhole(currentItemTotal) }}</span
                   >
                 </div>
-                
-                <div v-if="discountAmount > 0" class="flex justify-between items-center text-green-600">
+
+                <div
+                  v-if="discountAmount > 0"
+                  class="flex justify-between items-center text-green-600"
+                >
                   <span class="text-sm font-medium">{{ t("discount") }}</span>
-                  <span class="font-bold">-RM{{ discountAmount.toFixed(2) }}</span>
+                  <span class="font-bold"
+                    >-RM{{ formatPriceWhole(discountAmount) }}</span
+                  >
                 </div>
 
                 <div
@@ -3633,7 +3667,7 @@ watch(
                     }}
                   </span>
                   <span class="font-bold font-sans text-lg text-gray-900"
-                    >RM{{ paymentAmount }}</span
+                    >RM{{ formatPriceWhole(paymentAmount) }}</span
                   >
                 </div>
               </div>
@@ -3664,8 +3698,8 @@ watch(
             >
               RM{{
                 isCartModeEnabled && (currentStep === 4 || currentStep === 7)
-                  ? (cartTotal || 0).toFixed(2)
-                  : (grandTotal || 0).toFixed(2)
+                  ? formatPriceWhole(cartTotal || 0)
+                  : formatPriceWhole(grandTotal || 0)
               }}
             </span>
           </div>

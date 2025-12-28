@@ -222,6 +222,8 @@ export const api = {
       cartModeEnabled: data.cartModeEnabled,
       cartHoldDuration: data.cartHoldDuration,
       selectedStyle: data.selectedStyle as "rustic" | "modern" | "luxe",
+      bookingWindowStart: data.bookingWindowStart,
+      bookingWindowEnd: data.bookingWindowEnd,
       heroConfig: data.heroConfig
         ? {
             styleKey: data.heroConfig.styleKey as "rustic" | "modern" | "luxe",

@@ -60,6 +60,8 @@ export interface WebsiteSettings {
   cartModeEnabled: boolean;
   cartHoldDuration: number;
   selectedStyle: "rustic" | "modern" | "luxe";
+  bookingWindowStart?: string;
+  bookingWindowEnd?: string;
   heroConfig?: HeroStyleConfig;
 }
 
