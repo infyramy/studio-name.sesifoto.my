@@ -1,40 +1,56 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
-import { useRouter } from 'vue-router';
-import { useStudioStore } from '@/stores/studio';
-import { getBookingById } from '@/services/api';
-import { format } from 'date-fns';
-import type { Booking } from '@/types';
-import { useTranslation } from '@/composables/useTranslation';
-import { 
-  ChevronLeft, 
-  Search, 
-  Calendar, 
-  Clock, 
-  Users, 
-  MessageCircle, 
+import { ref, computed, onMounted, onUnmounted } from "vue";
+import { useRouter } from "vue-router";
+import { useStudioStore } from "@/stores/studio";
+import { api } from "@/services/api";
+import { format } from "date-fns";
+import type { Booking } from "@/types";
+import { useTranslation } from "@/composables/useTranslation";
+import {
+  ChevronLeft,
+  Search,
+  Calendar,
+  Clock,
+  Users,
+  MessageCircle,
   RefreshCw,
   AlertCircle,
-  Loader2
-} from 'lucide-vue-next';
+  Loader2,
+  CreditCard,
+  Receipt,
+} from "lucide-vue-next";
 
 const router = useRouter();
 const studioStore = useStudioStore();
 const { t } = useTranslation();
 
-// Background Images Setup (Consistent with Home)
-const backgroundImages = [
-  "https://i.postimg.cc/t4wCcRhG/untitled-10.jpg",
-  "https://i.postimg.cc/HsLYs8zy/untitled-19.jpg",
-  "https://i.postimg.cc/T1NXWQ0R/untitled-180.jpg"
-];
+// Background Images Setup (use studio images if available)
+const backgroundImages = computed(() => {
+  // Use studio theme images if available
+  const studioImages = studioStore.themes
+    ?.slice(0, 3)
+    .map((theme) => theme.images?.[0])
+    .filter(Boolean);
+
+  if (studioImages && studioImages.length > 0) {
+    return studioImages as string[];
+  }
+
+  // Fallback images
+  return [
+    "https://i.postimg.cc/t4wCcRhG/untitled-10.jpg",
+    "https://i.postimg.cc/HsLYs8zy/untitled-19.jpg",
+    "https://i.postimg.cc/T1NXWQ0R/untitled-180.jpg",
+  ];
+});
 
 const currentImageIndex = ref(0);
 let intervalId: any;
 
 onMounted(() => {
   intervalId = setInterval(() => {
-    currentImageIndex.value = (currentImageIndex.value + 1) % backgroundImages.length;
+    currentImageIndex.value =
+      (currentImageIndex.value + 1) % backgroundImages.value.length;
   }, 5000);
 });
 
@@ -43,29 +59,29 @@ onUnmounted(() => {
 });
 
 // Form State
-const bookingId = ref('RY2026-0142'); // Default for demo
-const phone = ref('0129876543'); // Default for demo
+const bookingId = ref("");
+const phone = ref("");
 const isLoading = ref(false);
-const error = ref('');
+const error = ref("");
 const foundBooking = ref<Booking | null>(null);
 
 const validateForm = () => {
-  error.value = '';
+  error.value = "";
 
   if (!bookingId.value.trim()) {
-    error.value = t('bookingId') + ' diperlukan';
+    error.value = t("bookingId") + " " + t("required").toLowerCase();
     return false;
   }
 
   if (!phone.value.trim()) {
-    error.value = t('phoneNumber') + ' ' + t('required');
+    error.value = t("phoneNumber") + " " + t("required").toLowerCase();
     return false;
   }
 
   // Validate Malaysian phone format
   const phoneRegex = /^01\d{8,9}$/;
-  if (!phoneRegex.test(phone.value.replace(/[\s-]/g, ''))) {
-    error.value = t('pleaseEnterValidPhone');
+  if (!phoneRegex.test(phone.value.replace(/[\s-]/g, ""))) {
+    error.value = t("pleaseEnterValidPhone");
     return false;
   }
 
@@ -76,77 +92,139 @@ const searchBooking = async () => {
   if (!validateForm()) return;
 
   isLoading.value = true;
-  error.value = '';
+  error.value = "";
   foundBooking.value = null;
 
   try {
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    // Normalize phone number
+    const normalizedPhone = phone.value.replace(/[\s-]/g, "");
 
-    // Call mock API
-    const booking = await getBookingById(bookingId.value);
+    // Call API to lookup booking
+    const booking = await api.lookupBooking(
+      bookingId.value.trim(),
+      normalizedPhone
+    );
 
-    // Verify phone number matches (Mock logic)
-    const normalizedInputPhone = phone.value.replace(/[\s-]/g, '');
-    const normalizedBookingPhone = (booking as any).customerInfo?.whatsapp?.replace(/[\s-]/g, '') || booking.customer_phone?.replace(/[\s-]/g, '');
-
-    if (normalizedInputPhone !== normalizedBookingPhone) {
-      error.value = t('bookingNotFoundOrPhoneMismatch');
+    if (!booking) {
+      error.value = t("bookingNotFoundCheckDetails");
       return;
     }
 
     foundBooking.value = booking;
   } catch (err) {
-    error.value = t('bookingNotFoundCheckDetails');
+    error.value = t("bookingNotFoundCheckDetails");
   } finally {
     isLoading.value = false;
   }
 };
 
 const formattedDate = computed(() => {
-  const dateStr = (foundBooking.value as any)?.selectedDate || foundBooking.value?.booking_date;
-  if (!dateStr) return '';
-  return format(new Date(dateStr), 'd MMMM yyyy');
+  if (!foundBooking.value?.booking_date) return "";
+  try {
+    return format(new Date(foundBooking.value.booking_date), "d MMMM yyyy");
+  } catch {
+    return foundBooking.value.booking_date;
+  }
 });
 
 const formattedTime = computed(() => {
-  const slot = (foundBooking.value as any)?.selectedSlot;
-  if (!slot) return (foundBooking.value as any)?.time_slot || '';
-  return slot.time || `${slot.start} - ${slot.end}`;
+  if (!foundBooking.value) return "";
+  return `${foundBooking.value.start_time} - ${foundBooking.value.end_time}`;
 });
+
+// Format amount from sen to RM
+const formatAmount = (amountInSen: number | undefined): string => {
+  if (!amountInSen) return "RM 0.00";
+  const amountInRM = amountInSen / 100;
+  return `RM ${amountInRM.toFixed(2)}`;
+};
 
 const getStatusBadge = (status?: string) => {
   switch (status) {
-    case 'confirmed':
-      return { text: t('confirmed'), class: 'bg-green-100 text-green-800 border-green-200' };
-    case 'pending_payment':
-      return { text: t('paymentPending'), class: 'bg-yellow-100 text-yellow-800 border-yellow-200' };
-    case 'cancelled':
-      return { text: t('cancelled'), class: 'bg-red-100 text-red-800 border-red-200' };
-    case 'completed':
-      return { text: t('completed'), class: 'bg-blue-100 text-blue-800 border-blue-200' };
+    case "confirmed":
+      return {
+        text: t("confirmed"),
+        class: "bg-green-100 text-green-800 border-green-200",
+      };
+    case "pending_payment":
+    case "cart_hold":
+      return {
+        text: t("paymentPending"),
+        class: "bg-yellow-100 text-yellow-800 border-yellow-200",
+      };
+    case "cancelled":
+      return {
+        text: t("cancelled"),
+        class: "bg-red-100 text-red-800 border-red-200",
+      };
+    case "completed":
+      return {
+        text: t("completed"),
+        class: "bg-blue-100 text-blue-800 border-blue-200",
+      };
     default:
-      return { text: t('pending'), class: 'bg-gray-100 text-gray-800 border-gray-200' };
+      return {
+        text: t("pending"),
+        class: "bg-gray-100 text-gray-800 border-gray-200",
+      };
+  }
+};
+
+const getPaymentStatusBadge = (status?: string) => {
+  switch (status) {
+    case "paid":
+      return {
+        text: t("fullPayment"),
+        class: "bg-green-100 text-green-700",
+      };
+    case "partially_paid":
+      return {
+        text: t("depositPaid"),
+        class: "bg-blue-100 text-blue-700",
+      };
+    case "pending":
+      return {
+        text: t("paymentPending"),
+        class: "bg-amber-100 text-amber-700",
+      };
+    default:
+      return {
+        text: t("pending"),
+        class: "bg-gray-100 text-gray-600",
+      };
   }
 };
 
 const reset = () => {
-  bookingId.value = '';
-  phone.value = '';
+  bookingId.value = "";
+  phone.value = "";
   foundBooking.value = null;
-  error.value = '';
+  error.value = "";
 };
 
-const brandColor = computed(() => studioStore.studio?.brand_color || '#000000');
+const getWhatsAppUrl = computed(() => {
+  if (!studioStore.studio?.whatsapp || !foundBooking.value) return "";
+  const phoneNum = studioStore.studio.whatsapp.replace(/[^0-9]/g, "");
+  const message = encodeURIComponent(
+    `Hi, saya ingin bertanya tentang tempahan saya.\n\n` +
+      `ID Tempahan: ${foundBooking.value.booking_number}\n` +
+      `Nama: ${foundBooking.value.customer_name}`
+  );
+  return `https://wa.me/${phoneNum}?text=${message}`;
+});
+
+const brandColor = computed(() => studioStore.studio?.brand_color || "#000000");
 </script>
 
 <template>
-  <div class="min-h-screen w-full relative overflow-hidden flex flex-col font-sans" style="font-family: 'Bricolage Grotesque', sans-serif;">
-    
+  <div
+    class="min-h-screen w-full relative overflow-hidden flex flex-col font-sans"
+    style="font-family: 'Bricolage Grotesque', sans-serif"
+  >
     <!-- Background Slideshow -->
     <div class="fixed inset-0 z-0 bg-black">
-      <div 
-        v-for="(img, index) in backgroundImages" 
+      <div
+        v-for="(img, index) in backgroundImages"
         :key="index"
         class="absolute inset-0 transition-opacity duration-[1500ms] ease-in-out will-change-opacity"
         :class="index === currentImageIndex ? 'opacity-100' : 'opacity-0'"
@@ -162,9 +240,11 @@ const brandColor = computed(() => studioStore.studio?.brand_color || '#000000');
     </div>
 
     <!-- Header -->
-    <header class="sticky top-0 z-40 bg-white/70 backdrop-blur-md border-b border-gray-200 px-4 py-4 flex items-center justify-between transition-all duration-300">
-      <button 
-        @click="router.back()" 
+    <header
+      class="sticky top-0 z-40 bg-white/70 backdrop-blur-md border-b border-gray-200 px-4 py-4 flex items-center justify-between transition-all duration-300"
+    >
+      <button
+        @click="router.back()"
         class="p-2 -ml-2 hover:bg-gray-100 rounded-full transition-colors active:scale-95"
       >
         <ChevronLeft class="w-6 h-6" />
@@ -176,56 +256,74 @@ const brandColor = computed(() => studioStore.studio?.brand_color || '#000000');
     </header>
 
     <!-- Main Content -->
-    <main class="relative z-20 flex-1 flex flex-col items-center justify-center px-4 sm:px-6 py-12 w-full">
-      
-      <div class="w-full max-w-md bg-white/80 backdrop-blur-md rounded-3xl shadow-xl border border-white/50 p-6 sm:p-8 animate-slide-up">
-        
+    <main
+      class="relative z-20 flex-1 flex flex-col items-center justify-center px-4 sm:px-6 py-12 w-full"
+    >
+      <div
+        class="w-full max-w-md bg-white/80 backdrop-blur-md rounded-3xl shadow-xl border border-white/50 p-6 sm:p-8 animate-slide-up"
+      >
         <!-- Search Form State -->
         <div v-if="!foundBooking" class="space-y-8">
           <div class="text-center space-y-2">
-            <div class="bg-white w-16 h-16 rounded-2xl flex items-center justify-center mx-auto shadow-sm border border-gray-100 mb-4">
+            <div
+              class="bg-white w-16 h-16 rounded-2xl flex items-center justify-center mx-auto shadow-sm border border-gray-100 mb-4"
+            >
               <Search class="w-8 h-8 text-gray-400" />
             </div>
-            <h2 class="text-2xl font-bold font-serif">{{ t('checkStatus') }}</h2>
-            <p class="text-sm text-gray-500">{{ t('enterBookingDetailsToCheckStatus') }}</p>
+            <h2 class="text-2xl font-bold font-serif">
+              {{ t("checkYourBooking") }}
+            </h2>
+            <p class="text-sm text-gray-500">
+              {{ t("enterBookingDetailsToCheckStatus") }}
+            </p>
           </div>
 
           <form @submit.prevent="searchBooking" class="space-y-5">
             <div class="space-y-1">
-              <label class="text-xs font-bold uppercase tracking-widest text-gray-500 ml-1">{{ t('bookingId') }}</label>
-              <input 
+              <label
+                class="text-xs font-bold uppercase tracking-widest text-gray-500 ml-1"
+                >{{ t("bookingId") }}</label
+              >
+              <input
                 v-model="bookingId"
-                type="text" 
-                class="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-black focus:ring-1 focus:ring-black/10 transition-all font-medium placeholder-gray-300"
+                type="text"
+                class="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-black focus:ring-1 focus:ring-black/10 transition-all font-medium placeholder-gray-300 uppercase"
                 :placeholder="t('enterBookingId')"
               />
+              <p class="text-[10px] text-gray-400 ml-1">
+                {{ t("bookingIdSentToWhatsApp") }}
+              </p>
             </div>
 
             <div class="space-y-1">
-              <label class="text-xs font-bold uppercase tracking-widest text-gray-500 ml-1">{{ t('phoneNumber') }}</label>
-              <input 
+              <label
+                class="text-xs font-bold uppercase tracking-widest text-gray-500 ml-1"
+                >{{ t("phoneNumber") }}</label
+              >
+              <input
                 v-model="phone"
-                type="tel" 
+                type="tel"
                 class="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 outline-none focus:border-black focus:ring-1 focus:ring-black/10 transition-all font-medium placeholder-gray-300"
                 :placeholder="t('enterPhone')"
               />
             </div>
 
-            <div v-if="error" class="bg-red-50 text-red-600 text-xs font-medium p-3 rounded-xl flex items-start gap-2">
+            <div
+              v-if="error"
+              class="bg-red-50 text-red-600 text-xs font-medium p-3 rounded-xl flex items-start gap-2"
+            >
               <AlertCircle class="w-4 h-4 flex-shrink-0 mt-0.5" />
               <span>{{ error }}</span>
             </div>
 
-            <button 
+            <button
               type="submit"
               :disabled="isLoading"
               class="w-full bg-black text-white py-4 rounded-xl font-bold uppercase tracking-widest text-xs hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              :style="{ backgroundColor: brandColor }"
             >
-              <span v-if="!isLoading">{{ t('checkNow') }}</span>
-              <span v-else>{{ t('checking') }}</span>
+              <span v-if="!isLoading">{{ t("checkNow") }}</span>
+              <span v-else>{{ t("checking") }}</span>
               <Loader2 v-if="isLoading" class="w-4 h-4 animate-spin" />
-              <ArrowRight v-else class="w-4 h-4" />
             </button>
           </form>
         </div>
@@ -234,95 +332,246 @@ const brandColor = computed(() => studioStore.studio?.brand_color || '#000000');
         <div v-else class="space-y-6 animate-fade-in">
           <!-- Success Header -->
           <div class="text-center border-b border-dashed border-gray-200 pb-6">
-            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-3 border" :class="getStatusBadge(foundBooking.booking_status).class">
+            <div
+              class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-3 border"
+              :class="getStatusBadge(foundBooking.booking_status).class"
+            >
               {{ getStatusBadge(foundBooking.booking_status).text }}
             </div>
-            <h2 class="text-3xl font-bold font-serif mb-1">{{ foundBooking.booking_number }}</h2>
-            <p class="text-sm text-gray-500">{{ t('bookingId') }}</p>
+            <h2 class="text-3xl font-bold font-serif mb-1">
+              {{ foundBooking.booking_number }}
+            </h2>
+            <p class="text-sm text-gray-500">{{ t("bookingId") }}</p>
           </div>
 
           <!-- Details -->
           <div class="space-y-4">
             <!-- Theme -->
-            <div class="flex gap-4 items-start bg-white p-4 rounded-2xl border border-gray-100">
-              <img 
-                v-if="foundBooking.theme?.images?.[0]" 
-                :src="foundBooking.theme.images[0]" 
+            <div
+              class="flex gap-4 items-start bg-white p-4 rounded-2xl border border-gray-100"
+            >
+              <img
+                v-if="foundBooking.theme?.images?.[0]"
+                :src="foundBooking.theme.images[0]"
                 class="w-16 h-16 rounded-lg object-cover"
               />
+              <div
+                v-else
+                class="w-16 h-16 rounded-lg bg-gray-100 flex items-center justify-center flex-shrink-0"
+              >
+                <Calendar class="w-6 h-6 text-gray-400" />
+              </div>
               <div>
-                <h3 class="font-bold font-serif text-lg leading-tight">{{ foundBooking.theme?.name }}</h3>
-                <p class="text-xs text-gray-500 mt-1">{{ studioStore.studio?.name }}</p>
+                <h3 class="font-bold font-serif text-lg leading-tight">
+                  {{ foundBooking.theme?.name }}
+                </h3>
+                <p class="text-xs text-gray-500 mt-1">
+                  {{ studioStore.studio?.name }}
+                </p>
               </div>
             </div>
 
             <!-- Date & Time -->
             <div class="grid grid-cols-2 gap-3">
-              <div class="bg-white p-3 rounded-2xl border border-gray-100 flex flex-col items-center justify-center text-center gap-1">
+              <div
+                class="bg-white p-3 rounded-2xl border border-gray-100 flex flex-col items-center justify-center text-center gap-1"
+              >
                 <Calendar class="w-5 h-5 text-gray-400" />
-                <span class="text-sm font-bold text-gray-900">{{ formattedDate }}</span>
-                <span class="text-[10px] text-gray-400 uppercase">{{ t('date') }}</span>
+                <span class="text-sm font-bold text-gray-900">{{
+                  formattedDate
+                }}</span>
+                <span class="text-[10px] text-gray-400 uppercase">{{
+                  t("date")
+                }}</span>
               </div>
-              <div class="bg-white p-3 rounded-2xl border border-gray-100 flex flex-col items-center justify-center text-center gap-1">
+              <div
+                class="bg-white p-3 rounded-2xl border border-gray-100 flex flex-col items-center justify-center text-center gap-1"
+              >
                 <Clock class="w-5 h-5 text-gray-400" />
-                <span class="text-sm font-bold text-gray-900">{{ formattedTime }}</span>
-                <span class="text-[10px] text-gray-400 uppercase">{{ t('time') }}</span>
+                <span class="text-sm font-bold text-gray-900">{{
+                  formattedTime
+                }}</span>
+                <span class="text-[10px] text-gray-400 uppercase">{{
+                  t("time")
+                }}</span>
               </div>
             </div>
 
             <!-- Pax -->
-            <div class="bg-white p-4 rounded-2xl border border-gray-100 flex items-center justify-between">
+            <div
+              v-if="foundBooking.pax_count"
+              class="bg-white p-4 rounded-2xl border border-gray-100 flex items-center justify-between"
+            >
               <div class="flex items-center gap-3">
                 <Users class="w-5 h-5 text-gray-400" />
-                <span class="text-sm font-medium text-gray-600">{{ t('numberOfGuests') }}</span>
+                <span class="text-sm font-medium text-gray-600">{{
+                  t("numberOfGuests")
+                }}</span>
               </div>
-              <span class="font-bold text-gray-900">{{ foundBooking.pax_count || (foundBooking as any).pax }} {{ t('people') }}</span>
+              <span class="font-bold text-gray-900"
+                >{{ foundBooking.pax_count }} {{ t("people") }}</span
+              >
+            </div>
+
+            <!-- Payment Info -->
+            <div
+              v-if="foundBooking.total_amount"
+              class="bg-white p-4 rounded-2xl border border-gray-100 space-y-3"
+            >
+              <div class="flex items-center gap-2 mb-2">
+                <Receipt class="w-4 h-4 text-gray-400" />
+                <span
+                  class="text-xs font-bold text-gray-500 uppercase tracking-wider"
+                  >{{ t("paymentSummary") }}</span
+                >
+              </div>
+
+              <!-- Payment Breakdown -->
+              <div class="space-y-2 pb-3 border-b border-gray-50">
+                <!-- Base Price -->
+                <div class="flex justify-between items-center text-sm">
+                  <span class="text-gray-500"
+                    >{{ foundBooking.theme?.name }} ({{
+                      foundBooking.theme?.base_pax || 1
+                    }}
+                    {{ t("people") }})</span
+                  >
+                  <span class="text-gray-900 font-medium">{{
+                    formatAmount(foundBooking.base_price)
+                  }}</span>
+                </div>
+
+                <!-- Extra Pax -->
+                <div
+                  v-if="
+                    foundBooking.extra_pax_fee && foundBooking.extra_pax_fee > 0
+                  "
+                  class="flex justify-between items-center text-sm"
+                >
+                  <span class="text-gray-500"
+                    >{{ t("extraPax") }} ({{
+                      foundBooking.pax_count -
+                      (foundBooking.theme?.base_pax || 1)
+                    }}
+                    {{ t("people") }})</span
+                  >
+                  <span class="text-gray-900 font-medium">{{
+                    formatAmount(foundBooking.extra_pax_fee)
+                  }}</span>
+                </div>
+
+                <!-- Addons -->
+                <div
+                  v-for="addon in foundBooking.addons"
+                  :key="addon.addon.name"
+                  class="flex justify-between items-center text-sm"
+                >
+                  <span class="text-gray-500"
+                    >{{ addon.addon.name }} x {{ addon.quantity }}</span
+                  >
+                  <span class="text-gray-900 font-medium">{{
+                    formatAmount(addon.price_at_booking)
+                  }}</span>
+                </div>
+              </div>
+
+              <!-- Payment Status Badge -->
+              <div class="flex items-center justify-between">
+                <span class="text-sm text-gray-600">{{ t("status") }}</span>
+                <span
+                  :class="[
+                    'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase',
+                    getPaymentStatusBadge(foundBooking.payment_status).class,
+                  ]"
+                >
+                  <CreditCard class="w-3 h-3" />
+                  {{ getPaymentStatusBadge(foundBooking.payment_status).text }}
+                </span>
+              </div>
+
+              <div class="flex justify-between items-center">
+                <span class="text-base font-bold text-gray-900">{{
+                  t("total")
+                }}</span>
+                <span class="text-base font-bold text-gray-900">{{
+                  formatAmount(foundBooking.total_amount)
+                }}</span>
+              </div>
+
+              <div
+                v-if="
+                  foundBooking.deposit_amount &&
+                  foundBooking.deposit_amount < foundBooking.total_amount
+                "
+                class="flex justify-between items-center text-xs pt-2 border-t border-gray-100"
+              >
+                <span class="text-green-600"
+                  >{{ t("deposit") }} ({{ t("depositPaid") }})</span
+                >
+                <span class="text-green-600 font-medium">{{
+                  formatAmount(foundBooking.deposit_amount)
+                }}</span>
+              </div>
+
+              <div
+                v-if="
+                  foundBooking.balance_amount && foundBooking.balance_amount > 0
+                "
+                class="flex justify-between items-center text-xs text-amber-600"
+              >
+                <span>{{ t("balance") }} ({{ t("remaining") }})</span>
+                <span class="font-medium">{{
+                  formatAmount(foundBooking.balance_amount)
+                }}</span>
+              </div>
             </div>
           </div>
 
           <!-- Actions -->
           <div class="pt-4 space-y-3">
-            <a 
-              v-if="studioStore.studio?.whatsapp"
-              :href="`https://wa.me/${studioStore.studio.whatsapp}`"
+            <a
+              v-if="getWhatsAppUrl"
+              :href="getWhatsAppUrl"
               target="_blank"
-              class="w-full bg-green-50 text-green-700 py-4 rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-green-100 transition-all flex items-center justify-center gap-2 border border-green-100"
+              rel="noopener noreferrer"
+              class="w-full bg-green-500 text-white py-4 rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-green-600 transition-all flex items-center justify-center gap-2 border border-green-100"
             >
               <MessageCircle class="w-4 h-4" />
-              {{ t('contactStudio') }}
+              {{ t("contactStudio") }}
             </a>
-            
-            <button 
+
+            <button
               @click="reset"
               class="w-full bg-white border border-gray-200 text-gray-500 py-4 rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-gray-50 hover:text-gray-900 transition-all flex items-center justify-center gap-2"
             >
               <RefreshCw class="w-4 h-4" />
-              {{ t('checkAnother') }}
+              {{ t("checkAnother") }}
             </button>
           </div>
-
         </div>
-
       </div>
     </main>
-
   </div>
 </template>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,500;1,600;1,700;1,800;1,900&family=Bricolage+Grotesque:opsz,wght@12..96,200..800&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,500;1,600;1,700;1,800;1,900&family=Bricolage+Grotesque:opsz,wght@12..96,200..800&display=swap");
 
 .font-serif {
-  font-family: 'Playfair Display', serif;
+  font-family: "Playfair Display", serif;
 }
 
 .font-sans {
-  font-family: 'Bricolage Grotesque', sans-serif;
+  font-family: "Bricolage Grotesque", sans-serif;
 }
 
 @keyframes ken-burns {
-  0% { transform: scale(1.05); }
-  100% { transform: scale(1.15); }
+  0% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1.15);
+  }
 }
 
 .animate-ken-burns {
@@ -330,8 +579,14 @@ const brandColor = computed(() => studioStore.studio?.brand_color || '#000000');
 }
 
 @keyframes slide-up {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .animate-slide-up {
@@ -339,12 +594,15 @@ const brandColor = computed(() => studioStore.studio?.brand_color || '#000000');
 }
 
 @keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .animate-fade-in {
   animation: fade-in 0.4s ease-out;
 }
 </style>
-

@@ -108,6 +108,8 @@ const transformTheme = (data: any): Theme => ({
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
   is_deposit: data.paymentMode === "deposit",
+  deposit_amount: data.depositAmount, // Fixed deposit amount in sen
+  payment_mode: data.paymentMode, // "deposit" or "full"
 });
 
 const transformAddon = (data: any): Addon => ({
@@ -415,6 +417,7 @@ export const api = {
           quantity: a.quantity,
         })),
         couponCode: request.coupon_code,
+        sessionId: request.session_id,
       },
     });
 
@@ -511,6 +514,134 @@ export const api = {
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         addons: [],
+      };
+    } catch {
+      return null;
+    }
+  },
+
+  // Get booking by booking number (for success page)
+  async getBookingByNumber(bookingNumber: string): Promise<Booking | null> {
+    try {
+      const data = await apiFetch(`/public/bookings/${bookingNumber}`);
+
+      return {
+        id: data.id,
+        studio_id: "",
+        booking_number: data.bookingNumber,
+        theme_id: "",
+        theme: {
+          id: "",
+          studio_id: "",
+          name: data.themeName,
+          description_short: "",
+          description_long: "",
+          images: [],
+          base_price: 0,
+          base_pax: 0,
+          extra_pax_price: 0,
+          duration_minutes: 0,
+          buffer_minutes: null,
+          strict_max_people: false,
+          max_total_people: 0,
+          status: "active",
+          sort_order: 0,
+          created_at: "",
+          updated_at: "",
+        },
+        booking_date: data.bookingDate,
+        start_time: data.startTime,
+        end_time: data.endTime,
+        pax_count: 0,
+        customer_name: data.customerName,
+        customer_phone: data.customerPhone,
+        customer_email: "",
+        customer_notes: "",
+        consent_tc: true,
+        consent_marketing: false,
+        base_price: 0,
+        extra_pax_fee: 0,
+        addons_total: 0,
+        special_pricing_applied: 0,
+        total_amount: data.totalAmount,
+        deposit_amount: data.depositAmount,
+        balance_amount: data.balanceAmount,
+        payment_status: data.paymentStatus as any,
+        booking_status: data.bookingStatus as any,
+        cart_hold_expires_at: data.cartHoldExpiresAt || null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        addons: [],
+      };
+    } catch {
+      return null;
+    }
+  },
+
+  // Lookup booking by booking number and phone (for check booking page)
+  async lookupBooking(
+    bookingNumber: string,
+    phone: string
+  ): Promise<Booking | null> {
+    try {
+      const data = await apiFetch(
+        `/public/bookings/lookup?bookingNumber=${encodeURIComponent(
+          bookingNumber
+        )}&phone=${encodeURIComponent(phone)}`
+      );
+
+      return {
+        id: data.id,
+        studio_id: "",
+        booking_number: data.bookingNumber,
+        theme_id: "",
+        theme: {
+          id: "",
+          studio_id: "",
+          name: data.themeName,
+          description_short: "",
+          description_long: "",
+          images: data.themeImage ? [data.themeImage] : [],
+          base_price: data.basePrice || 0,
+          base_pax: data.basePax || 0,
+          extra_pax_price: 0,
+          duration_minutes: 0,
+          buffer_minutes: null,
+          strict_max_people: false,
+          max_total_people: 0,
+          status: "active",
+          sort_order: 0,
+          created_at: "",
+          updated_at: "",
+        },
+        booking_date: data.bookingDate,
+        start_time: data.startTime,
+        end_time: data.endTime,
+        pax_count: data.paxCount || 0,
+        customer_name: data.customerName,
+        customer_phone: data.customerPhone,
+        customer_email: "",
+        customer_notes: "",
+        consent_tc: true,
+        consent_marketing: false,
+        base_price: data.basePrice || 0,
+        extra_pax_fee: data.extraPaxFee || 0,
+        addons_total: data.addonsTotal || 0,
+        special_pricing_applied: 0,
+        total_amount: data.totalAmount,
+        deposit_amount: data.depositAmount,
+        balance_amount: data.balanceAmount,
+        payment_status: data.paymentStatus as any,
+        booking_status: data.bookingStatus as any,
+        cart_hold_expires_at: data.cartHoldExpiresAt || null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        addons:
+          data.addons?.map((a: any) => ({
+            addon: { name: a.name, price: a.price / a.quantity },
+            quantity: a.quantity,
+            price_at_booking: a.price,
+          })) || [],
       };
     } catch {
       return null;
@@ -623,7 +754,12 @@ export const createBooking = (request: BookingRequest) =>
 export const getBookingById = async (
   bookingNumber: string
 ): Promise<Booking> => {
-  // For lookup, we need phone - this is handled differently in the UI
-  // This function is used on the success page where we should have the booking cached
-  throw new Error("Use getBookingByIdAndPhone instead");
+  const booking = await api.getBookingByNumber(bookingNumber);
+  if (!booking) {
+    throw new Error("Booking not found");
+  }
+  return booking;
 };
+
+export const lookupBooking = (bookingNumber: string, phone: string) =>
+  api.lookupBooking(bookingNumber, phone);

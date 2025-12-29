@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { useTranslation } from "@/composables/useTranslation";
 import { Camera, ArrowRight, RefreshCw } from "lucide-vue-next";
+import { useRouter } from "vue-router";
+
+const router = useRouter();
 
 const { t } = useTranslation();
 
@@ -9,7 +12,8 @@ const goToMainSite = () => {
 };
 
 const refreshPage = () => {
-  window.location.reload();
+  console.log("refreshPage");
+  window.location.href = `https://${window.location.hostname}.sesifoto.my`;
 };
 </script>
 

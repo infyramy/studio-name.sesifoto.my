@@ -83,7 +83,7 @@ export const translationsBM: Translations = {
   checkStatus: "Semak Status",
   enterBookingDetailsToCheckStatus:
     "Masukkan butiran tempahan anda untuk menyemak status terkini.",
-  numberOfGuests: "Bilangan Tetamu",
+  numberOfGuests: "Bilangan Pax",
   checkAnother: "Semak Lain",
   pleaseEnterValidPhone: "Sila masukkan nombor telefon yang sah",
   bookingNotFoundOrPhoneMismatch:
@@ -271,6 +271,19 @@ export const translationsBM: Translations = {
   visitSesifoto: "Kunjungi Sesifoto",
   goBack: "Kembali",
   followUs: "Untuk maklumat terkini, ikuti kami di",
+
+  // Payment Errors
+  paymentFailed: "Pembayaran Gagal",
+  paymentFailedMessage:
+    "Kami tidak dapat memproses pembayaran anda. Sila cuba lagi.",
+  paymentCancelled: "Pembayaran Dibatalkan",
+  paymentCancelledMessage:
+    "Anda telah membatalkan pembayaran. Tempahan anda tidak disahkan.",
+  paymentExpired: "Pembayaran Tamat Tempoh",
+  paymentExpiredMessage: "Sesi pembayaran telah tamat tempoh. Sila cuba lagi.",
+  noChargeApplied: "Tiada caj dikenakan ke akaun anda.",
+  bookingFailed: "Gagal membuat tempahan. Sila cuba lagi.",
+  noTermsConfigured: "Tiada terma dan syarat dikonfigurasikan.",
 
   // Studio Not Found
   studioNotFoundTitle: "Studio Tidak Dijumpai",
@@ -641,6 +654,19 @@ export const translationsEN: Translations = {
   visitSesifoto: "Visit Sesifoto",
   goBack: "Go Back",
   followUs: "For updates follow us on",
+
+  // Payment Errors
+  paymentFailed: "Payment Failed",
+  paymentFailedMessage:
+    "We were unable to process your payment. Please try again.",
+  paymentCancelled: "Payment Cancelled",
+  paymentCancelledMessage:
+    "You cancelled the payment. Your booking has not been confirmed.",
+  paymentExpired: "Payment Expired",
+  paymentExpiredMessage: "The payment session has expired. Please try again.",
+  noChargeApplied: "No charges have been applied to your account.",
+  bookingFailed: "Failed to create booking. Please try again.",
+  noTermsConfigured: "No terms and conditions configured.",
 
   // Studio Not Found
   studioNotFoundTitle: "Studio Not Found",

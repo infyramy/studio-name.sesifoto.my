@@ -85,6 +85,8 @@ export interface Theme {
   created_at: string;
   updated_at: string;
   is_deposit?: boolean; // Display-only flag to mark price as deposit
+  deposit_amount?: number; // Fixed deposit amount in sen (e.g., 10000 = RM 100)
+  payment_mode?: "deposit" | "full"; // Payment mode for this theme
 }
 
 // Working Hours Types
@@ -216,6 +218,7 @@ export interface BookingRequest {
   selected_addons: SelectedAddon[];
   coupon_code?: string;
   discount_amount?: number;
+  session_id?: string; // Browser session ID (for excluding own slot holds)
 }
 
 export interface SelectedAddon {

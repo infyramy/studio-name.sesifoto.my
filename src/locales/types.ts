@@ -262,6 +262,17 @@ export type TranslationKey =
   | "goBack"
   | "followUs"
 
+  // Payment Errors
+  | "paymentFailed"
+  | "paymentFailedMessage"
+  | "paymentCancelled"
+  | "paymentCancelledMessage"
+  | "paymentExpired"
+  | "paymentExpiredMessage"
+  | "noChargeApplied"
+  | "bookingFailed"
+  | "noTermsConfigured"
+
   // Studio Not Found
   | "studioNotFoundTitle"
   | "studioNotFoundMessage"

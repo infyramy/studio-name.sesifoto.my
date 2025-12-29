@@ -1567,20 +1567,53 @@ const nextStep = async () => {
               ? validatedCoupon.value?.code
               : undefined,
             discount_amount: isCouponApplied ? discountAmount.value : undefined,
+            session_id: getSessionId(),
           };
 
           // Create booking
           const createdBooking = await createBooking(bookingRequest);
           bookingNumbers.push(createdBooking.booking_number);
+
+          // Initiate payment for the first booking (all items paid together)
+          if (i === 0) {
+            // Determine payment type from studio settings
+            const paymentType =
+              studioStore.websiteSettings?.paymentType || "deposit";
+
+            // Call payment initiation API
+            const paymentResult = await api.initiatePayment(
+              createdBooking.id,
+              paymentType
+            );
+
+            // Clear booking state before redirecting
+            clearBookingState();
+
+            // Redirect to CHIP checkout
+            if (paymentResult.checkoutUrl) {
+              window.location.href = paymentResult.checkoutUrl;
+              return; // Stop execution after redirect
+            }
+          }
         }
 
-        // Clear booking state after successful creation
+        // Fallback: If no checkoutUrl (CHIP not configured), redirect to success
         clearBookingState();
-
-        // Redirect to success page with first booking number
         router.push(`/success/${bookingNumbers[0]}`);
-      } catch (error) {
+      } catch (error: any) {
         console.error("Failed to create bookings:", error);
+
+        // Show error to user
+        await showModal({
+          title: t("error") || "Error",
+          message:
+            error.message ||
+            t("bookingFailed") ||
+            "Failed to create booking. Please try again.",
+          type: "error",
+          confirmText: t("ok") || "OK",
+        });
+
         isProcessingPayment.value = false;
       }
     } else {
@@ -1635,18 +1668,47 @@ const nextStep = async () => {
           coupon_code: validatedCoupon.value?.code,
           discount_amount:
             discountAmount.value > 0 ? discountAmount.value : undefined,
+          session_id: getSessionId(),
         };
 
         // Create booking
         const createdBooking = await createBooking(bookingRequest);
 
-        // Clear booking state after successful creation
+        // Determine payment type from studio settings
+        const paymentType =
+          studioStore.websiteSettings?.paymentType || "deposit";
+
+        // Initiate payment with CHIP
+        const paymentResult = await api.initiatePayment(
+          createdBooking.id,
+          paymentType
+        );
+
+        // Clear booking state before redirecting
         clearBookingState();
 
-        // Redirect to success page with booking number
+        // Redirect to CHIP checkout
+        if (paymentResult.checkoutUrl) {
+          window.location.href = paymentResult.checkoutUrl;
+          return; // Stop execution after redirect
+        }
+
+        // Fallback: If no checkoutUrl (CHIP not configured), redirect to success
         router.push(`/success/${createdBooking.booking_number}`);
-      } catch (error) {
+      } catch (error: any) {
         console.error("Failed to create booking:", error);
+
+        // Show error to user
+        await showModal({
+          title: t("error") || "Error",
+          message:
+            error.message ||
+            t("bookingFailed") ||
+            "Failed to create booking. Please try again.",
+          type: "error",
+          confirmText: t("ok") || "OK",
+        });
+
         isProcessingPayment.value = false;
       }
     }
@@ -1822,12 +1884,31 @@ const paymentType = computed(() => {
 });
 
 const depositPercentage = computed(() => {
+  // Calculate percentage for display based on theme's deposit amount
+  if (!selectedTheme.value || !grandTotal.value) return 50;
+
+  // If theme has a deposit_amount, calculate percentage from that
+  if (selectedTheme.value.deposit_amount) {
+    return Math.round(
+      (selectedTheme.value.deposit_amount / grandTotal.value) * 100
+    );
+  }
+
   return studioStore.studio?.settings.deposit_percentage || 50;
 });
 
 const depositAmount = computed(() => {
+  if (!selectedTheme.value) return 0;
+
+  // Use theme's deposit_amount if available (fixed deposit in sen)
+  if (selectedTheme.value.deposit_amount) {
+    return selectedTheme.value.deposit_amount;
+  }
+
+  // Fallback: calculate based on percentage
   if (!grandTotal.value) return 0;
-  return grandTotal.value * (depositPercentage.value / 100);
+  const percentage = studioStore.studio?.settings.deposit_percentage || 50;
+  return grandTotal.value * (percentage / 100);
 });
 
 const paymentAmount = computed(() => {
@@ -3691,10 +3772,10 @@ watch(
               </div>
             </div>
 
-            <div class="p-6 space-y-6">
+            <div class="p-6 space-y-3">
               <!-- Theme Information -->
               <div
-                class="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 pb-6 border-b border-dashed border-gray-200"
+                class="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 border-dashed border-gray-200"
               >
                 <div class="flex-1">
                   <div class="font-bold font-serif text-lg mb-2">
@@ -3749,7 +3830,9 @@ watch(
                     {{ t("pax") || "Pax" }}
                   </div>
                 </div>
-                <div class="font-bold font-sans text-lg sm:text-base">
+                <div
+                  class="flex items-center font-bold font-sans text-lg sm:text-base justify-end"
+                >
                   RM{{ formatPriceWhole(selectedTheme?.base_price || 0) }}
                 </div>
               </div>
@@ -3758,7 +3841,7 @@ watch(
                 <!-- Special Pricing -->
                 <div
                   v-if="specialPricingAmount !== 0"
-                  class="flex justify-between"
+                  class="flex items-center justify-between"
                 >
                   <span class="text-gray-600">
                     {{ t("specialDate") }}
@@ -3827,7 +3910,10 @@ watch(
               </div>
 
               <!-- Edit Buttons (under addon section, aligned right) -->
-              <div class="flex justify-end gap-3 pt-2">
+              <div
+                v-if="Object.values(selectedAddons).some((qty) => qty > 0)"
+                class="flex justify-end gap-3"
+              >
                 <button
                   @click="currentStep = 3"
                   class="flex items-center gap-2 px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded-xl text-sm font-sans font-medium text-gray-700 transition-all"
@@ -3837,7 +3923,7 @@ watch(
               </div>
 
               <!-- User Details -->
-              <div class="pt-6 border-t border-dashed border-gray-200">
+              <div class="pt-3 border-t border-dashed border-gray-200">
                 <div class="flex justify-between items-center mb-4">
                   <h4 class="font-bold font-serif text-base mb-4">
                     {{ t("customerInformation") }}
@@ -3947,7 +4033,7 @@ watch(
                   <!-- Show original total (which is grandTotal in Single mode before discount logic applied, but grandTotal is computed to include discount) -->
                   <!-- Actually, for single mode, grandTotal uses currentItemTotal. I modified grandTotal to include discount. -->
                   <!-- So to show original, I need to show currentItemTotal -->
-                  <span class="text-2xl font-bold font-serif"
+                  <span class="text-2xl font-bold"
                     >RM{{ formatPriceWhole(currentItemTotal) }}</span
                   >
                 </div>
@@ -3969,7 +4055,7 @@ watch(
                     {{
                       paymentType === "full"
                         ? t("payFullPaymentLabel")
-                        : t("payDeposit") + ` (${depositPercentage}%)`
+                        : t("payDeposit")
                     }}
                   </span>
                   <span class="font-bold font-sans text-lg text-gray-900"
