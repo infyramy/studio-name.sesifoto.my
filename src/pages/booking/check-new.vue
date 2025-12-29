@@ -460,6 +460,25 @@ const brandColor = computed(() => studioStore.studio?.brand_color || "#000000");
                   }}</span>
                 </div>
 
+                <!-- Special Pricing -->
+                <div
+                  v-if="
+                    foundBooking.special_pricing_applied &&
+                    foundBooking.special_pricing_applied !== 0
+                  "
+                  class="flex justify-between items-center text-sm"
+                >
+                  <span class="text-gray-500 italic">
+                    {{
+                      foundBooking.special_pricing_label || t("specialPrice")
+                    }}
+                  </span>
+                  <span class="text-gray-900 font-medium">
+                    {{ foundBooking.special_pricing_applied > 0 ? "+" : ""
+                    }}{{ formatAmount(foundBooking.special_pricing_applied) }}
+                  </span>
+                </div>
+
                 <!-- Addons -->
                 <div
                   v-for="addon in foundBooking.addons"
@@ -472,6 +491,25 @@ const brandColor = computed(() => studioStore.studio?.brand_color || "#000000");
                   <span class="text-gray-900 font-medium">{{
                     formatAmount(addon.price_at_booking)
                   }}</span>
+                </div>
+
+                <!-- Discount / Coupon -->
+                <div
+                  v-if="
+                    foundBooking.discount_amount &&
+                    foundBooking.discount_amount > 0
+                  "
+                  class="flex justify-between items-center text-sm pt-1 border-t border-gray-50 mt-1"
+                >
+                  <span class="text-red-500 font-medium italic">
+                    {{ t("discount") }}
+                    <span v-if="foundBooking.coupon_code"
+                      >({{ foundBooking.coupon_code }})</span
+                    >
+                  </span>
+                  <span class="text-red-500 font-medium">
+                    -{{ formatAmount(foundBooking.discount_amount) }}
+                  </span>
                 </div>
               </div>
 

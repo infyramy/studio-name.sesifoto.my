@@ -281,14 +281,91 @@ const getWhatsAppUrl = computed(() => {
         <!-- Payment Info -->
         <div
           v-if="booking.total_amount"
-          class="bg-gray-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-gray-100 space-y-2 font-sans"
+          class="bg-gray-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-gray-100 space-y-3 font-sans"
         >
-          <div class="flex items-center gap-2 mb-2">
+          <div class="flex items-center gap-2 mb-1">
             <Receipt class="w-4 h-4 text-gray-400" />
             <span
               class="text-xs font-bold text-gray-500 uppercase tracking-wider"
               >{{ t("paymentSummary") || "Payment Summary" }}</span
             >
+          </div>
+
+          <!-- Payment Breakdown -->
+          <div class="space-y-2 pb-2 border-b border-gray-200">
+            <!-- Base Price -->
+            <div class="flex justify-between items-center text-xs sm:text-sm">
+              <span class="text-gray-500"
+                >{{ booking.theme?.name }} ({{ booking.theme?.base_pax || 1 }}
+                {{ t("people") }})</span
+              >
+              <span class="text-gray-900 font-medium">{{
+                formatAmount(booking.base_price)
+              }}</span>
+            </div>
+
+            <!-- Extra Pax -->
+            <div
+              v-if="booking.extra_pax_fee && booking.extra_pax_fee > 0"
+              class="flex justify-between items-center text-xs sm:text-sm"
+            >
+              <span class="text-gray-500"
+                >{{ t("extra") }} ({{
+                  booking.pax_count - (booking.theme?.base_pax || 1)
+                }}
+                {{ t("people") }})</span
+              >
+              <span class="text-gray-900 font-medium">{{
+                formatAmount(booking.extra_pax_fee)
+              }}</span>
+            </div>
+
+            <!-- Special Pricing -->
+            <div
+              v-if="
+                booking.special_pricing_applied &&
+                booking.special_pricing_applied !== 0
+              "
+              class="flex justify-between items-center text-xs sm:text-sm"
+            >
+              <span class="text-gray-500 italic">
+                {{ booking.special_pricing_label || t("specialPrice") }}
+              </span>
+              <span class="text-gray-900 font-medium">
+                {{ booking.special_pricing_applied > 0 ? "+" : ""
+                }}{{ formatAmount(booking.special_pricing_applied) }}
+              </span>
+            </div>
+
+            <!-- Addons -->
+            <div
+              v-for="addon in booking.addons"
+              :key="addon.addon.name"
+              class="flex justify-between items-center text-xs sm:text-sm"
+            >
+              <span class="text-gray-500"
+                >{{ addon.addon.name }} x {{ addon.quantity }}</span
+              >
+              <span class="text-gray-900 font-medium">{{
+                formatAmount(addon.price_at_booking)
+              }}</span>
+            </div>
+
+            <!-- Discount -->
+            <div
+              v-if="booking.discount_amount && booking.discount_amount > 0"
+              class="flex justify-between items-center text-xs sm:text-sm pt-1 border-t border-gray-100 mt-1"
+            >
+              <span class="text-red-500 font-medium italic">
+                {{ t("discount") }}
+                <span v-if="booking.coupon_code"
+                  >({{ booking.coupon_code }})</span
+                >
+              </span>
+              <span class="text-red-500 font-medium">
+                -{{ formatAmount(booking.discount_amount) }}
+              </span>
+            </div>
           </div>
 
           <div class="flex justify-between items-center">

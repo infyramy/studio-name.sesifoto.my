@@ -246,6 +246,7 @@ export interface Booking {
   extra_pax_fee: number;
   addons_total: number;
   special_pricing_applied: number;
+  special_pricing_label?: string | null;
   coupon_code?: string;
   discount_amount?: number;
   total_amount: number;

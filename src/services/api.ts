@@ -536,9 +536,9 @@ export const api = {
           name: data.themeName,
           description_short: "",
           description_long: "",
-          images: [],
-          base_price: 0,
-          base_pax: 0,
+          images: data.themeImage ? [data.themeImage] : [],
+          base_price: data.basePrice || 0,
+          base_pax: data.basePax || 0,
           extra_pax_price: 0,
           duration_minutes: 0,
           buffer_minutes: null,
@@ -552,17 +552,20 @@ export const api = {
         booking_date: data.bookingDate,
         start_time: data.startTime,
         end_time: data.endTime,
-        pax_count: 0,
+        pax_count: data.paxCount || 0,
         customer_name: data.customerName,
         customer_phone: data.customerPhone,
         customer_email: "",
         customer_notes: "",
         consent_tc: true,
         consent_marketing: false,
-        base_price: 0,
-        extra_pax_fee: 0,
-        addons_total: 0,
-        special_pricing_applied: 0,
+        base_price: data.basePrice || 0,
+        extra_pax_fee: data.extraPaxFee || 0,
+        addons_total: data.addonsTotal || 0,
+        special_pricing_applied: data.specialPricingApplied || 0,
+        special_pricing_label: data.specialPricingLabel || null,
+        coupon_code: data.couponCode || null,
+        discount_amount: data.discountAmount || 0,
         total_amount: data.totalAmount,
         deposit_amount: data.depositAmount,
         balance_amount: data.balanceAmount,
@@ -571,7 +574,12 @@ export const api = {
         cart_hold_expires_at: data.cartHoldExpiresAt || null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-        addons: [],
+        addons:
+          data.addons?.map((a: any) => ({
+            addon: { name: a.name, price: a.price / a.quantity },
+            quantity: a.quantity,
+            price_at_booking: a.price,
+          })) || [],
       };
     } catch {
       return null;
@@ -627,7 +635,10 @@ export const api = {
         base_price: data.basePrice || 0,
         extra_pax_fee: data.extraPaxFee || 0,
         addons_total: data.addonsTotal || 0,
-        special_pricing_applied: 0,
+        special_pricing_applied: data.specialPricingApplied || 0,
+        special_pricing_label: data.specialPricingLabel || null,
+        coupon_code: data.couponCode || null,
+        discount_amount: data.discountAmount || 0,
         total_amount: data.totalAmount,
         deposit_amount: data.depositAmount,
         balance_amount: data.balanceAmount,
@@ -662,7 +673,9 @@ export const api = {
 
   // ===== Helper Functions =====
   parseTime(time: string): number {
-    const [hours, minutes] = time.split(":").map(Number);
+    const parts = (time || "").split(":").map(Number);
+    const hours = parts[0] || 0;
+    const minutes = parts[1] || 0;
     return hours * 60 + minutes;
   },
 
