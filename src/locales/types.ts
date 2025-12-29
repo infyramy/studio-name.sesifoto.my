@@ -164,6 +164,10 @@ export type TranslationKey =
   | "free"
   | "perUnit"
   | "draft"
+  | "specialPriceApply"
+  | "surcharge"
+  | "fixedPrice"
+  | "noAddonsAvailable"
 
   // Cart
   | "cart"
@@ -331,6 +335,7 @@ export type TranslationKey =
   | "restoreYourBooking"
   | "restoreBookingMessage"
   | "startFresh"
+  | "restoring"
   | "reserving"
   | "reserved"
   | "minutesRemaining"

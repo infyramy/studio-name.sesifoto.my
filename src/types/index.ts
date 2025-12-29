@@ -78,6 +78,8 @@ export interface Theme {
   extra_pax_price: number;
   duration_minutes: number;
   buffer_minutes: number | null; // null uses studio default
+  strict_max_people: boolean; // If true, max is base_pax; if false, max is max_total_people
+  max_total_people: number; // Maximum total people allowed when strict_max_people is false
   status: "active" | "inactive";
   sort_order: number;
   created_at: string;

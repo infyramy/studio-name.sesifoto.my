@@ -101,6 +101,8 @@ const transformTheme = (data: any): Theme => ({
   extra_pax_price: data.extraPaxPrice || 0,
   duration_minutes: data.durationMinutes,
   buffer_minutes: data.bufferMinutes || null,
+  strict_max_people: data.strictMaxPeople ?? false,
+  max_total_people: data.maxTotalPeople || data.basePax || 1,
   status: "active",
   sort_order: data.sortOrder,
   created_at: new Date().toISOString(),
@@ -318,6 +320,25 @@ export const api = {
     }));
   },
 
+  // ===== Terms and Conditions API =====
+  async getTerms(): Promise<{
+    contentBm?: string;
+    contentEn?: string;
+    pdfUrl?: string;
+  }> {
+    const slug = getStudioSlug();
+    try {
+      const data = await apiFetch(`/public/studio/${slug}/terms`);
+      return {
+        contentBm: data.contentBm,
+        contentEn: data.contentEn,
+        pdfUrl: data.pdfUrl,
+      };
+    } catch {
+      return {};
+    }
+  },
+
   // ===== Slot Availability APIs =====
   async getAvailableDates(
     studioId: string,
@@ -460,6 +481,8 @@ export const api = {
           extra_pax_price: 0,
           duration_minutes: 0,
           buffer_minutes: null,
+          strict_max_people: false,
+          max_total_people: 0,
           status: "active",
           sort_order: 0,
           created_at: "",
@@ -516,6 +539,70 @@ export const api = {
     const hours = Math.floor(minutes / 60);
     const mins = minutes % 60;
     return `${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
+  },
+
+  // ========================================
+  // SLOT HOLDS
+  // ========================================
+
+  async createSlotHold(
+    themeId: string,
+    date: string,
+    startTime: string,
+    endTime: string,
+    sessionId: string
+  ): Promise<{
+    holdId: string;
+    themeId: string;
+    date: string;
+    startTime: string;
+    endTime: string;
+    sessionId: string;
+    expiresAt: string;
+    createdAt: string;
+  }> {
+    const slug = getStudioSlug();
+    return apiFetch(`/public/studio/${slug}/holds`, {
+      method: "POST",
+      body: {
+        themeId,
+        date,
+        startTime,
+        endTime,
+        sessionId,
+      },
+    });
+  },
+
+  async releaseSlotHold(
+    holdId: string,
+    sessionId: string
+  ): Promise<{ success: boolean }> {
+    const slug = getStudioSlug();
+    return apiFetch(
+      `/public/studio/${slug}/holds/${holdId}?sessionId=${sessionId}`,
+      {
+        method: "DELETE",
+      }
+    );
+  },
+
+  async getSessionHolds(sessionId: string): Promise<
+    Array<{
+      holdId: string;
+      themeId: string;
+      date: string;
+      startTime: string;
+      endTime: string;
+      sessionId: string;
+      expiresAt: string;
+      createdAt: string;
+    }>
+  > {
+    const slug = getStudioSlug();
+    return apiFetch(`/public/studio/${slug}/holds?sessionId=${sessionId}`, {
+      method: "GET",
+    });
   },
 };
 

@@ -171,6 +171,10 @@ export const translationsBM: Translations = {
   free: "Percuma",
   perUnit: "/ unit",
   draft: "DRAFT",
+  specialPriceApply: "Harga istimewa dikenakan",
+  surcharge: "surcaj",
+  fixedPrice: "Harga tetap",
+  noAddonsAvailable: "Tiada tambahan tersedia untuk tema ini",
 
   // Cart
   cart: "Troli",
@@ -352,6 +356,7 @@ export const translationsBM: Translations = {
   restoreBookingMessage:
     "Kami menjumpai tempahan anda dari beberapa minit yang lalu. Mahu teruskan dari mana anda berhenti?",
   startFresh: "Mula Baharu",
+  restoring: "Memulihkan...",
   reserving: "Menempah...",
   reserved: "Ditempah",
   minutesRemaining: "minit berbaki",
@@ -536,6 +541,10 @@ export const translationsEN: Translations = {
   free: "Free",
   perUnit: "/ unit",
   draft: "DRAFT",
+  specialPriceApply: "Special price apply",
+  surcharge: "surcharge",
+  fixedPrice: "Fixed price",
+  noAddonsAvailable: "No add-ons available for this theme",
 
   // Cart
   cart: "Cart",
@@ -716,6 +725,7 @@ export const translationsEN: Translations = {
   restoreBookingMessage:
     "We found your booking from a few minutes ago. Would you like to continue where you left off?",
   startFresh: "Start Fresh",
+  restoring: "Restoring...",
   reserving: "Reserving...",
   reserved: "Reserved",
   minutesRemaining: "minutes remaining",

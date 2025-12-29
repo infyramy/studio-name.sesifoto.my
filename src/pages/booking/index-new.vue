@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from "vue";
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from "vue";
 import { useRouter } from "vue-router";
 import { useStudioStore } from "@/stores/studio";
 import { useTranslation } from "@/composables/useTranslation";
@@ -25,6 +25,7 @@ import {
 } from "lucide-vue-next";
 import type { Theme, Addon, PricingRule, Coupon } from "@/types";
 import Modal from "@/components/Modal.vue";
+import { marked } from "marked";
 
 const router = useRouter();
 const studioStore = useStudioStore();
@@ -84,6 +85,10 @@ interface CartItem {
   total: number;
   dateInfo?: any; // Store date info for special pricing
   hold?: CartHold; // Hold info for this cart item
+  specialPricing?: {
+    message: string;
+    amount: number;
+  };
 }
 const cart = ref<CartItem[]>([]);
 
@@ -92,6 +97,16 @@ const currentStep = ref<number>(1);
 
 // Terms acceptance tracking
 const termsAccepted = ref(false);
+
+// Terms content from database
+const termsContent = ref<string>("");
+const loadingTerms = ref(true);
+
+// Computed property to parse markdown to HTML
+const termsContentHtml = computed(() => {
+  if (!termsContent.value) return "";
+  return marked(termsContent.value) as string;
+});
 
 // Background Images Setup
 const backgroundImages = [
@@ -139,6 +154,18 @@ onMounted(async () => {
 
   // Clean expired holds
   cleanExpiredHolds();
+
+  // Fetch terms and conditions from database
+  try {
+    const terms = await api.getTerms();
+    if (terms.contentBm) {
+      termsContent.value = terms.contentBm;
+    }
+  } catch (error) {
+    console.error("Failed to fetch terms:", error);
+  } finally {
+    loadingTerms.value = false;
+  }
 
   intervalId = setInterval(() => {
     currentImageIndex.value =
@@ -230,9 +257,16 @@ async function restoreBookingState(state: any) {
     if (state.selectedAddons) selectedAddons.value = state.selectedAddons;
     if (state.customerInfo) customerInfo.value = state.customerInfo;
 
+    // Scroll to the selected date after a short delay (to allow dates to load)
+    if (state.selectedDate) {
+      setTimeout(() => {
+        scrollToSelectedDate();
+      }, 500);
+    }
+
     // Validate and restore holds
     if (state.mode === "single" && state.confirmedSlot?.hold?.holdId) {
-      const holds = getActiveHolds();
+      const holds = await getActiveHolds();
       const hold = holds.find(
         (h) => h.holdId === state.confirmedSlot.hold.holdId
       );
@@ -393,7 +427,7 @@ async function restoreCartItems(savedCartItems: any[]) {
   for (const item of savedCartItems) {
     if (!item.hold?.holdId) continue;
 
-    const holds = getActiveHolds();
+    const holds = await getActiveHolds();
     const hold = holds.find((h) => h.holdId === item.hold.holdId);
 
     if (hold) {
@@ -653,12 +687,31 @@ const dates = ref<
 const dateRangeStart = ref<string>("");
 const dateRangeEnd = ref<string>("");
 
+// Pricing rules fetched from backend
+const pricingRules = ref<
+  {
+    name: string;
+    date_range_start: string;
+    date_range_end: string;
+    rule_type: "percentage_increase" | "fixed_price";
+    value: number;
+  }[]
+>([]);
+
 // Fetch available dates from backend
 async function fetchAvailableDates() {
   if (!selectedTheme.value || !studioStore.studio) {
     dates.value = [];
     return;
   }
+
+  // Helper function to format date as YYYY-MM-DD in LOCAL timezone (not UTC)
+  const formatDateLocal = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
 
   loadingDates.value = true;
   try {
@@ -668,27 +721,66 @@ async function fetchAvailableDates() {
 
     const websiteSettings = studioStore.websiteSettings;
 
-    // Determine start date: use booking window start if set, otherwise use today
+    // Debug: log the booking window settings
+    console.log("[fetchAvailableDates] websiteSettings:", {
+      bookingWindowStart: websiteSettings?.bookingWindowStart,
+      bookingWindowEnd: websiteSettings?.bookingWindowEnd,
+      today: formatDateLocal(today),
+    });
+
+    // Determine start date: use booking window start if set and in the future, otherwise use today
     let startDate = new Date(today);
     if (websiteSettings?.bookingWindowStart) {
-      const windowStart = new Date(websiteSettings.bookingWindowStart);
-      windowStart.setHours(0, 0, 0, 0);
+      // Parse as local date by appending time
+      const windowStart = new Date(
+        websiteSettings.bookingWindowStart + "T00:00:00"
+      );
       startDate = windowStart > today ? windowStart : today;
     }
 
     // Determine end date: use booking window end if set, otherwise limit to 30 days from start
     let endDate = new Date(startDate);
     if (websiteSettings?.bookingWindowEnd) {
-      const windowEnd = new Date(websiteSettings.bookingWindowEnd);
-      windowEnd.setHours(0, 0, 0, 0);
+      const windowEnd = new Date(
+        websiteSettings.bookingWindowEnd + "T00:00:00"
+      );
       endDate = windowEnd;
     } else {
       endDate.setDate(startDate.getDate() + 29); // 30 days total
     }
 
-    // Format dates for API call
-    const startDateStr = startDate.toISOString().slice(0, 10);
-    const endDateStr = endDate.toISOString().slice(0, 10);
+    // Validation: If booking window end is before today, booking has passed
+    if (websiteSettings?.bookingWindowEnd) {
+      const windowEnd = new Date(
+        websiteSettings.bookingWindowEnd + "T00:00:00"
+      );
+      if (windowEnd < today) {
+        console.log(
+          "[fetchAvailableDates] Booking window has passed, no dates available"
+        );
+        dates.value = [];
+        loadingDates.value = false;
+        return;
+      }
+    }
+
+    // Validation: Ensure endDate is not before startDate
+    if (endDate < startDate) {
+      console.warn(
+        "[fetchAvailableDates] endDate < startDate, adjusting endDate to startDate + 29 days"
+      );
+      endDate = new Date(startDate);
+      endDate.setDate(startDate.getDate() + 29);
+    }
+
+    // Format dates for API call using LOCAL timezone
+    const startDateStr = formatDateLocal(startDate);
+    const endDateStr = formatDateLocal(endDate);
+
+    console.log("[fetchAvailableDates] Date range:", {
+      startDate: startDateStr,
+      endDate: endDateStr,
+    });
 
     // Store range for reference
     dateRangeStart.value = startDateStr;
@@ -727,12 +819,29 @@ async function fetchAvailableDates() {
   }
 }
 
-// Watch for theme changes to reload dates
-watch(selectedTheme, () => {
+// Watch for theme changes to reload dates and pricing rules
+watch(selectedTheme, async () => {
   if (selectedTheme.value) {
     fetchAvailableDates();
+    // Fetch pricing rules for showing surcharge/discount info
+    if (studioStore.studio) {
+      try {
+        const rules = await api.getPricingRules(studioStore.studio.id);
+        pricingRules.value = rules.map((r) => ({
+          name: r.name,
+          date_range_start: r.date_range_start,
+          date_range_end: r.date_range_end,
+          rule_type: r.rule_type,
+          value: r.value,
+        }));
+      } catch (e) {
+        console.error("Failed to fetch pricing rules:", e);
+        pricingRules.value = [];
+      }
+    }
   } else {
     dates.value = [];
+    pricingRules.value = [];
   }
 });
 
@@ -816,9 +925,8 @@ const updateAddon = (addon: Addon, change: number) => {
 };
 
 // ============================================
-// Simulated Cart Hold API
+// Cart Hold API (Backend Integration)
 // ============================================
-const CART_HOLDS_KEY = "booking_cart_holds";
 
 interface CartHold {
   holdId: string;
@@ -832,86 +940,76 @@ interface CartHold {
   createdAt: string;
 }
 
-// Simulate delay for API calls
-const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-// Check if two time ranges overlap
-function timeRangesOverlap(
-  start1: string,
-  end1: string,
-  start2: string,
-  end2: string
-): boolean {
-  const s1 = parseTimeToMinutes(start1);
-  const e1 = parseTimeToMinutes(end1);
-  const s2 = parseTimeToMinutes(start2);
-  const e2 = parseTimeToMinutes(end2);
-  return s1 < e2 && s2 < e1;
-}
-
 function parseTimeToMinutes(time: string): number {
   const [hours, minutes] = time.split(":").map(Number);
   return hours * 60 + minutes;
 }
 
 async function createCartHold(slotData: any): Promise<CartHold> {
-  await delay(300);
+  try {
+    const response = await api.createSlotHold(
+      slotData.themeId,
+      slotData.date,
+      slotData.startTime,
+      slotData.endTime,
+      getSessionId()
+    );
 
-  const holds = getActiveHolds();
-  const conflict = holds.find(
-    (h) =>
-      h.studioId === slotData.studioId &&
-      h.date === slotData.date &&
-      h.sessionId !== getSessionId() && // Allow same session
-      timeRangesOverlap(
-        h.startTime,
-        h.endTime,
-        slotData.startTime,
-        slotData.endTime
-      )
-  );
-
-  if (conflict) {
-    throw new Error("SLOT_NO_LONGER_AVAILABLE");
+    return {
+      holdId: response.holdId,
+      sessionId: response.sessionId,
+      studioId: studioStore.studio?.id || "",
+      themeId: response.themeId,
+      date: response.date,
+      startTime: response.startTime,
+      endTime: response.endTime,
+      expiresAt: response.expiresAt,
+      createdAt: response.createdAt,
+    };
+  } catch (error: any) {
+    // Handle conflict error from backend
+    if (
+      error?.data?.message === "SLOT_NO_LONGER_AVAILABLE" ||
+      error?.message === "SLOT_NO_LONGER_AVAILABLE" ||
+      error?.statusCode === 400
+    ) {
+      throw new Error("SLOT_NO_LONGER_AVAILABLE");
+    }
+    throw error;
   }
-
-  const hold: CartHold = {
-    holdId: `hold-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-    sessionId: getSessionId(),
-    studioId: slotData.studioId,
-    themeId: slotData.themeId,
-    date: slotData.date,
-    startTime: slotData.startTime,
-    endTime: slotData.endTime,
-    expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
-    createdAt: new Date().toISOString(),
-  };
-
-  holds.push(hold);
-  localStorage.setItem(CART_HOLDS_KEY, JSON.stringify(holds));
-
-  return hold;
 }
 
 async function releaseCartHold(holdId: string): Promise<void> {
-  await delay(100);
-  const holds = getActiveHolds().filter((h) => h.holdId !== holdId);
-  localStorage.setItem(CART_HOLDS_KEY, JSON.stringify(holds));
+  try {
+    await api.releaseSlotHold(holdId, getSessionId());
+  } catch (error) {
+    console.error("Failed to release hold:", error);
+    // Ignore error - hold will expire anyway
+  }
 }
 
-function getActiveHolds(): CartHold[] {
+async function getActiveHolds(): Promise<CartHold[]> {
   try {
-    const holds = JSON.parse(localStorage.getItem(CART_HOLDS_KEY) || "[]");
-    return holds.filter((h: CartHold) => new Date(h.expiresAt) > new Date());
+    const holds = await api.getSessionHolds(getSessionId());
+    return holds.map((h) => ({
+      holdId: h.holdId,
+      sessionId: h.sessionId,
+      studioId: studioStore.studio?.id || "",
+      themeId: h.themeId,
+      date: h.date,
+      startTime: h.startTime,
+      endTime: h.endTime,
+      expiresAt: h.expiresAt,
+      createdAt: h.createdAt,
+    }));
   } catch (error) {
-    console.error("Error reading cart holds:", error);
+    console.error("Error fetching holds:", error);
     return [];
   }
 }
 
 function cleanExpiredHolds(): void {
-  const holds = getActiveHolds();
-  localStorage.setItem(CART_HOLDS_KEY, JSON.stringify(holds));
+  // No longer needed - backend handles cleanup
 }
 
 // ============================================
@@ -1142,10 +1240,19 @@ const addToCart = async () => {
       }
     }
 
-    const baseTotal =
-      selectedTheme.value.base_price + extraPaxCost + addonsTotal;
-    const dateModifier = datePriceModifier.value;
-    const itemTotal = baseTotal * dateModifier;
+    // Apply special pricing to session base price only
+    let sessionPrice = selectedTheme.value.base_price;
+    const rule = selectedDatePricingRule.value;
+    if (rule && selectedDateInfo.value?.isSpecial) {
+      if (rule.rule_type === "percentage_increase") {
+        sessionPrice = sessionPrice * (1 + rule.value / 100);
+      } else if (rule.rule_type === "fixed_price") {
+        // fixed_price means add/subtract a fixed amount (surcharge/discount)
+        sessionPrice = sessionPrice + rule.value;
+      }
+    }
+
+    const itemTotal = sessionPrice + extraPaxCost + addonsTotal;
 
     const dateInfo = selectedDateInfo.value;
 
@@ -1159,6 +1266,13 @@ const addToCart = async () => {
       total: itemTotal,
       dateInfo: dateInfo,
       hold: hold, // Store hold info
+      specialPricing:
+        specialPricingAmount.value !== 0
+          ? {
+              message: specialPricingMessage.value || "",
+              amount: specialPricingAmount.value,
+            }
+          : undefined,
     };
 
     cart.value.push(cartItem);
@@ -1244,6 +1358,30 @@ const scrollDates = (direction: "left" | "right") => {
   dateScroller.value.scrollTo({ left: newScroll, behavior: "smooth" });
 };
 
+// Scroll to the selected date in the date scroller
+const scrollToSelectedDate = () => {
+  if (!dateScroller.value || !selectedDate.value) return;
+
+  // Wait for DOM to update with dates
+  nextTick(() => {
+    const selectedDateElement = dateScroller.value?.querySelector(
+      `[data-date="${selectedDate.value}"]`
+    ) as HTMLElement | null;
+
+    if (selectedDateElement && dateScroller.value) {
+      // Scroll the selected date into center of the scroller
+      const scrollerWidth = dateScroller.value.offsetWidth;
+      const elementLeft = selectedDateElement.offsetLeft;
+      const elementWidth = selectedDateElement.offsetWidth;
+      const scrollPosition = elementLeft - scrollerWidth / 2 + elementWidth / 2;
+
+      dateScroller.value.scrollTo({
+        left: Math.max(0, scrollPosition),
+        behavior: "smooth",
+      });
+    }
+  });
+};
 // Helper function to parse time
 const parseTime = (timeStr: string): string => {
   if (!timeStr) return "09:00";
@@ -1559,6 +1697,22 @@ const prevStep = async () => {
 };
 
 // Calculations
+
+// Maximum pax allowed based on theme settings
+const maxPax = computed(() => {
+  if (!selectedTheme.value) return 1;
+
+  // If strictMaxPeople is true, max is base_pax (no extra pax allowed)
+  // If strictMaxPeople is false, max is max_total_people
+  if (selectedTheme.value.strict_max_people) {
+    return selectedTheme.value.base_pax || 1;
+  }
+
+  return (
+    selectedTheme.value.max_total_people || selectedTheme.value.base_pax || 1
+  );
+});
+
 const extraPaxCost = computed(() => {
   if (!selectedTheme.value) return 0;
   const extra = Math.max(
@@ -1579,19 +1733,27 @@ const addonsTotal = computed(() => {
   return total;
 });
 
-const datePriceModifier = computed(() => {
-  if (!selectedDateInfo.value || !selectedDateInfo.value.isSpecial) return 1;
-  // Note: Special pricing is now handled by the backend when fetching time slots
-  // The backend returns the correct price for each slot based on active pricing rules
-  return 1;
-});
-
 // Current item total (for cart mode)
 const currentItemTotal = computed(() => {
   if (!selectedTheme.value) return 0;
-  const baseTotal =
-    selectedTheme.value.base_price + extraPaxCost.value + addonsTotal.value;
-  return baseTotal * datePriceModifier.value;
+
+  let sessionPrice = selectedTheme.value.base_price;
+
+  // Apply special pricing to base session price only
+  const rule = selectedDatePricingRule.value;
+  if (rule && selectedDateInfo.value?.isSpecial) {
+    if (rule.rule_type === "percentage_increase") {
+      // Apply percentage modifier (e.g., 20% increase)
+      sessionPrice = sessionPrice * (1 + rule.value / 100);
+    } else if (rule.rule_type === "fixed_price") {
+      // fixed_price means add/subtract a fixed amount (surcharge/discount)
+      // positive value = surcharge, negative value = discount
+      sessionPrice = sessionPrice + rule.value;
+    }
+  }
+
+  // Add extras and addons on top of the (possibly modified) session price
+  return sessionPrice + extraPaxCost.value + addonsTotal.value;
 });
 
 // Cart totals (for cart mode)
@@ -1688,6 +1850,61 @@ const isBlackoutDateSelected = computed(() => {
   return selectedDateInfo.value?.isBlackout || false;
 });
 
+// Get the pricing rule for the selected date (if any)
+const selectedDatePricingRule = computed(() => {
+  if (!selectedDate.value) return null;
+  const dateStr = selectedDate.value;
+
+  return pricingRules.value.find((rule) => {
+    return dateStr >= rule.date_range_start && dateStr <= rule.date_range_end;
+  });
+});
+
+// Format the surcharge/discount message for display
+const specialPricingMessage = computed(() => {
+  const rule = selectedDatePricingRule.value;
+  if (!rule) return null;
+
+  if (rule.rule_type === "percentage_increase") {
+    // Positive value = surcharge, negative value = discount
+    if (rule.value > 0) {
+      return `+${rule.value}% ${t("surcharge")}`;
+    } else {
+      return `${rule.value}% ${t("discount")}`;
+    }
+  } else if (rule.rule_type === "fixed_price") {
+    // fixed_price means add/subtract a fixed amount (surcharge/discount)
+    // value is in cents, convert to RM for display
+    const amountInRM = Number(rule.value) / 100;
+    if (amountInRM >= 0) {
+      return `+RM ${amountInRM.toFixed(2)} ${t("surcharge")}`;
+    } else {
+      return `RM ${amountInRM.toFixed(2)} ${t("discount")}`;
+    }
+  }
+
+  return null;
+});
+
+// Calculate the special pricing amount (surcharge/discount)
+const specialPricingAmount = computed(() => {
+  if (!selectedTheme.value) return 0;
+  if (!selectedDatePricingRule.value || !selectedDateInfo.value?.isSpecial)
+    return 0;
+
+  const rule = selectedDatePricingRule.value;
+  const basePrice = selectedTheme.value.base_price;
+
+  if (rule.rule_type === "percentage_increase") {
+    // Calculate the percentage amount
+    return basePrice * (rule.value / 100);
+  } else if (rule.rule_type === "fixed_price") {
+    // Fixed amount surcharge/discount
+    return rule.value;
+  }
+
+  return 0;
+});
 // ============================================
 // Auto-Save Booking State
 // ============================================
@@ -1909,9 +2126,15 @@ watch(
             <div class="flex gap-3">
               <button
                 @click="restoreBookingState(recoveryState)"
-                class="flex-1 bg-gray-900 text-white py-3 rounded-xl font-bold text-sm uppercase tracking-wider"
+                :disabled="isRecovering"
+                class="flex-1 bg-gray-900 text-white py-3 rounded-xl font-bold text-sm uppercase tracking-wider flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
               >
-                {{ t("yes") }}, {{ t("continue") }}
+                <Loader2 v-if="isRecovering" class="w-4 h-4 animate-spin" />
+                {{
+                  isRecovering
+                    ? t("restoring")
+                    : `${t("yes")}, ${t("continue")}`
+                }}
               </button>
               <button
                 @click="dismissRecoveryDialog"
@@ -1934,7 +2157,7 @@ watch(
         ></div>
       </div>
 
-      <main class="p-6 sm:p-8 max-w-4xl mx-auto space-y-8 pb-32">
+      <main class="p-4 sm:p-6 max-w-4xl mx-auto space-y-8 pb-32">
         <!-- Theme Overview (shown in steps 2-4, excluding terms and summary) -->
         <div
           v-if="
@@ -2146,6 +2369,7 @@ watch(
                   v-else
                   v-for="d in dates"
                   :key="d.date"
+                  :data-date="d.date"
                   @click="!d.isBlackout && selectDate(d.date)"
                   :disabled="d.isBlackout"
                   :class="[
@@ -2235,7 +2459,14 @@ watch(
                     {{ selectedDateInfo.specialLabel }}
                   </p>
                   <p class="text-amber-800">
-                    {{ t("specialPriceApply") || "Harga istimewa dikenakan" }}
+                    {{ t("specialPriceApply") }}
+                  </p>
+                  <!-- Show surcharge/discount amount -->
+                  <p
+                    v-if="specialPricingMessage"
+                    class="font-bold text-amber-900 bg-amber-100 px-2 py-1 rounded-lg inline-block"
+                  >
+                    {{ specialPricingMessage }}
                   </p>
                 </div>
               </div>
@@ -2333,8 +2564,10 @@ watch(
           <div
             class="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 space-y-6"
           >
-            <div class="flex justify-between items-center">
-              <div>
+            <div
+              class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-6 sm:gap-0"
+            >
+              <div class="w-full sm:w-auto">
                 <h3 class="font-bold font-serif text-xl">
                   {{ t("numberOfPeople") }}
                 </h3>
@@ -2343,33 +2576,45 @@ watch(
                   <span class="font-medium text-gray-900"
                     >{{ selectedTheme?.base_pax }} {{ t("people") }}</span
                   >
+                  <span class="text-gray-400 mx-1">•</span>
+                  <span class="text-gray-500"
+                    >Max:
+                    {{
+                      selectedTheme?.strict_max_people
+                        ? maxPax
+                        : selectedTheme?.max_total_people
+                    }}
+                    {{ t("people") }}</span
+                  >
                 </p>
               </div>
               <div
-                class="flex items-center gap-6 bg-gray-50 rounded-full p-1.5 border border-gray-200/50"
+                class="flex items-center justify-between sm:justify-start gap-6 bg-gray-50 rounded-full p-1.5 border border-gray-200/50 w-full sm:w-auto"
               >
                 <button
                   @click="paxCount > 1 ? paxCount-- : null"
-                  class="w-10 h-10 flex items-center justify-center rounded-full bg-white shadow-sm text-gray-600 hover:text-black disabled:opacity-50 transition-all active:scale-90"
+                  class="w-12 h-12 sm:w-10 sm:h-10 flex items-center justify-center rounded-full bg-white shadow-sm text-gray-600 hover:text-black disabled:opacity-50 transition-all active:scale-95"
                   :disabled="paxCount <= 1"
                 >
-                  <Minus class="w-4 h-4" />
+                  <Minus class="w-4 h-4 sm:w-4 sm:h-4" />
                 </button>
-                <span class="font-bold font-serif text-xl w-6 text-center">{{
-                  paxCount
-                }}</span>
-                <button
-                  @click="paxCount++"
-                  class="w-10 h-10 flex items-center justify-center rounded-full bg-white shadow-sm text-gray-600 hover:text-black transition-all active:scale-90"
+                <span
+                  class="font-bold font-serif text-xl sm:text-xl w-8 sm:w-6 text-center"
+                  >{{ paxCount }}</span
                 >
-                  <Plus class="w-4 h-4" />
+                <button
+                  @click="paxCount < maxPax ? paxCount++ : null"
+                  class="w-12 h-12 sm:w-10 sm:h-10 flex items-center justify-center rounded-full bg-white shadow-sm text-gray-600 hover:text-black disabled:opacity-50 transition-all active:scale-95"
+                  :disabled="paxCount >= maxPax"
+                >
+                  <Plus class="w-4 h-4 sm:w-4 sm:h-4" />
                 </button>
               </div>
             </div>
 
             <div
               v-if="extraPaxCost > 0"
-              class="bg-gray-50 p-4 rounded-xl flex justify-between items-center text-sm font-sans"
+              class="bg-gray-50 p-4 rounded-xl flex flex-col sm:flex-row sm:justify-between sm:items-center text-sm font-sans gap-2 sm:gap-0"
             >
               <div class="text-gray-600 flex items-center gap-2">
                 <Users class="w-4 h-4" />
@@ -2391,6 +2636,26 @@ watch(
             <h3 class="font-bold font-serif text-lg sm:text-xl px-1">
               {{ t("addOns") }}
             </h3>
+
+            <!-- Empty State - No Addons Available -->
+            <div
+              v-if="!studioStore.addons || studioStore.addons.length === 0"
+              class="bg-gray-50 border border-dashed border-gray-200 rounded-2xl p-8 text-center"
+            >
+              <div
+                class="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center"
+              >
+                <Plus class="w-8 h-8 text-gray-300" />
+              </div>
+              <p class="text-gray-500 font-sans text-sm">
+                {{
+                  t("noAddonsAvailable") ||
+                  "No add-ons available for this theme"
+                }}
+              </p>
+            </div>
+
+            <!-- Addons List -->
             <div
               v-for="addon in studioStore.addons"
               :key="addon.id"
@@ -2457,7 +2722,7 @@ watch(
               >
                 <button
                   @click="updateAddon(addon, -1)"
-                  class="w-9 h-9 sm:w-8 sm:h-8 rounded-full bg-white shadow-sm border border-gray-100 flex items-center justify-center hover:bg-gray-50 disabled:opacity-50 transition-all active:scale-90"
+                  class="w-10 h-10 sm:w-8 sm:h-8 rounded-full bg-white shadow-sm border border-gray-100 flex items-center justify-center hover:bg-gray-50 disabled:opacity-50 transition-all active:scale-90"
                   :disabled="!selectedAddons[addon.id]"
                 >
                   <Minus class="w-4 h-4 sm:w-3 sm:h-3" />
@@ -2468,7 +2733,7 @@ watch(
                 >
                 <button
                   @click="updateAddon(addon, 1)"
-                  class="w-9 h-9 sm:w-8 sm:h-8 rounded-full bg-white shadow-sm border border-gray-100 flex items-center justify-center hover:bg-gray-50 transition-all active:scale-90"
+                  class="w-10 h-10 sm:w-8 sm:h-8 rounded-full bg-white shadow-sm border border-gray-100 flex items-center justify-center hover:bg-gray-50 transition-all active:scale-90"
                 >
                   <Plus class="w-4 h-4 sm:w-3 sm:h-3" />
                 </button>
@@ -2895,87 +3160,34 @@ watch(
               class="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-y-auto"
             >
               <div class="p-6 space-y-6">
+                <!-- Loading State -->
+                <div v-if="loadingTerms" class="flex justify-center py-8">
+                  <Loader2 class="w-6 h-6 animate-spin text-gray-400" />
+                </div>
+
                 <!-- Terms Content -->
                 <div
+                  v-else-if="termsContent"
                   class="prose prose-sm sm:prose max-w-none font-sans text-gray-700 space-y-4"
                 >
                   <h4 class="font-bold font-serif text-lg text-gray-900">
                     {{ t("bookingTerms") || "Booking Terms" }}
                   </h4>
 
-                  <div class="space-y-4 text-sm sm:text-base leading-relaxed">
-                    <p><strong>1. Pengesahan Tempahan</strong></p>
-                    <p>
-                      Tempahan anda akan disahkan setelah bayaran diterima. Anda
-                      akan menerima pengesahan melalui WhatsApp atau e-mel.
-                    </p>
+                  <div
+                    class="space-y-4 text-sm sm:text-base leading-relaxed"
+                    v-html="termsContentHtml"
+                  />
+                </div>
 
-                    <p><strong>2. Dasar Pembatalan</strong></p>
-                    <p>
-                      Pembatalan yang dibuat 48 jam sebelum tarikh tempahan akan
-                      menerima bayaran balik penuh. Pembatalan yang dibuat dalam
-                      tempoh 48 jam akan dikenakan yuran pembatalan 50%.
-                    </p>
-
-                    <p><strong>3. Penjadualan Semula</strong></p>
-                    <p>
-                      Penjadualan semula dibenarkan sehingga 24 jam sebelum masa
-                      tempahan anda, tertakluk kepada ketersediaan. Permintaan
-                      penjadualan semula yang dibuat dalam tempoh 24 jam mungkin
-                      dikenakan caj tambahan.
-                    </p>
-
-                    <p><strong>4. Pembayaran</strong></p>
-                    <p>
-                      Pembayaran mesti diselesaikan untuk mengesahkan tempahan
-                      anda. Kami menerima pembayaran dalam talian melalui
-                      gateway pembayaran selamat kami.
-                    </p>
-
-                    <p><strong>5. Ketibaan Lewat</strong></p>
-                    <p>
-                      Sila hadir tepat pada masanya untuk sesi anda. Ketibaan
-                      lewat mungkin mengakibatkan masa sesi dikurangkan tanpa
-                      bayaran balik.
-                    </p>
-
-                    <p><strong>6. Peraturan Studio</strong></p>
-                    <p>
-                      Sila hormati ruang studio dan peralatan. Sebarang
-                      kerosakan yang disebabkan oleh kecuaian akan dikenakan
-                      bayaran sewajarnya.
-                    </p>
-
-                    <p><strong>7. Hak Fotografi</strong></p>
-                    <p>
-                      Studio berhak menggunakan gambar yang diambil semasa sesi
-                      untuk tujuan promosi melainkan dipersetujui sebaliknya.
-                    </p>
-
-                    <p><strong>8. Liabiliti</strong></p>
-                    <p>
-                      Studio tidak bertanggungjawab ke atas barang peribadi.
-                      Sila simpan barang berharga anda dengan selamat semasa
-                      sesi anda.
-                    </p>
-
-                    <p><strong>9. Permintaan Khas</strong></p>
-                    <p>
-                      Permintaan khas mesti disampaikan sekurang-kurangnya 48
-                      jam sebelum tempahan anda. Kami akan berusaha sedaya upaya
-                      untuk menampungnya.
-                    </p>
-
-                    <p><strong>10. Maklumat Hubungan</strong></p>
-                    <p>
-                      Untuk sebarang pertanyaan atau kebimbangan, sila hubungi
-                      kami melalui WhatsApp di
-                      {{
-                        studioStore.studio?.whatsapp ||
-                        "nombor yang disediakan"
-                      }}.
-                    </p>
-                  </div>
+                <!-- No Terms Configured Fallback -->
+                <div v-else class="text-center py-8 text-gray-500">
+                  <p>
+                    {{
+                      t("noTermsConfigured") ||
+                      "Tiada terma dan syarat dikonfigurasi."
+                    }}
+                  </p>
                 </div>
               </div>
             </div>
@@ -3044,87 +3256,34 @@ watch(
               style=""
             >
               <div class="p-6 space-y-6">
+                <!-- Loading State -->
+                <div v-if="loadingTerms" class="flex justify-center py-8">
+                  <Loader2 class="w-6 h-6 animate-spin text-gray-400" />
+                </div>
+
                 <!-- Terms Content -->
                 <div
+                  v-else-if="termsContent"
                   class="prose prose-sm sm:prose max-w-none font-sans text-gray-700 space-y-4"
                 >
                   <h4 class="font-bold font-serif text-lg text-gray-900">
                     {{ t("bookingTerms") }}
                   </h4>
 
-                  <div class="space-y-4 text-sm sm:text-base leading-relaxed">
-                    <p><strong>1. Pengesahan Tempahan</strong></p>
-                    <p>
-                      Tempahan anda akan disahkan setelah bayaran diterima. Anda
-                      akan menerima pengesahan melalui WhatsApp atau e-mel.
-                    </p>
+                  <div
+                    class="space-y-4 text-sm sm:text-base leading-relaxed"
+                    v-html="termsContentHtml"
+                  />
+                </div>
 
-                    <p><strong>2. Dasar Pembatalan</strong></p>
-                    <p>
-                      Pembatalan yang dibuat 48 jam sebelum tarikh tempahan akan
-                      menerima bayaran balik penuh. Pembatalan yang dibuat dalam
-                      tempoh 48 jam akan dikenakan yuran pembatalan 50%.
-                    </p>
-
-                    <p><strong>3. Penjadualan Semula</strong></p>
-                    <p>
-                      Penjadualan semula dibenarkan sehingga 24 jam sebelum masa
-                      tempahan anda, tertakluk kepada ketersediaan. Permintaan
-                      penjadualan semula yang dibuat dalam tempoh 24 jam mungkin
-                      dikenakan caj tambahan.
-                    </p>
-
-                    <p><strong>4. Pembayaran</strong></p>
-                    <p>
-                      Pembayaran mesti diselesaikan untuk mengesahkan tempahan
-                      anda. Kami menerima pembayaran dalam talian melalui
-                      gateway pembayaran selamat kami.
-                    </p>
-
-                    <p><strong>5. Ketibaan Lewat</strong></p>
-                    <p>
-                      Sila hadir tepat pada masanya untuk sesi anda. Ketibaan
-                      lewat mungkin mengakibatkan masa sesi dikurangkan tanpa
-                      bayaran balik.
-                    </p>
-
-                    <p><strong>6. Peraturan Studio</strong></p>
-                    <p>
-                      Sila hormati ruang studio dan peralatan. Sebarang
-                      kerosakan yang disebabkan oleh kecuaian akan dikenakan
-                      bayaran sewajarnya.
-                    </p>
-
-                    <p><strong>7. Hak Fotografi</strong></p>
-                    <p>
-                      Studio berhak menggunakan gambar yang diambil semasa sesi
-                      untuk tujuan promosi melainkan dipersetujui sebaliknya.
-                    </p>
-
-                    <p><strong>8. Liabiliti</strong></p>
-                    <p>
-                      Studio tidak bertanggungjawab ke atas barang peribadi.
-                      Sila simpan barang berharga anda dengan selamat semasa
-                      sesi anda.
-                    </p>
-
-                    <p><strong>9. Permintaan Khas</strong></p>
-                    <p>
-                      Permintaan khas mesti disampaikan sekurang-kurangnya 48
-                      jam sebelum tempahan anda. Kami akan berusaha sedaya upaya
-                      untuk menampungnya.
-                    </p>
-
-                    <p><strong>10. Maklumat Hubungan</strong></p>
-                    <p>
-                      Untuk sebarang pertanyaan atau kebimbangan, sila hubungi
-                      kami melalui WhatsApp di
-                      {{
-                        studioStore.studio?.whatsapp ||
-                        "nombor yang disediakan"
-                      }}.
-                    </p>
-                  </div>
+                <!-- No Terms Configured Fallback -->
+                <div v-else class="text-center py-8 text-gray-500">
+                  <p>
+                    {{
+                      t("noTermsConfigured") ||
+                      "Tiada terma dan syarat dikonfigurasi."
+                    }}
+                  </p>
                 </div>
               </div>
             </div>
@@ -3213,13 +3372,59 @@ watch(
                 :key="item.id"
                 class="pb-6 border-b border-dashed border-gray-200 last:border-0 last:pb-0"
               >
-                <div class="flex justify-between items-start">
-                  <div>
-                    <div class="font-bold font-serif text-lg mb-1">
+                <div
+                  class="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3"
+                >
+                  <div class="flex-1">
+                    <div class="font-bold font-serif text-lg mb-2">
                       {{ item.theme.name }}
                     </div>
+                    <!-- Mobile: Stacked layout -->
+                    <div class="flex flex-col gap-2 sm:hidden">
+                      <div
+                        class="flex items-center gap-2 text-sm text-gray-600 font-sans"
+                      >
+                        <div
+                          class="flex items-center justify-center w-7 h-7 rounded-lg bg-gray-100"
+                        >
+                          <Calendar class="w-4 h-4 text-gray-600" />
+                        </div>
+                        <span>{{ item.date }}</span>
+                      </div>
+                      <div
+                        class="flex items-center gap-2 text-sm text-gray-600 font-sans"
+                      >
+                        <div
+                          class="flex items-center justify-center w-7 h-7 rounded-lg bg-gray-100"
+                        >
+                          <Clock class="w-4 h-4 text-gray-600" />
+                        </div>
+                        <span>{{ item.slot.start }} - {{ item.slot.end }}</span>
+                      </div>
+                      <div
+                        class="flex items-center gap-2 text-sm text-gray-600 font-sans"
+                      >
+                        <div
+                          class="flex items-center justify-center w-7 h-7 rounded-lg bg-gray-100"
+                        >
+                          <Users class="w-4 h-4 text-gray-600" />
+                        </div>
+                        <span>{{ item.pax }} {{ t("pax") || "Pax" }}</span>
+                      </div>
+                      <!-- Hold countdown on mobile -->
+                      <div
+                        v-if="cartItemHolds.get(item.id)"
+                        class="inline-flex items-center gap-1.5 bg-amber-50 text-amber-700 px-2.5 py-1 rounded-lg text-xs font-bold w-fit"
+                      >
+                        <span
+                          class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"
+                        ></span>
+                        {{ cartItemHolds.get(item.id)?.countdown }}
+                      </div>
+                    </div>
+                    <!-- Desktop: Inline layout -->
                     <div
-                      class="text-sm text-gray-500 font-sans flex items-center gap-2 flex-wrap"
+                      class="hidden sm:flex text-sm text-gray-500 font-sans items-center gap-2 flex-wrap"
                     >
                       <Calendar class="w-3 h-3" /> {{ item.date }}
                       <span class="w-1 h-1 rounded-full bg-gray-300"></span>
@@ -3236,8 +3441,38 @@ watch(
                         </span>
                       </template>
                     </div>
+
+                    <!-- Special Pricing Badge -->
+                    <div
+                      v-if="item.specialPricing"
+                      class="mt-3 flex items-center gap-2 text-sm bg-gray-50 dark:bg-gray-800/50 p-2 rounded-lg w-fit"
+                    >
+                      <AlertCircle
+                        v-if="item.specialPricing.amount > 0"
+                        class="w-4 h-4 text-orange-600"
+                      />
+                      <Check v-else class="w-4 h-4 text-green-600" />
+                      <span
+                        :class="
+                          item.specialPricing.amount > 0
+                            ? 'text-orange-700'
+                            : 'text-green-700'
+                        "
+                      >
+                        {{ item.specialPricing.message }}
+                        <span class="font-bold ml-1">
+                          {{ item.specialPricing.amount > 0 ? "+" : "-" }}RM{{
+                            formatPriceWhole(
+                              Math.abs(item.specialPricing.amount)
+                            )
+                          }}
+                        </span>
+                      </span>
+                    </div>
                   </div>
-                  <div class="font-bold font-sans">RM{{ item.total }}</div>
+                  <div class="font-bold font-sans text-lg sm:text-base">
+                    RM{{ item.total }}
+                  </div>
                 </div>
               </div>
 
@@ -3459,14 +3694,51 @@ watch(
             <div class="p-6 space-y-6">
               <!-- Theme Information -->
               <div
-                class="flex justify-between items-start pb-6 border-b border-dashed border-gray-200"
+                class="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3 pb-6 border-b border-dashed border-gray-200"
               >
-                <div>
-                  <div class="font-bold font-serif text-lg mb-1">
+                <div class="flex-1">
+                  <div class="font-bold font-serif text-lg mb-2">
                     {{ selectedTheme?.name }}
                   </div>
+                  <!-- Mobile: Stacked layout -->
+                  <div class="flex flex-col gap-2 sm:hidden">
+                    <div
+                      class="flex items-center gap-2 text-sm text-gray-600 font-sans"
+                    >
+                      <div
+                        class="flex items-center justify-center w-7 h-7 rounded-lg bg-gray-100"
+                      >
+                        <Calendar class="w-4 h-4 text-gray-600" />
+                      </div>
+                      <span>{{ selectedDate }}</span>
+                    </div>
+                    <div
+                      class="flex items-center gap-2 text-sm text-gray-600 font-sans"
+                    >
+                      <div
+                        class="flex items-center justify-center w-7 h-7 rounded-lg bg-gray-100"
+                      >
+                        <Clock class="w-4 h-4 text-gray-600" />
+                      </div>
+                      <span
+                        >{{ selectedSlot?.start }} -
+                        {{ selectedSlot?.end }}</span
+                      >
+                    </div>
+                    <div
+                      class="flex items-center gap-2 text-sm text-gray-600 font-sans"
+                    >
+                      <div
+                        class="flex items-center justify-center w-7 h-7 rounded-lg bg-gray-100"
+                      >
+                        <Users class="w-4 h-4 text-gray-600" />
+                      </div>
+                      <span>{{ paxCount }} {{ t("pax") || "Pax" }}</span>
+                    </div>
+                  </div>
+                  <!-- Desktop: Inline layout -->
                   <div
-                    class="text-sm text-gray-500 font-sans flex items-center gap-2"
+                    class="hidden sm:flex text-sm text-gray-500 font-sans items-center gap-2"
                   >
                     <Calendar class="w-3 h-3" /> {{ selectedDate }}
                     <span class="w-1 h-1 rounded-full bg-gray-300"></span>
@@ -3477,12 +3749,46 @@ watch(
                     {{ t("pax") || "Pax" }}
                   </div>
                 </div>
-                <div class="font-bold font-sans">
+                <div class="font-bold font-sans text-lg sm:text-base">
                   RM{{ formatPriceWhole(selectedTheme?.base_price || 0) }}
                 </div>
               </div>
 
               <div class="space-y-3 text-sm font-sans">
+                <!-- Special Pricing -->
+                <div
+                  v-if="specialPricingAmount !== 0"
+                  class="flex justify-between"
+                >
+                  <span class="text-gray-600">
+                    {{ t("specialDate") }}
+                  </span>
+                  <div class="flex items-center gap-2">
+                    <span
+                      class="text-xs"
+                      :class="
+                        specialPricingAmount > 0
+                          ? 'text-orange-600'
+                          : 'text-green-600'
+                      "
+                    >
+                      {{ specialPricingMessage }}
+                    </span>
+                    <span
+                      class="font-medium"
+                      :class="
+                        specialPricingAmount > 0
+                          ? 'text-gray-900'
+                          : 'text-green-600'
+                      "
+                    >
+                      {{ specialPricingAmount > 0 ? "+" : "-" }} RM{{
+                        formatPriceWhole(Math.abs(specialPricingAmount))
+                      }}
+                    </span>
+                  </div>
+                </div>
+
                 <!-- Extra Pax -->
                 <div v-if="extraPaxCost > 0" class="flex justify-between">
                   <span class="text-gray-600"
