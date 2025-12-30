@@ -319,6 +319,7 @@ export type TranslationKey =
   | "couponExpired"
   | "couponNotYetValid"
   | "couponLimitReached"
+  | "minSpendRequired"
   | "applied"
   | "selectedSession"
 

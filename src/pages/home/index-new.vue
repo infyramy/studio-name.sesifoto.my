@@ -262,7 +262,7 @@ const adjustOpacity = (color: string | undefined, opacity: number) => {
             v-if="studioStore.studio?.logo_url"
             :src="studioStore.studio.logo_url"
             alt="Studio Logo"
-            class="h-10 md:h-12 w-auto opacity-90 drop-shadow-lg"
+            class="h-12 md:h-14 w-auto"
           />
           <Camera v-else class="w-10 h-10 text-white/90" />
         </div>

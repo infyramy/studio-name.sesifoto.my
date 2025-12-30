@@ -1179,7 +1179,17 @@ const handleApplyCoupon = async () => {
   selectedCouponItemIndex.value = null; // Reset selection
 
   try {
-    const coupon = await api.validateCoupon(couponCode.value);
+    // Calculate the subtotal to send to backend for min spend validation
+    let subtotal = 0;
+    if (isCartModeEnabled.value && cart.value.length > 0) {
+      // In cart mode, use the total of all cart items (or first item if only 1)
+      subtotal = cart.value.reduce((sum, item) => sum + item.total, 0);
+    } else {
+      // In single mode, use current item total
+      subtotal = currentItemTotal.value;
+    }
+
+    const coupon = await api.validateCoupon(couponCode.value, subtotal);
     validatedCoupon.value = coupon;
 
     // Auto-select item if only 1 item in cart (Cart Mode) or in Single Mode
@@ -1865,6 +1875,30 @@ const discountAmount = computed(() => {
 
   // Cap discount at target total
   return Math.min(discount, targetTotal);
+});
+
+// Check if min spend is not met (for displaying warning)
+const minSpendNotMet = computed(() => {
+  if (!validatedCoupon.value || !validatedCoupon.value.min_spend) return false;
+
+  let targetTotal = 0;
+
+  if (isCartModeEnabled.value) {
+    if (
+      selectedCouponItemIndex.value === null ||
+      selectedCouponItemIndex.value < 0 ||
+      selectedCouponItemIndex.value >= cart.value.length
+    ) {
+      // If no item selected, check against cart total
+      targetTotal = cartTotal.value;
+    } else {
+      targetTotal = cart.value[selectedCouponItemIndex.value].total;
+    }
+  } else {
+    targetTotal = currentItemTotal.value;
+  }
+
+  return targetTotal < validatedCoupon.value.min_spend;
 });
 
 // Grand total (conditional based on mode)
@@ -3636,11 +3670,24 @@ watch(
                       {{
                         validatedCoupon.type === "percentage"
                           ? `${validatedCoupon.value}% off`
-                          : `RM${validatedCoupon.value} off`
+                          : `RM${formatPriceWhole(validatedCoupon.value)} off`
                       }}
                       <span v-if="isCartModeEnabled && cartItemCount > 1">{{
                         t("selectedSession")
                       }}</span>
+                    </p>
+                    <!-- Min spend warning -->
+                    <p
+                      v-if="minSpendNotMet && validatedCoupon.min_spend"
+                      class="text-xs text-amber-600 mt-1 font-medium"
+                    >
+                      ⚠️
+                      {{
+                        t("minSpendRequired").replace(
+                          "{amount}",
+                          formatPriceWhole(validatedCoupon.min_spend)
+                        )
+                      }}
                     </p>
                   </div>
                   <button
@@ -4010,7 +4057,20 @@ watch(
                       {{
                         validatedCoupon.type === "percentage"
                           ? `${validatedCoupon.value}% off`
-                          : `RM${validatedCoupon.value} off`
+                          : `RM${formatPriceWhole(validatedCoupon.value)} off`
+                      }}
+                    </p>
+                    <!-- Min spend warning -->
+                    <p
+                      v-if="minSpendNotMet && validatedCoupon.min_spend"
+                      class="text-xs text-amber-600 mt-1 font-medium"
+                    >
+                      ⚠️
+                      {{
+                        t("minSpendRequired").replace(
+                          "{amount}",
+                          formatPriceWhole(validatedCoupon.min_spend)
+                        )
                       }}
                     </p>
                   </div>

@@ -371,11 +371,11 @@ export const api = {
   },
 
   // ===== Coupon APIs =====
-  async validateCoupon(code: string): Promise<Coupon> {
+  async validateCoupon(code: string, subtotal: number = 0): Promise<Coupon> {
     const slug = getStudioSlug();
     const data = await apiFetch("/public/coupons/validate", {
       method: "POST",
-      body: { studioSlug: slug, code, subtotal: 0 },
+      body: { studioSlug: slug, code, subtotal },
     });
 
     return {

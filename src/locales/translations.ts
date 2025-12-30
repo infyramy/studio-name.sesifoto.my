@@ -324,6 +324,7 @@ export const translationsBM: Translations = {
   couponExpired: "Kupon telah tamat tempoh",
   couponNotYetValid: "Kupon belum sah",
   couponLimitReached: "Had penggunaan kupon telah dicapai",
+  minSpendRequired: "Perbelanjaan minimum RM{amount} diperlukan",
   applied: "Digunakan",
   selectedSession: "sesi terpilih",
 
@@ -707,6 +708,7 @@ export const translationsEN: Translations = {
   couponExpired: "Coupon expired",
   couponNotYetValid: "Coupon not yet valid",
   couponLimitReached: "Coupon usage limit reached",
+  minSpendRequired: "Minimum spend of RM{amount} required",
   applied: "Applied",
   selectedSession: "selected session",
 
