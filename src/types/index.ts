@@ -178,6 +178,7 @@ export interface Addon {
   name: string;
   price: number;
   max_quantity: number | null; // null = unlimited
+  addon_type: "single" | "quantity"; // New field
   status: "active" | "inactive";
   sort_order: number;
   image?: string; // Optional image URL

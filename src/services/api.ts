@@ -118,6 +118,7 @@ const transformAddon = (data: any): Addon => ({
   name: data.name,
   price: data.price,
   max_quantity: data.maxQuantity || null,
+  addon_type: data.addonType || "quantity", // Map from backend
   status: "active",
   sort_order: data.sortOrder,
   image: data.image,

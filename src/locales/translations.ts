@@ -40,14 +40,22 @@ export const translationsBM: Translations = {
   // Booking Steps
   step: "Langkah",
   selectTheme: "Pilih Tema",
+  selectThemeDescription:
+    "Sila pilih konsep yang anda inginkan untuk sesi fotografi anda.",
+  change: "Tukar",
+  slotLocked: "Slot Dikunci",
   chooseDateAndTime: "Pilih Tarikh & Masa",
   dateAndTime: "Tarikh & Masa",
   customizeSession: "Sesuaikan Sesi",
-  customerInformation: "Maklumat Pelanggan",
+  customerInformation: "Maklumat Anda",
   selectThemeTitle: "Pilih Tema Anda",
   selectThemeSubtitle: "Pilih pakej fotografi yang sesuai untuk anda",
   chooseDateTimeTitle: "Pilih Tarikh & Masa",
   chooseDateTimeSubtitle: "Pilih tarikh dan slot masa pilihan anda",
+  paxAndAddons: "Pax & Tambahan",
+  paxAndAddonsDescription: "Masukkan total bilangan pax yang akan hadir.",
+  paxCount: "Bilangan Pax",
+  totalPaxPresent: "Total Pax Hadir",
   customizeSessionTitle: "Sesuaikan Sesi Anda",
   customizeSessionSubtitle: "Laraskan bilangan orang dan pilih tambahan",
   customerInfoTitle: "Maklumat Anda",
@@ -55,7 +63,7 @@ export const translationsBM: Translations = {
   stepSelectTheme: "Pilih Tema",
   stepDateAndTime: "Tarikh & Masa",
   stepPaxAndAddons: "Pax & Tambahan",
-  stepCustomerInformation: "Maklumat Pelanggan",
+  stepCustomerInformation: "Maklumat Anda",
   stepSummary: "Ringkasan",
   processingPayment: "Memproses Bayaran",
   pleaseWait: "Sila tunggu sebentar...",
@@ -202,7 +210,9 @@ export const translationsBM: Translations = {
 
   // Booking Summary
   summary: "Ringkasan",
-  bookingSummary: "Ringkasan Tempahan",
+  bookingSummary: "Ringkasan",
+  bookingSummaryDescription:
+    "Sila semak ringkasan tempahan sebelum membuat pembayaran.",
   bookingDetails: "Butiran Tempahan",
   date: "Tarikh",
   time: "Masa",
@@ -381,6 +391,9 @@ export const translationsBM: Translations = {
   restoredItems: "item dipulihkan",
   itemsExpired: "item tamat tempoh",
   allItemsExpired: "Semua item dalam troli telah tamat tempoh.",
+  hideDetails: "Tutup butiran",
+  viewBreakdown: "Lihat butiran",
+  setPrice: "Harga Set",
 };
 
 // English (EN)
@@ -423,14 +436,21 @@ export const translationsEN: Translations = {
   // Booking Steps
   step: "Step",
   selectTheme: "Select Theme",
+  selectThemeDescription: "Select the photography package that suits you.",
   chooseDateAndTime: "Choose Date & Time",
   dateAndTime: "Date & Time",
   customizeSession: "Customize Session",
-  customerInformation: "Customer Information",
+  change: "Change",
+  slotLocked: "Slot Locked",
+  customerInformation: "Your Information",
   selectThemeTitle: "Select Your Theme",
   selectThemeSubtitle: "Choose the photography package that suits you",
   chooseDateTimeTitle: "Choose Date & Time",
   chooseDateTimeSubtitle: "Select your preferred date and time slot",
+  paxAndAddons: "Pax & Add-ons",
+  paxAndAddonsDescription: "Enter the total number of pax present.",
+  paxCount: "Number of Pax",
+  totalPaxPresent: "Total Pax Present",
   customizeSessionTitle: "Customize Your Session",
   customizeSessionSubtitle: "Adjust the number of people and select add-ons",
   customerInfoTitle: "Your Information",
@@ -438,7 +458,7 @@ export const translationsEN: Translations = {
   stepSelectTheme: "Select Theme",
   stepDateAndTime: "Date & Time",
   stepPaxAndAddons: "Pax & Add-ons",
-  stepCustomerInformation: "Customer Information",
+  stepCustomerInformation: "Your Information",
   stepSummary: "Summary",
   processingPayment: "Processing Payment",
   pleaseWait: "Please wait a moment...",
@@ -586,7 +606,9 @@ export const translationsEN: Translations = {
 
   // Booking Summary
   summary: "Summary",
-  bookingSummary: "Booking Summary",
+  bookingSummary: "Summary",
+  bookingSummaryDescription:
+    "Please review your booking details before making payment.",
   bookingDetails: "Booking Details",
   date: "Date",
   time: "Time",
@@ -762,6 +784,9 @@ export const translationsEN: Translations = {
   restoredItems: "item(s) restored",
   itemsExpired: "item(s) expired",
   allItemsExpired: "All cart items have expired.",
+  hideDetails: "Hide Details",
+  viewBreakdown: "View Breakdown",
+  setPrice: "Set Price",
 };
 
 export const translations = {

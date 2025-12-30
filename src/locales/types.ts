@@ -37,8 +37,17 @@ export type TranslationKey =
   // Booking Steps
   | "step"
   | "selectTheme"
+  | "selectThemeDescription"
+  | "change"
+  | "slotLocked"
   | "chooseDateAndTime"
   | "dateAndTime"
+  | "paxAndAddons"
+  | "paxAndAddonsDescription"
+  | "paxCount"
+  | "totalPaxPresent"
+  | "bookingSummary"
+  | "bookingSummaryDescription"
   | "customizeSession"
   | "customerInformation"
   | "selectThemeTitle"
@@ -192,6 +201,9 @@ export type TranslationKey =
   | "multipleSessions"
   | "editAddons"
   | "editDetails"
+  | "hideDetails"
+  | "viewBreakdown"
+  | "setPrice"
 
   // Booking Summary
   | "summary"
