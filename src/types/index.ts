@@ -32,6 +32,7 @@ export interface StudioSettings {
   booking_open: boolean; // Whether booking is currently open
   buffer_minutes: number; // default buffer between slots
   auto_cutoff_hours: number; // 0 for slot start time
+  chip_fee_mode: "on_top" | "absorbed"; // How the CHIP fee is handled
 }
 
 // Hero Style Configuration (from backend)
@@ -62,6 +63,7 @@ export interface WebsiteSettings {
   selectedStyle: "rustic" | "modern" | "luxe";
   bookingWindowStart?: string;
   bookingWindowEnd?: string;
+  chipFeeMode?: "on_top" | "absorbed";
   heroConfig?: HeroStyleConfig;
 }
 

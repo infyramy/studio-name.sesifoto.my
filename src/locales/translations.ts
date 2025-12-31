@@ -183,6 +183,9 @@ export const translationsBM: Translations = {
   surcharge: "surcaj",
   fixedPrice: "Harga tetap",
   noAddonsAvailable: "Tiada tambahan tersedia untuk tema ini",
+  chipFee: "Caj Transaksi",
+  totalToPay: "Jumlah Bayaran",
+  totalAmount: "Jumlah Keseluruhan",
 
   // Cart
   cart: "Troli",
@@ -579,6 +582,9 @@ export const translationsEN: Translations = {
   surcharge: "surcharge",
   fixedPrice: "Fixed price",
   noAddonsAvailable: "No add-ons available for this theme",
+  chipFee: "Transaction Fee",
+  totalToPay: "Total to Pay",
+  totalAmount: "Total Amount",
 
   // Cart
   cart: "Cart",

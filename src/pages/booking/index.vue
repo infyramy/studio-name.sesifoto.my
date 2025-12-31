@@ -1703,6 +1703,28 @@ const proceedToCheckout = () => router.push("/cart/checkout");
                   <span class="text-primary-600">RM{{ totalAmount }}</span>
                 </div>
               </div>
+              <!-- CHIP Fee (when on_top mode) -->
+              <div
+                v-if="studioStore.websiteSettings?.chipFeeMode === 'on_top'"
+                class="bg-amber-50 border border-amber-200 p-2 sm:p-3 rounded"
+              >
+                <div class="flex justify-between text-xs sm:text-sm mb-1">
+                  <span class="text-amber-700 font-light">
+                    {{ t("chipFee") || "Caj Transaksi" }}
+                  </span>
+                  <span class="font-medium text-amber-700">RM1.00</span>
+                </div>
+                <div
+                  class="flex justify-between text-xs sm:text-sm font-medium"
+                >
+                  <span class="text-amber-800">
+                    {{ t("totalToPay") || "Jumlah Bayaran" }}
+                  </span>
+                  <span class="text-amber-800"
+                    >RM{{ (totalAmount + 1).toFixed(2) }}</span
+                  >
+                </div>
+              </div>
               <div class="bg-primary-50 p-2 sm:p-3">
                 <div class="flex justify-between text-xs sm:text-sm mb-1">
                   <span class="text-gray-600 font-light"

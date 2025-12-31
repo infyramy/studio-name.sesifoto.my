@@ -177,6 +177,9 @@ export type TranslationKey =
   | "surcharge"
   | "fixedPrice"
   | "noAddonsAvailable"
+  | "chipFee"
+  | "totalToPay"
+  | "totalAmount"
 
   // Cart
   | "cart"

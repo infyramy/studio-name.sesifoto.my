@@ -108,7 +108,7 @@ const getWhatsAppUrl = computed(() => {
 
 <template>
   <div
-    class="min-h-screen bg-[#Fcf9f6] font-serif flex flex-col items-center justify-center p-4 sm:p-6 relative overflow-hidden"
+    class="min-h-screen bg-[#Fcf9f6] flex flex-col items-center justify-center p-4 sm:p-6 relative overflow-hidden"
     style="font-family: 'Playfair Display', serif"
   >
     <!-- Background Pattern (Optional) -->
@@ -129,7 +129,7 @@ const getWhatsAppUrl = computed(() => {
         <div
           class="w-14 h-14 sm:w-16 sm:h-16 border-4 border-gray-100 border-t-gray-900 rounded-full animate-spin"
         ></div>
-        <p class="text-sm sm:text-base text-gray-500 font-sans">
+        <p class="text-sm sm:text-base text-gray-500">
           {{ t("loading") }}
         </p>
       </div>
@@ -144,7 +144,7 @@ const getWhatsAppUrl = computed(() => {
         <h1 class="text-xl sm:text-2xl font-bold text-gray-900">
           {{ t("error") }}
         </h1>
-        <p class="text-sm sm:text-base text-gray-500 font-sans">{{ error }}</p>
+        <p class="text-sm sm:text-base text-gray-500">{{ error }}</p>
         <button
           @click="goHome"
           class="w-full bg-gray-900 text-white font-bold uppercase tracking-widest text-[10px] sm:text-xs py-3 sm:py-4 rounded-xl hover:bg-black transition-all duration-300 flex items-center justify-center gap-2"
@@ -176,13 +176,11 @@ const getWhatsAppUrl = computed(() => {
       <!-- Text Content -->
       <div class="text-center space-y-2 sm:space-y-3">
         <h1
-          class="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 tracking-tight font-sans"
+          class="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 tracking-tight"
         >
           {{ t("bookingSuccessful") }}
         </h1>
-        <p
-          class="text-sm sm:text-base text-gray-500 font-sans leading-relaxed px-2"
-        >
+        <p class="text-sm sm:text-base text-gray-500 leading-relaxed px-2">
           {{ t("thankYouMessage") }}
         </p>
       </div>
@@ -192,7 +190,7 @@ const getWhatsAppUrl = computed(() => {
         class="bg-gray-50 rounded-xl p-3 sm:p-4 border border-gray-100 text-center space-y-2"
       >
         <span
-          class="block text-[10px] sm:text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 sm:mb-1.5 font-sans"
+          class="block text-[10px] sm:text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 sm:mb-1.5"
           >{{ t("bookingId") }}</span
         >
         <span
@@ -225,7 +223,7 @@ const getWhatsAppUrl = computed(() => {
             class="w-14 h-14 sm:w-16 sm:h-16 rounded-lg object-cover flex-shrink-0"
           />
           <div class="flex-1 min-w-0">
-            <h3 class="font-bold font-sans text-base sm:text-lg leading-tight">
+            <h3 class="font-bold text-base sm:text-lg leading-tight">
               {{ booking.theme.name }}
             </h3>
             <p class="text-[11px] sm:text-xs text-gray-500 mt-0.5 sm:mt-1">
@@ -235,7 +233,7 @@ const getWhatsAppUrl = computed(() => {
         </div>
 
         <!-- Date & Time -->
-        <div class="grid grid-cols-2 gap-2 sm:gap-3 font-sans">
+        <div class="grid grid-cols-2 gap-2 sm:gap-3">
           <div
             class="bg-gray-50 p-2.5 sm:p-3 rounded-xl sm:rounded-2xl border border-gray-100 flex flex-col items-center justify-center text-center gap-1"
           >
@@ -265,7 +263,7 @@ const getWhatsAppUrl = computed(() => {
         <!-- Pax -->
         <div
           v-if="booking.pax_count"
-          class="bg-gray-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-gray-100 flex items-center justify-between font-sans"
+          class="bg-gray-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-gray-100 flex items-center justify-between"
         >
           <div class="flex items-center gap-2 sm:gap-3">
             <Users class="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
@@ -281,7 +279,7 @@ const getWhatsAppUrl = computed(() => {
         <!-- Payment Info -->
         <div
           v-if="booking.total_amount"
-          class="bg-gray-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-gray-100 space-y-3 font-sans"
+          class="bg-gray-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-gray-100 space-y-3"
         >
           <div class="flex items-center gap-2 mb-1">
             <Receipt class="w-4 h-4 text-gray-400" />
@@ -414,7 +412,7 @@ const getWhatsAppUrl = computed(() => {
           :href="getWhatsAppUrl"
           target="_blank"
           rel="noopener noreferrer"
-          class="w-full bg-green-500 hover:bg-green-600 text-white font-sans font-bold uppercase tracking-widest text-[10px] sm:text-xs py-3 sm:py-4 rounded-xl transition-all duration-300 flex items-center justify-center gap-2 group shadow-lg hover:shadow-xl"
+          class="w-full bg-green-500 hover:bg-green-600 text-white font-bold uppercase tracking-widest text-[10px] sm:text-xs py-3 sm:py-4 rounded-xl transition-all duration-300 flex items-center justify-center gap-2 group shadow-lg hover:shadow-xl"
         >
           <MessageCircle class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           <span>{{ t("getDetailsInWhatsApp") }}</span>
@@ -426,7 +424,7 @@ const getWhatsAppUrl = computed(() => {
         <!-- Back to Home Button -->
         <button
           @click="goHome"
-          class="w-full bg-gray-900 text-white font-sans font-bold uppercase tracking-widest text-[10px] sm:text-xs py-3 sm:py-4 rounded-xl hover:bg-black hover:shadow-lg transition-all duration-300 flex items-center justify-center gap-2 group"
+          class="w-full bg-gray-900 text-white font-bold uppercase tracking-widest text-[10px] sm:text-xs py-3 sm:py-4 rounded-xl hover:bg-black hover:shadow-lg transition-all duration-300 flex items-center justify-center gap-2 group"
         >
           <span>{{ t("backToHome") }}</span>
           <Home
@@ -436,7 +434,7 @@ const getWhatsAppUrl = computed(() => {
 
         <!-- Info Text -->
         <p
-          class="text-[10px] sm:text-xs text-gray-400 font-sans mt-3 sm:mt-4 text-center px-2"
+          class="text-[10px] sm:text-xs text-gray-400 mt-3 sm:mt-4 text-center px-2"
         >
           {{ t("checkWhatsAppForConfirmation") }}
         </p>

@@ -28,7 +28,7 @@ import {
   Mail,
   Phone,
 } from "lucide-vue-next";
-import type { Theme, Addon, PricingRule, Coupon } from "@/types";
+import type { Theme, Coupon } from "@/types";
 import Modal from "@/components/Modal.vue";
 import { marked } from "marked";
 
@@ -677,7 +677,6 @@ const validateCustomerForm = () => {
 };
 
 const isProcessingPayment = ref(false);
-const activeImageIndices = ref<Record<string, number>>({});
 const loadingThemes = ref(true);
 const loadingDates = ref(true);
 const dateScroller = ref<HTMLElement | null>(null);
@@ -688,10 +687,6 @@ const validatedCoupon = ref<Coupon | null>(null);
 const isValidatingCoupon = ref(false);
 const couponError = ref("");
 const selectedCouponItemIndex = ref<number | null>(null); // For cart mode: which item to apply to
-
-const setActiveImage = (themeId: string, index: number) => {
-  activeImageIndices.value[themeId] = index;
-};
 
 // Available dates fetched from backend API
 const dates = ref<
@@ -940,17 +935,6 @@ const selectSlot = (slot: any) => {
   selectedSlot.value = slot;
 };
 
-const updateAddon = (addon: Addon, change: number) => {
-  const current = selectedAddons.value[addon.id] || 0;
-  let next = current + change;
-
-  if (next < 0) next = 0;
-  if (addon.max_quantity && next > addon.max_quantity)
-    next = addon.max_quantity;
-
-  selectedAddons.value[addon.id] = next;
-};
-
 // ============================================
 // Cart Hold API (Backend Integration)
 // ============================================
@@ -1091,27 +1075,6 @@ async function handleHoldExpiry() {
   // Release hold from storage
   if (expiredHoldId) {
     releaseCartHold(expiredHoldId);
-  }
-}
-
-async function handleChangeSlot() {
-  const confirmChange = await showModal({
-    title: t("changeSlotConfirm"),
-    message: t("changeSlotMessage"),
-    type: "warning",
-    confirmText: t("yes"),
-    cancelText: t("no"),
-    showCancel: true,
-  });
-
-  if (confirmChange) {
-    if (confirmedSlot.value?.hold?.holdId) {
-      releaseCartHold(confirmedSlot.value.hold.holdId);
-    }
-    confirmedSlot.value = null;
-    holdExpiresAt.value = null;
-    if (holdCountdownInterval) clearInterval(holdCountdownInterval);
-    currentStep.value = 2;
   }
 }
 
@@ -1966,30 +1929,6 @@ const discountAmount = computed(() => {
   return Math.min(discount, targetTotal);
 });
 
-// Check if min spend is not met (for displaying warning)
-const minSpendNotMet = computed(() => {
-  if (!validatedCoupon.value || !validatedCoupon.value.min_spend) return false;
-
-  let targetTotal = 0;
-
-  if (isCartModeEnabled.value) {
-    if (
-      selectedCouponItemIndex.value === null ||
-      selectedCouponItemIndex.value < 0 ||
-      selectedCouponItemIndex.value >= cart.value.length
-    ) {
-      // If no item selected, check against cart total
-      targetTotal = cartTotal.value;
-    } else {
-      targetTotal = cart.value[selectedCouponItemIndex.value].total;
-    }
-  } else {
-    targetTotal = currentItemTotal.value;
-  }
-
-  return targetTotal < validatedCoupon.value.min_spend;
-});
-
 // Grand total (conditional based on mode)
 const grandTotal = computed(() => {
   let total = 0;
@@ -2171,7 +2110,7 @@ watch(
 
 <template>
   <div
-    class="min-h-screen relative font-sans text-gray-900 pb-20"
+    class="min-h-screen relative text-gray-900 pb-20"
     style="font-family: 'Bricolage Grotesque', sans-serif"
   >
     <!-- Rustic Background Images with Crossfade -->
@@ -2208,9 +2147,7 @@ watch(
             >
               <ArrowLeft class="w-6 h-6 stroke-[2.5]" />
             </button>
-            <h1
-              class="text-xl font-bold font-sans tracking-tight text-gray-900"
-            >
+            <h1 class="text-xl font-bold tracking-tight text-gray-900">
               {{ steps[currentStep - 1]?.title || t("booking") }}
             </h1>
           </div>
@@ -2262,20 +2199,20 @@ watch(
               <!-- Date & Time (if selected) -->
               <p
                 v-if="selectedDate && selectedSlot"
-                class="text-xs text-gray-500 font-sans mt-1 line-clamp-1"
+                class="text-xs text-gray-500 mt-1 line-clamp-1"
               >
                 {{ formatDate(selectedDate) }}, {{ selectedSlot.start }} -
                 {{ selectedSlot.end }}
               </p>
               <!-- Fallback if only theme selected -->
-              <p v-else class="text-xs text-gray-400 font-sans mt-1">
+              <p v-else class="text-xs text-gray-400 mt-1">
                 {{ t("selectDateAndTime") }}
               </p>
             </div>
 
             <!-- Right: Price & Action -->
             <div class="flex flex-col items-center justify-between">
-              <span class="font-bold font-sans text-base">
+              <span class="font-bold text-base">
                 RM{{ formatPriceWhole(selectedTheme.base_price) }}
               </span>
               <button
@@ -2327,7 +2264,7 @@ watch(
               </div>
             </div>
             <div class="text-center space-y-2">
-              <h3 class="text-xl font-bold font-serif">
+              <h3 class="text-xl font-bold">
                 {{ t("processingPayment") }}
               </h3>
               <p class="text-sm text-gray-500">{{ t("pleaseWait") }}</p>
@@ -2350,7 +2287,7 @@ watch(
           class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
         >
           <div class="bg-white rounded-3xl p-8 max-w-md mx-4 shadow-2xl">
-            <h3 class="text-2xl font-bold font-serif mb-4">
+            <h3 class="text-2xl font-bold mb-4">
               {{ t("restoreYourBooking") }}
             </h3>
             <p class="text-sm text-gray-600 mb-6">
@@ -2503,7 +2440,7 @@ watch(
 
                     <!-- Mobile Price -->
                     <div
-                      class="sm:hidden font-bold font-sans text-lg text-gray-900 leading-none"
+                      class="sm:hidden font-bold text-lg text-gray-900 leading-none"
                     >
                       RM{{ formatPriceWhole(theme.base_price) }}
                     </div>
@@ -2534,7 +2471,7 @@ watch(
                   </div>
 
                   <!-- Price -->
-                  <div class="font-bold font-sans text-xl text-gray-900">
+                  <div class="font-bold text-xl text-gray-900">
                     RM{{ formatPriceWhole(theme.base_price) }}
                   </div>
                 </div>
@@ -2608,13 +2545,13 @@ watch(
                     ]"
                   >
                     <span
-                      class="text-[10px] uppercase font-sans tracking-widest font-medium mb-1"
+                      class="text-[10px] uppercase tracking-widest font-medium mb-1"
                       >{{ d.month }}</span
                     >
-                    <span class="text-2xl font-bold font-serif leading-none">{{
+                    <span class="text-2xl font-bold leading-none">{{
                       d.day
                     }}</span>
-                    <span class="text-[10px] font-sans mt-1 opacity-80">{{
+                    <span class="text-[10px] mt-1 opacity-80">{{
                       d.weekday
                     }}</span>
 
@@ -2660,7 +2597,7 @@ watch(
                 <div class="bg-red-100 p-2 rounded-full flex-shrink-0">
                   <AlertCircle class="w-4 h-4" />
                 </div>
-                <div class="text-xs font-sans leading-relaxed">
+                <div class="text-xs leading-relaxed">
                   <span
                     class="font-bold block uppercase tracking-wider text-[10px] mb-0.5 text-red-700"
                     >{{ t("blackoutDate") }}</span
@@ -2677,7 +2614,7 @@ watch(
                 <div class="bg-amber-100 p-2 rounded-full flex-shrink-0">
                   <Info class="w-4 h-4" />
                 </div>
-                <div class="text-xs font-sans leading-relaxed flex-1">
+                <div class="text-xs leading-relaxed flex-1">
                   <span
                     class="font-bold block uppercase tracking-wider text-[10px] mb-1 text-amber-700"
                     >{{ t("specialDate") }}</span
@@ -2710,14 +2647,12 @@ watch(
               }"
             >
               <div class="flex items-center justify-between">
-                <h3
-                  class="text-lg font-bold font-serif flex items-center gap-2"
-                >
+                <h3 class="text-lg font-bold flex items-center gap-2">
                   <Clock class="w-5 h-5" /> {{ t("selectTime") }}
                 </h3>
                 <span
                   v-if="selectedDate"
-                  class="text-xs font-sans text-gray-400 uppercase tracking-wider"
+                  class="text-xs text-gray-400 uppercase tracking-wider"
                   >{{
                     selectedSlot ? t("oneSlotSelected") : t("selectOneSlot")
                   }}</span
@@ -2743,7 +2678,7 @@ watch(
                   @click="selectSlot(slot)"
                   :disabled="!slot.available"
                   :class="[
-                    'py-4 px-3 rounded-2xl text-sm font-sans font-medium text-center border transition-all duration-300 relative overflow-hidden flex items-center justify-center',
+                    'py-4 px-3 rounded-2xl text-sm  font-medium text-center border transition-all duration-300 relative overflow-hidden flex items-center justify-center',
                     !slot.available
                       ? 'bg-gray-50 text-gray-300 border-transparent cursor-not-allowed'
                       : selectedSlot?.id === slot.id
@@ -2765,7 +2700,7 @@ watch(
               <!-- No Slots Available -->
               <div
                 v-else-if="selectedDate && !loadingSlots"
-                class="text-center py-8 text-gray-500 text-sm font-sans"
+                class="text-center py-8 text-gray-500 text-sm"
               >
                 {{
                   t("noSlotsAvailable") ||
@@ -2779,9 +2714,7 @@ watch(
           <div v-else-if="currentStep === 3" :key="3" class="space-y-8">
             <!-- Main Header -->
             <div class="space-y-1 mt-5">
-              <h2
-                class="text-xl sm:text-2xl font-bold font-sans tracking-tight"
-              >
+              <h2 class="text-xl sm:text-2xl font-bold tracking-tight">
                 {{ t("paxAndAddons") }}
               </h2>
               <p class="text-gray-500 font-light">
@@ -3066,7 +2999,7 @@ watch(
                   <!-- Expanded Pricing Breakdown -->
                   <div
                     v-if="expandedCartItems.has(item.id)"
-                    class="mt-4 pt-4 border-t border-dashed border-gray-100 space-y-2 text-sm font-sans bg-gray-50/50 p-4 rounded-xl animate-fade-in"
+                    class="mt-4 pt-4 border-t border-dashed border-gray-100 space-y-2 text-sm bg-gray-50/50 p-4 rounded-xl animate-fade-in"
                   >
                     <!-- Base Price -->
                     <div
@@ -3184,9 +3117,7 @@ watch(
             <div class="space-y-8 px-2 mt-5">
               <!-- Main Header -->
               <div class="space-y-1">
-                <h2
-                  class="text-xl sm:text-2xl font-bold font-sans tracking-tight"
-                >
+                <h2 class="text-xl sm:text-2xl font-bold tracking-tight">
                   {{ t("customerInformation") }}
                 </h2>
                 <p class="text-gray-500 font-light">
@@ -3203,7 +3134,7 @@ watch(
                     @input="formErrors.name = ''"
                     id="name"
                     required
-                    class="peer w-full bg-transparent border-b-2 py-2.5 pt-4 outline-none font-sans text-lg transition-colors placeholder-transparent"
+                    class="peer w-full bg-transparent border-b-2 py-2.5 pt-4 outline-none text-lg transition-colors placeholder-transparent"
                     :class="
                       formErrors.name
                         ? 'border-red-300 focus:border-red-500'
@@ -3235,7 +3166,7 @@ watch(
                     @input="formErrors.phone = ''"
                     id="phone"
                     required
-                    class="peer w-full bg-transparent border-b-2 py-2.5 pt-4 outline-none font-sans text-lg transition-colors placeholder-transparent"
+                    class="peer w-full bg-transparent border-b-2 py-2.5 pt-4 outline-none text-lg transition-colors placeholder-transparent"
                     :class="
                       formErrors.phone
                         ? 'border-red-300 focus:border-red-500'
@@ -3254,13 +3185,10 @@ watch(
                   >
                     {{ t("phoneNumber") }}
                   </label>
-                  <p
-                    v-if="formErrors.phone"
-                    class="mt-1 text-xs text-red-500 font-sans"
-                  >
+                  <p v-if="formErrors.phone" class="mt-1 text-xs text-red-500">
                     {{ formErrors.phone }}
                   </p>
-                  <p v-else class="mt-1 text-xs text-gray-500 font-sans">
+                  <p v-else class="mt-1 text-xs text-gray-500">
                     {{ t("preferWhatsApp") }}
                   </p>
                 </div>
@@ -3273,7 +3201,7 @@ watch(
                     @input="formErrors.email = ''"
                     id="email"
                     required
-                    class="peer w-full bg-transparent border-b-2 py-2.5 pt-4 outline-none font-sans text-lg transition-colors placeholder-transparent"
+                    class="peer w-full bg-transparent border-b-2 py-2.5 pt-4 outline-none text-lg transition-colors placeholder-transparent"
                     :class="
                       formErrors.email
                         ? 'border-red-300 focus:border-red-500'
@@ -3292,13 +3220,10 @@ watch(
                   >
                     {{ t("email") }}
                   </label>
-                  <p
-                    v-if="formErrors.email"
-                    class="mt-1 text-xs text-red-500 font-sans"
-                  >
+                  <p v-if="formErrors.email" class="mt-1 text-xs text-red-500">
                     {{ formErrors.email }}
                   </p>
-                  <p v-else class="mt-1 text-xs text-gray-500 font-sans">
+                  <p v-else class="mt-1 text-xs text-gray-500">
                     {{ t("emailConfirmationNote") }}
                   </p>
                 </div>
@@ -3314,9 +3239,7 @@ watch(
           >
             <div class="space-y-6 px-2">
               <div class="space-y-1">
-                <h2
-                  class="text-xl sm:text-2xl font-bold font-sans tracking-tight"
-                >
+                <h2 class="text-xl sm:text-2xl font-bold tracking-tight">
                   {{ t("customerInformation") }}
                 </h2>
                 <p class="text-gray-500 font-light">
@@ -3333,7 +3256,7 @@ watch(
                     @input="formErrors.name = ''"
                     id="cart-name"
                     required
-                    class="peer w-full bg-transparent border-b-2 py-2.5 pt-4 outline-none font-sans text-lg transition-colors placeholder-transparent"
+                    class="peer w-full bg-transparent border-b-2 py-2.5 pt-4 outline-none text-lg transition-colors placeholder-transparent"
                     :class="
                       formErrors.name
                         ? 'border-red-300 focus:border-red-500'
@@ -3352,10 +3275,7 @@ watch(
                   >
                     {{ t("fullName") }}
                   </label>
-                  <p
-                    v-if="formErrors.name"
-                    class="mt-1 text-xs text-red-500 font-sans"
-                  >
+                  <p v-if="formErrors.name" class="mt-1 text-xs text-red-500">
                     {{ formErrors.name }}
                   </p>
                 </div>
@@ -3368,7 +3288,7 @@ watch(
                     @input="formErrors.phone = ''"
                     id="cart-phone"
                     required
-                    class="peer w-full bg-transparent border-b-2 py-2.5 pt-4 outline-none font-sans text-lg transition-colors placeholder-transparent"
+                    class="peer w-full bg-transparent border-b-2 py-2.5 pt-4 outline-none text-lg transition-colors placeholder-transparent"
                     :class="
                       formErrors.phone
                         ? 'border-red-300 focus:border-red-500'
@@ -3387,13 +3307,10 @@ watch(
                   >
                     {{ t("phoneNumber") }}
                   </label>
-                  <p
-                    v-if="formErrors.phone"
-                    class="mt-1 text-xs text-red-500 font-sans"
-                  >
+                  <p v-if="formErrors.phone" class="mt-1 text-xs text-red-500">
                     {{ formErrors.phone }}
                   </p>
-                  <p v-else class="mt-1 text-xs text-gray-500 font-sans">
+                  <p v-else class="mt-1 text-xs text-gray-500">
                     {{ t("preferWhatsApp") }}
                   </p>
                 </div>
@@ -3406,7 +3323,7 @@ watch(
                     @input="formErrors.email = ''"
                     id="cart-email"
                     required
-                    class="peer w-full bg-transparent border-b-2 py-2.5 pt-4 outline-none font-sans text-lg transition-colors placeholder-transparent"
+                    class="peer w-full bg-transparent border-b-2 py-2.5 pt-4 outline-none text-lg transition-colors placeholder-transparent"
                     :class="
                       formErrors.email
                         ? 'border-red-300 focus:border-red-500'
@@ -3425,13 +3342,10 @@ watch(
                   >
                     {{ t("email") }}
                   </label>
-                  <p
-                    v-if="formErrors.email"
-                    class="mt-1 text-xs text-red-500 font-sans"
-                  >
+                  <p v-if="formErrors.email" class="mt-1 text-xs text-red-500">
                     {{ formErrors.email }}
                   </p>
-                  <p v-else class="mt-1 text-xs text-gray-500 font-sans">
+                  <p v-else class="mt-1 text-xs text-gray-500">
                     {{ t("emailConfirmationNote") }}
                   </p>
                 </div>
@@ -3446,7 +3360,7 @@ watch(
             class="space-y-6 animate-fade-in"
           >
             <div class="space-y-4">
-              <!-- <h3 class="font-bold font-serif text-lg sm:text-xl px-1">{{ t('termsAndConditions') }}</h3> -->
+              <!-- <h3 class="font-bold text-lg sm:text-xl px-1">{{ t('termsAndConditions') }}</h3> -->
 
               <!-- Scrollable Terms Container -->
               <div
@@ -3518,12 +3432,12 @@ watch(
                   class="flex-1 cursor-pointer select-none"
                 >
                   <span
-                    class="block text-sm sm:text-base font-bold font-sans text-gray-900 mb-1"
+                    class="block text-sm sm:text-base font-bold text-gray-900 mb-1"
                   >
                     {{ t("agreeToTerms") }}
                   </span>
                   <span
-                    class="block text-xs sm:text-sm text-gray-600 font-sans leading-relaxed"
+                    class="block text-xs sm:text-sm text-gray-600 leading-relaxed"
                   >
                     {{
                       t("termsAcceptanceNote") ||
@@ -3541,7 +3455,7 @@ watch(
             class="space-y-6 animate-fade-in"
           >
             <div class="space-y-4">
-              <!-- <h3 class="font-bold font-serif text-lg sm:text-xl px-1">{{ t('termsAndConditions') }}</h3> -->
+              <!-- <h3 class="font-bold text-lg sm:text-xl px-1">{{ t('termsAndConditions') }}</h3> -->
 
               <!-- Scrollable Terms Container -->
               <div
@@ -3614,12 +3528,12 @@ watch(
                   class="flex-1 cursor-pointer select-none"
                 >
                   <span
-                    class="block text-sm sm:text-base font-bold font-sans text-gray-900 mb-1"
+                    class="block text-sm sm:text-base font-bold text-gray-900 mb-1"
                   >
                     {{ t("agreeToTerms") }}
                   </span>
                   <span
-                    class="block text-xs sm:text-sm text-gray-600 font-sans leading-relaxed"
+                    class="block text-xs sm:text-sm text-gray-600 leading-relaxed"
                   >
                     {{
                       t("termsAcceptanceNote") ||
@@ -3929,13 +3843,40 @@ watch(
 
                 <!-- Totals (Matches Step 6) -->
                 <div class="space-y-4">
+                  <!-- CHIP Transaction Fee (when on_top mode) -->
+                  <div
+                    v-if="studioStore.websiteSettings?.chipFeeMode === 'on_top'"
+                    class="bg-amber-50 border border-amber-200 rounded-xl p-3"
+                  >
+                    <div class="flex justify-between text-sm mb-1">
+                      <span class="text-amber-700">
+                        {{ t("chipFee") || "Caj Transaksi" }}
+                      </span>
+                      <span class="font-bold text-amber-700">RM1.00</span>
+                    </div>
+                    <div class="flex justify-between text-sm font-bold">
+                      <span class="text-amber-800">
+                        {{ t("totalToPay") || "Jumlah Bayaran" }}
+                      </span>
+                      <span class="text-amber-800"
+                        >RM{{ formatPriceWhole(grandTotal + 100) }}</span
+                      >
+                    </div>
+                  </div>
+
                   <div class="flex justify-between items-end pt-2">
                     <span
                       class="font-bold text-sm uppercase tracking-wider text-gray-900"
-                      >JUMLAH KESELURUHAN</span
+                      >{{ t("totalAmount") }}</span
                     >
                     <span class="font-bold text-4xl text-gray-900"
-                      >RM{{ formatPriceWhole(grandTotal) }}</span
+                      >RM{{
+                        formatPriceWhole(
+                          studioStore.websiteSettings?.chipFeeMode === "on_top"
+                            ? grandTotal + 100
+                            : grandTotal
+                        )
+                      }}</span
                     >
                   </div>
 
@@ -4162,22 +4103,43 @@ watch(
 
                   <!-- 4. Totals -->
                   <div class="space-y-4">
-                    <!-- Processing Fee (Static placeholder or calculation if needed) -->
-                    <!-- <div
-                    class="flex justify-between text-gray-400 italic font-sans"
-                    v-if="true"
-                  >
-                    <span>Processing Fee</span>
-                    <span>RM{{ formatPriceWhole(5) }}</span>
-                  </div> -->
+                    <!-- CHIP Transaction Fee (when on_top mode) -->
+                    <div
+                      v-if="
+                        studioStore.websiteSettings?.chipFeeMode === 'on_top'
+                      "
+                      class="bg-amber-50 border border-amber-200 rounded-xl p-3"
+                    >
+                      <div class="flex justify-between text-sm mb-1">
+                        <span class="text-amber-700">
+                          {{ t("chipFee") }}
+                        </span>
+                        <span class="font-bold text-amber-700">RM1.00</span>
+                      </div>
+                      <!-- <div class="flex justify-between text-sm font-bold">
+                        <span class="text-amber-800">
+                          {{ t("totalToPay") }}
+                        </span>
+                        <span class="text-amber-800"
+                          >RM{{ formatPriceWhole(grandTotal + 100) }}</span
+                        >
+                      </div> -->
+                    </div>
 
                     <div class="flex justify-between items-end pt-2">
                       <span
                         class="font-bold text-sm uppercase tracking-wider text-gray-900"
-                        >JUMLAH KESELURUHAN</span
+                        >{{ t("totalAmount") }}</span
                       >
                       <span class="font-bold text-4xl text-gray-900"
-                        >RM{{ formatPriceWhole(grandTotal) }}</span
+                        >RM{{
+                          formatPriceWhole(
+                            studioStore.websiteSettings?.chipFeeMode ===
+                              "on_top"
+                              ? grandTotal + 100
+                              : grandTotal
+                          )
+                        }}</span
                       >
                     </div>
 
@@ -4219,8 +4181,18 @@ watch(
             <span class="font-bold text-xl sm:text-2xl">
               RM{{
                 isCartModeEnabled && (currentStep === 4 || currentStep === 7)
-                  ? formatPriceWhole(cartTotal || 0)
-                  : formatPriceWhole(grandTotal || 0)
+                  ? formatPriceWhole(
+                      (cartTotal || 0) +
+                        (studioStore.websiteSettings?.chipFeeMode === "on_top"
+                          ? 100
+                          : 0)
+                    )
+                  : formatPriceWhole(
+                      (grandTotal || 0) +
+                        (studioStore.websiteSettings?.chipFeeMode === "on_top"
+                          ? 100
+                          : 0)
+                    )
               }}
             </span>
           </div>
@@ -4331,10 +4303,6 @@ watch(
 
 .font-serif {
   font-family: "Playfair Display", serif;
-}
-
-.font-sans {
-  font-family: "Bricolage Grotesque", sans-serif;
 }
 
 /* Hide scrollbar but keep functionality */

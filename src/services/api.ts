@@ -84,6 +84,7 @@ const transformStudio = (data: any): Studio => ({
     booking_open: true,
     buffer_minutes: 15,
     auto_cutoff_hours: 0,
+    chip_fee_mode: "absorbed",
   },
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
@@ -197,6 +198,8 @@ export const api = {
         booking_open: settings.bookingOpen,
         buffer_minutes: 15,
         auto_cutoff_hours: 0,
+        chip_fee_mode:
+          (settings.chipFeeMode as "on_top" | "absorbed") || "absorbed",
       };
 
       // Apply website settings language if available (takes precedence)
@@ -229,6 +232,7 @@ export const api = {
       selectedStyle: data.selectedStyle as "rustic" | "modern" | "luxe",
       bookingWindowStart: data.bookingWindowStart,
       bookingWindowEnd: data.bookingWindowEnd,
+      chipFeeMode: data.chipFeeMode as "on_top" | "absorbed" | undefined,
       heroConfig: data.heroConfig
         ? {
             styleKey: data.heroConfig.styleKey as "rustic" | "modern" | "luxe",
