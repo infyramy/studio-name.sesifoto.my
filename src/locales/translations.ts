@@ -244,7 +244,8 @@ export const translationsBM: Translations = {
   bookingConfirmationPending:
     "Studio akan mengesahkan tempahan anda dalam masa 24 jam",
   getDetailsInWhatsApp: "Dapatkan Butiran di WhatsApp",
-  checkWhatsAppForConfirmation: "Sila semak WhatsApp anda untuk pengesahan.",
+  checkWhatsAppForConfirmation:
+    "Sila semak emel dan WhatsApp anda untuk pengesahan.",
 
   // Lookup Page
   checkYourBooking: "Semak Tempahan Anda",
@@ -259,7 +260,7 @@ export const translationsBM: Translations = {
   bookingNotFound: "Tempahan Tidak Dijumpai",
   bookingNotFoundMessage: "Sila semak ID tempahan dan nombor telefon anda",
   bookingIdSentToWhatsApp:
-    "ID Tempahan anda telah dihantar ke WhatsApp selepas tempahan",
+    "ID Tempahan anda telah dihantar ke emel dan WhatsApp selepas tempahan",
   status: "Status",
   confirmed: "Disahkan",
   pending: "Belum Selesai",
@@ -397,6 +398,12 @@ export const translationsBM: Translations = {
   hideDetails: "Tutup butiran",
   viewBreakdown: "Lihat butiran",
   setPrice: "Harga Set",
+
+  // Customer Details
+  customerDetails: "Maklumat Pelanggan",
+  phone: "Telefon",
+  bookedOn: "Ditempah pada",
+  inclTransactionFee: "Termasuk Caj Transaksi",
 };
 
 // English (EN)
@@ -644,7 +651,8 @@ export const translationsEN: Translations = {
   bookingConfirmationPending:
     "Studio will confirm your booking within 24 hours",
   getDetailsInWhatsApp: "Get Details in WhatsApp",
-  checkWhatsAppForConfirmation: "Please check your WhatsApp for confirmation.",
+  checkWhatsAppForConfirmation:
+    "Please check your email and WhatsApp for confirmation.",
 
   // Lookup Page
   checkYourBooking: "Check Your Booking",
@@ -658,7 +666,8 @@ export const translationsEN: Translations = {
   searching: "Searching...",
   bookingNotFound: "Booking Not Found",
   bookingNotFoundMessage: "Please check your booking ID and phone number",
-  bookingIdSentToWhatsApp: "Your Booking ID was sent to WhatsApp after booking",
+  bookingIdSentToWhatsApp:
+    "Your Booking ID was sent to email and WhatsApp after booking",
   status: "Status",
   confirmed: "Confirmed",
   pending: "Pending",
@@ -793,6 +802,12 @@ export const translationsEN: Translations = {
   hideDetails: "Hide Details",
   viewBreakdown: "View Breakdown",
   setPrice: "Set Price",
+
+  // Customer Details
+  customerDetails: "Customer Details",
+  phone: "Phone",
+  bookedOn: "Booked on",
+  inclTransactionFee: "Incl. Transaction Fee",
 };
 
 export const translations = {

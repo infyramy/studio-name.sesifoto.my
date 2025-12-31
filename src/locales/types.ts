@@ -370,6 +370,12 @@ export type TranslationKey =
   | "failedToAddToCart"
   | "restoredItems"
   | "itemsExpired"
-  | "allItemsExpired";
+  | "allItemsExpired"
+
+  // Customer Details
+  | "customerDetails"
+  | "phone"
+  | "bookedOn"
+  | "inclTransactionFee";
 
 export type Translations = Record<TranslationKey, string>;

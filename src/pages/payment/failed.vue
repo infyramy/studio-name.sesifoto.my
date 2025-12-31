@@ -53,7 +53,7 @@ const errorMessage = computed(() => {
 });
 
 const goHome = () => router.push("/");
-const goToBooking = () => router.push("/booking-new");
+const goToBooking = () => router.push("/booking");
 
 const getWhatsAppUrl = computed(() => {
   if (!studioStore.studio?.whatsapp) return "";

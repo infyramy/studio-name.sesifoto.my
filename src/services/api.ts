@@ -669,13 +669,27 @@ export const api = {
   // ===== Payment API =====
   async initiatePayment(
     bookingId: string,
-    paymentType: "full" | "deposit" = "deposit"
-  ): Promise<{ checkoutUrl: string }> {
+    paymentType: "full" | "deposit" = "deposit",
+    additionalBookingIds?: string[],
+    amount?: number
+  ): Promise<{
+    checkoutUrl: string | null;
+    paymentSkipped?: boolean;
+    confirmedBookingNumbers?: string[];
+  }> {
     const data = await apiFetch(`/public/bookings/${bookingId}/payment`, {
       method: "POST",
-      body: { paymentType },
+      body: {
+        paymentType,
+        additionalBookingIds,
+        amount,
+      },
     });
-    return { checkoutUrl: data.checkoutUrl };
+    return {
+      checkoutUrl: data.checkoutUrl,
+      paymentSkipped: data.paymentSkipped,
+      confirmedBookingNumbers: data.confirmedBookingNumbers,
+    };
   },
 
   // ===== Helper Functions =====

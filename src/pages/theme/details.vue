@@ -51,7 +51,7 @@ const prevImage = () => {
 };
 
 const goToBooking = () => {
-  router.push(`/booking/${themeId}`);
+  router.push({ path: "/booking", query: { theme: themeId } });
 };
 </script>
 

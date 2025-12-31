@@ -6,33 +6,9 @@ const routes: RouteRecordRaw[] = [
   {
     path: "/",
     name: "home",
-    component: () => import("@/pages/home/index-new.vue"),
+    component: () => import("@/pages/home/index.vue"),
     meta: {
       title: "Tempah Sesi Raya Anda",
-    },
-  },
-  {
-    path: "/home-new",
-    name: "home-new",
-    component: () => import("@/pages/home/index-new.vue"),
-    meta: {
-      title: "Tempah Sesi Raya Anda",
-    },
-  },
-  {
-    path: "/home-luxe",
-    name: "home-luxe",
-    component: () => import("@/pages/home/index-luxe.vue"),
-    meta: {
-      title: "Tempah Sesi Raya Anda (Luxe)",
-    },
-  },
-  {
-    path: "/home-modern",
-    name: "home-modern",
-    component: () => import("@/pages/home/index-modern.vue"),
-    meta: {
-      title: "Tempah Sesi Raya Anda (Modern)",
     },
   },
   {
@@ -44,11 +20,11 @@ const routes: RouteRecordRaw[] = [
     },
   },
   {
-    path: "/booking-new",
-    name: "booking-new",
-    component: () => import("@/pages/booking/index-new.vue"),
+    path: "/booking",
+    name: "booking",
+    component: () => import("@/pages/booking/index.vue"),
     meta: {
-      title: "Tempahan Baru",
+      title: "Tempahan",
     },
   },
   {
@@ -60,17 +36,9 @@ const routes: RouteRecordRaw[] = [
     },
   },
   {
-    path: "/booking",
-    name: "booking",
-    component: () => import("@/pages/booking/index.vue"),
-    meta: {
-      title: "Tempahan",
-    },
-  },
-  {
     path: "/check-booking",
     name: "check-booking",
-    component: () => import("@/pages/booking/check-new.vue"),
+    component: () => import("@/pages/booking/check.vue"),
     meta: {
       title: "Semak Tempahan",
     },
