@@ -16,6 +16,7 @@ import {
   ArrowRight,
   CreditCard,
   Receipt,
+  ChevronDown,
 } from "lucide-vue-next";
 
 const router = useRouter();
@@ -23,16 +24,38 @@ const route = useRoute();
 const studioStore = useStudioStore();
 const { t } = useTranslation();
 
-const bookingId = route.params.bookingId as string;
-const booking = ref<Booking | null>(null);
+// Support multiple booking IDs (comma-separated for cart mode)
+const bookingIdParam = route.params.bookingId as string;
+const bookingIds = bookingIdParam.split(",").filter((id) => id.trim());
+const bookings = ref<Booking[]>([]);
 const isLoading = ref(true);
 const error = ref<string | null>(null);
 
-// Fetch booking data
+// Accordion Expand State (for multiple bookings)
+const expandedIndex = ref<number | null>(0);
+
+const toggleAccordion = (index: number) => {
+  if (expandedIndex.value === index) {
+    expandedIndex.value = null;
+  } else {
+    expandedIndex.value = index;
+  }
+};
+
+// For backward compatibility - primary booking is the first one
+const booking = computed(() => bookings.value[0] || null);
+const isMultipleBookings = computed(() => bookings.value.length > 1);
+
+// Fetch all booking data
 onMounted(async () => {
   try {
-    const bookingData = await getBookingById(bookingId);
-    booking.value = bookingData;
+    const fetchedBookings = await Promise.all(
+      bookingIds.map((id) => getBookingById(id.trim()))
+    );
+    bookings.value = fetchedBookings.filter((b) => b !== null) as Booking[];
+    if (bookings.value.length === 0) {
+      error.value = t("bookingNotFound");
+    }
   } catch (err) {
     error.value = err instanceof Error ? err.message : t("bookingNotFound");
   } finally {
@@ -47,19 +70,18 @@ const formatAmount = (amountInSen: number | undefined): string => {
   return `RM ${amountInRM.toFixed(2)}`;
 };
 
-const formattedDate = computed(() => {
-  if (!booking.value) return "";
-  const dateStr = booking.value.booking_date;
+// Helper functions for formatting (usable in v-for loop)
+const getFormattedDate = (b: Booking) => {
+  const dateStr = b.booking_date;
   if (!dateStr) return "";
   try {
     return format(new Date(dateStr), "d MMMM yyyy");
   } catch {
     return dateStr;
   }
-});
+};
 
-const formattedTime = computed(() => {
-  if (!booking.value) return "";
+const getFormattedTime = (b: Booking) => {
   const formatTime = (time: string | undefined) => {
     if (!time) return "";
     const [hours, minutes] = time.split(":");
@@ -68,19 +90,17 @@ const formattedTime = computed(() => {
     const hour12 = h % 12 || 12;
     return `${hour12}:${minutes || "00"} ${ampm}`;
   };
-  return `${formatTime(booking.value.start_time)} - ${formatTime(
-    booking.value.end_time
-  )}`;
-});
+  return `${formatTime(b.start_time)} - ${formatTime(b.end_time)}`;
+};
 
-const formattedCreatedDate = computed(() => {
-  if (!booking.value?.created_at) return "";
+const getFormattedCreatedDate = (b: Booking) => {
+  if (!b.created_at) return "";
   try {
-    return format(new Date(booking.value.created_at), "d MMM yyyy, h:mm a");
+    return format(new Date(b.created_at), "d MMM yyyy, h:mm a");
   } catch {
     return "";
   }
-});
+};
 
 const paymentStatusLabel = computed(() => {
   if (!booking.value) return "";
@@ -194,8 +214,10 @@ const getWhatsAppUrl = computed(() => {
           </p>
         </div>
 
-        <!-- Booking ID with Payment Status -->
+        <!-- Booking IDs with Payment Status -->
+        <!-- Single Booking -->
         <div
+          v-if="!isMultipleBookings"
           class="bg-gray-50 rounded-xl p-3 sm:p-4 border border-gray-100 text-center space-y-2"
         >
           <span
@@ -204,7 +226,7 @@ const getWhatsAppUrl = computed(() => {
           >
           <span
             class="font-mono text-lg sm:text-xl font-bold text-gray-900 tracking-wider break-all"
-            >{{ booking.booking_number }}</span
+            >{{ booking?.booking_number }}</span
           >
           <div class="pt-2">
             <span
@@ -219,272 +241,401 @@ const getWhatsAppUrl = computed(() => {
           </div>
         </div>
 
+        <!-- Multiple Bookings (Cart Mode) -->
+        <div
+          v-else
+          class="bg-gray-50 rounded-xl p-3 sm:p-4 border border-gray-100 space-y-3"
+        >
+          <div class="text-center">
+            <span
+              class="block text-[10px] sm:text-xs font-bold text-gray-400 uppercase tracking-widest mb-2"
+              >{{ bookings.length }} {{ t("bookings") }}</span
+            >
+          </div>
+
+          <!-- Booking IDs with Payment Status -->
+          <div class="space-y-2">
+            <div
+              v-for="(b, index) in bookings"
+              :key="b.booking_number"
+              class="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-gray-100"
+            >
+              <div class="flex items-center gap-2 min-w-0">
+                <span class="text-xs text-gray-400 font-medium"
+                  >{{ index + 1 }}.</span
+                >
+                <span
+                  class="font-mono text-sm font-bold text-gray-900 truncate"
+                  >{{ b.booking_number }}</span
+                >
+              </div>
+              <span
+                :class="[
+                  'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase',
+                  b.payment_status === 'paid'
+                    ? 'bg-green-100 text-green-700'
+                    : b.payment_status === 'partially_paid'
+                    ? 'bg-blue-100 text-blue-700'
+                    : 'bg-amber-100 text-amber-700',
+                ]"
+              >
+                <CreditCard class="w-2.5 h-2.5" />
+                {{
+                  b.payment_status === "paid"
+                    ? t("fullPayment")
+                    : b.payment_status === "partially_paid"
+                    ? t("depositPaid")
+                    : t("pending")
+                }}
+              </span>
+            </div>
+          </div>
+        </div>
+
         <!-- Booking Details -->
-        <div class="space-y-3 sm:space-y-4">
-          <!-- Theme -->
+        <div class="space-y-4">
           <div
-            v-if="booking.theme"
-            class="flex gap-3 sm:gap-4 items-start bg-gray-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-gray-100"
+            v-for="(b, bIndex) in bookings"
+            :key="b.id"
+            :class="[
+              isMultipleBookings
+                ? 'bg-white border border-gray-200 rounded-xl overflow-hidden transition-all duration-300 shadow-sm'
+                : 'space-y-3 sm:space-y-4',
+            ]"
           >
-            <img
-              v-if="booking.theme.images?.[0]"
-              :src="booking.theme.images[0]"
-              class="w-14 h-14 sm:w-16 sm:h-16 rounded-lg object-cover flex-shrink-0"
-            />
-            <div class="flex-1 min-w-0">
-              <h3 class="font-bold text-base sm:text-lg leading-tight">
-                {{ booking.theme.name }}
-              </h3>
-              <p class="text-[11px] sm:text-xs text-gray-500 mt-0.5 sm:mt-1">
-                {{ studioStore.studio?.name }}
-              </p>
-            </div>
-          </div>
-
-          <!-- Date & Time -->
-          <div class="grid grid-cols-2 gap-2 sm:gap-3">
+            <!-- Accordion Header (Only for Multiple Bookings) -->
             <div
-              class="bg-gray-50 p-2.5 sm:p-3 rounded-xl sm:rounded-2xl border border-gray-100 flex flex-col items-center justify-center text-center gap-1"
+              v-if="isMultipleBookings"
+              @click="toggleAccordion(bIndex)"
+              class="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 bg-gray-50/50 transition-colors"
+              :class="{
+                'border-b border-gray-100': expandedIndex === bIndex,
+              }"
             >
-              <Calendar class="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
-              <span
-                class="text-xs sm:text-sm font-bold text-gray-900 break-words"
-                >{{ formattedDate }}</span
-              >
-              <span class="text-[9px] sm:text-[10px] text-gray-400 uppercase">{{
-                t("date")
-              }}</span>
-            </div>
-            <div
-              class="bg-gray-50 p-2.5 sm:p-3 rounded-xl sm:rounded-2xl border border-gray-100 flex flex-col items-center justify-center text-center gap-1"
-            >
-              <Clock class="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
-              <span
-                class="text-xs sm:text-sm font-bold text-gray-900 break-words"
-                >{{ formattedTime }}</span
-              >
-              <span class="text-[9px] sm:text-[10px] text-gray-400 uppercase">{{
-                t("time")
-              }}</span>
-            </div>
-          </div>
-
-          <!-- Pax -->
-          <div
-            v-if="booking.pax_count"
-            class="bg-gray-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-gray-100 flex items-center justify-between"
-          >
-            <div class="flex items-center gap-2 sm:gap-3">
-              <Users class="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
-              <span class="text-xs sm:text-sm font-medium text-gray-600">{{
-                t("numberOfGuests")
-              }}</span>
-            </div>
-            <span class="font-bold text-sm sm:text-base text-gray-900"
-              >{{ booking.pax_count }} {{ t("people") }}</span
-            >
-          </div>
-
-          <!-- Customer Details -->
-          <div
-            class="bg-gray-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-gray-100 space-y-2"
-          >
-            <div class="flex items-center gap-2 mb-2">
-              <svg
-                class="w-4 h-4 text-gray-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                />
-              </svg>
-              <span
-                class="text-xs font-bold text-gray-500 uppercase tracking-wider"
-                >{{ t("customerDetails") || "Customer Details" }}</span
-              >
-            </div>
-            <div class="space-y-1.5 text-xs sm:text-sm">
-              <div class="flex justify-between">
-                <span class="text-gray-500">{{ t("name") || "Name" }}</span>
-                <span class="font-medium text-gray-900">{{
-                  booking.customer_name
-                }}</span>
-              </div>
-              <div class="flex justify-between">
-                <span class="text-gray-500">{{ t("phone") || "Phone" }}</span>
-                <span class="font-medium text-gray-900">{{
-                  booking.customer_phone
-                }}</span>
-              </div>
-              <div v-if="booking.customer_email" class="flex justify-between">
-                <span class="text-gray-500">{{ t("email") || "Email" }}</span>
-                <span class="font-medium text-gray-900 break-all">{{
-                  booking.customer_email
-                }}</span>
-              </div>
-              <div
-                v-if="booking.customer_notes"
-                class="pt-1.5 border-t border-gray-100"
-              >
-                <span class="text-gray-500 block mb-1">{{
-                  t("notes") || "Notes"
-                }}</span>
-                <span class="text-gray-700 italic"
-                  >"{{ booking.customer_notes }}"</span
-                >
-              </div>
-            </div>
-            <div
-              v-if="formattedCreatedDate"
-              class="text-[10px] text-gray-400 pt-2 border-t border-gray-100"
-            >
-              {{ t("bookedOn") || "Booked on" }}: {{ formattedCreatedDate }}
-            </div>
-          </div>
-
-          <!-- Payment Info -->
-          <div
-            v-if="booking.total_amount"
-            class="bg-gray-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-gray-100 space-y-3"
-          >
-            <div class="flex items-center gap-2 mb-1">
-              <Receipt class="w-4 h-4 text-gray-400" />
-              <span
-                class="text-xs font-bold text-gray-500 uppercase tracking-wider"
-                >{{ t("paymentSummary") || "Payment Summary" }}</span
-              >
-            </div>
-
-            <!-- Payment Breakdown -->
-            <div class="space-y-2 pb-2 border-b border-gray-200">
-              <!-- Base Price -->
-              <div class="flex justify-between items-center text-xs sm:text-sm">
-                <span class="text-gray-500"
-                  >{{ booking.theme?.name }} ({{
-                    booking.theme?.base_pax || 1
-                  }}
-                  {{ t("people") }})</span
-                >
-                <span class="text-gray-900 font-medium">{{
-                  formatAmount(booking.base_price)
-                }}</span>
-              </div>
-
-              <!-- Extra Pax -->
-              <div
-                v-if="booking.extra_pax_fee && booking.extra_pax_fee > 0"
-                class="flex justify-between items-center text-xs sm:text-sm"
-              >
-                <span class="text-gray-500"
-                  >{{ t("extra") }} ({{
-                    booking.pax_count - (booking.theme?.base_pax || 1)
-                  }}
-                  {{ t("people") }})</span
-                >
-                <span class="text-gray-900 font-medium">{{
-                  formatAmount(booking.extra_pax_fee)
-                }}</span>
-              </div>
-
-              <!-- Special Pricing -->
-              <div
-                v-if="
-                  booking.special_pricing_applied &&
-                  booking.special_pricing_applied !== 0
-                "
-                class="flex justify-between items-center text-xs sm:text-sm"
-              >
-                <span class="text-gray-500 italic">
-                  {{ booking.special_pricing_label || t("specialPrice") }}
-                </span>
-                <span class="text-gray-900 font-medium">
-                  {{ booking.special_pricing_applied > 0 ? "+" : ""
-                  }}{{ formatAmount(booking.special_pricing_applied) }}
-                </span>
-              </div>
-
-              <!-- Addons -->
-              <div
-                v-for="addon in booking.addons"
-                :key="addon.addon.name"
-                class="flex justify-between items-center text-xs sm:text-sm"
-              >
-                <span class="text-gray-500"
-                  >{{ addon.addon.name }} x {{ addon.quantity }}</span
-                >
-                <span class="text-gray-900 font-medium">{{
-                  formatAmount(addon.price_at_booking)
-                }}</span>
-              </div>
-
-              <!-- Discount -->
-              <div
-                v-if="booking.discount_amount && booking.discount_amount > 0"
-                class="flex justify-between items-center text-xs sm:text-sm pt-1 border-t border-gray-100 mt-1"
-              >
-                <span class="text-red-500 font-medium italic">
-                  {{ t("discount") }}
-                  <span v-if="booking.coupon_code"
-                    >({{ booking.coupon_code }})</span
+              <div class="flex flex-col gap-1">
+                <div class="flex items-center gap-2">
+                  <span
+                    class="text-[10px] font-bold text-gray-500 uppercase tracking-wider"
+                    >{{ t("booking") }} {{ bIndex + 1 }}</span
                   >
-                </span>
-                <span class="text-red-500 font-medium">
-                  -{{ formatAmount(booking.discount_amount) }}
-                </span>
+                  <span class="font-mono text-xs text-gray-400">{{
+                    b.booking_number
+                  }}</span>
+                </div>
+                <h3 class="font-bold text-gray-900 text-sm leading-tight">
+                  {{ b.theme?.name }}
+                </h3>
               </div>
+              <ChevronDown
+                class="w-5 h-5 text-gray-400 transition-transform duration-300"
+                :class="{ 'rotate-180': expandedIndex === bIndex }"
+              />
             </div>
 
-            <div class="flex justify-between items-center">
-              <span class="text-xs sm:text-sm font-medium text-gray-600">{{
-                t("total")
-              }}</span>
-              <span class="font-bold text-base sm:text-lg text-gray-900">{{
-                formatAmount(booking.total_amount)
-              }}</span>
-            </div>
-
+            <!-- Content Container (Animated) -->
             <div
-              v-if="
-                booking.deposit_amount &&
-                booking.deposit_amount < booking.total_amount
+              class="grid transition-[grid-template-rows] duration-300 ease-in-out"
+              :class="
+                !isMultipleBookings || expandedIndex === bIndex
+                  ? 'grid-rows-[1fr]'
+                  : 'grid-rows-[0fr]'
               "
-              class="flex justify-between items-center text-[10px] sm:text-xs pt-2 border-t border-gray-200"
             >
-              <span class="text-green-600 font-medium"
-                >{{ t("deposit") }} ({{ t("depositPaid") || "Paid" }})</span
-              >
-              <span class="text-green-600 font-bold">{{
-                formatAmount(booking.deposit_amount)
-              }}</span>
-            </div>
+              <div class="overflow-hidden min-h-0">
+                <div
+                  :class="
+                    isMultipleBookings
+                      ? 'p-4 space-y-3'
+                      : 'space-y-3 sm:space-y-4'
+                  "
+                >
+                  <!-- Theme -->
+                  <div
+                    v-if="b.theme"
+                    class="flex gap-3 sm:gap-4 items-start bg-gray-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-gray-100"
+                  >
+                    <img
+                      v-if="b.theme.images?.[0]"
+                      :src="b.theme.images[0]"
+                      class="w-14 h-14 sm:w-16 sm:h-16 rounded-lg object-cover flex-shrink-0"
+                    />
+                    <div class="flex-1 min-w-0">
+                      <h3 class="font-bold text-base sm:text-lg leading-tight">
+                        {{ b.theme.name }}
+                      </h3>
+                      <p
+                        class="text-[11px] sm:text-xs text-gray-500 mt-0.5 sm:mt-1"
+                      >
+                        {{ studioStore.studio?.name }}
+                      </p>
+                    </div>
+                  </div>
 
-            <div
-              v-if="booking.balance_amount && booking.balance_amount > 0"
-              class="flex justify-between items-center text-[10px] sm:text-xs text-amber-600"
-            >
-              <span class="font-medium"
-                >{{ t("balance") }} ({{ t("remaining") || "Remaining" }})</span
-              >
-              <span class="font-bold">{{
-                formatAmount(booking.balance_amount)
-              }}</span>
-            </div>
+                  <!-- Date & Time -->
+                  <div class="grid grid-cols-2 gap-2 sm:gap-3">
+                    <div
+                      class="bg-gray-50 p-2.5 sm:p-3 rounded-xl sm:rounded-2xl border border-gray-100 flex flex-col items-center justify-center text-center gap-1"
+                    >
+                      <Calendar class="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
+                      <span
+                        class="text-xs sm:text-sm font-bold text-gray-900 break-words"
+                        >{{ getFormattedDate(b) }}</span
+                      >
+                      <span
+                        class="text-[9px] sm:text-[10px] text-gray-400 uppercase"
+                        >{{ t("date") }}</span
+                      >
+                    </div>
+                    <div
+                      class="bg-gray-50 p-2.5 sm:p-3 rounded-xl sm:rounded-2xl border border-gray-100 flex flex-col items-center justify-center text-center gap-1"
+                    >
+                      <Clock class="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
+                      <span
+                        class="text-xs sm:text-sm font-bold text-gray-900 break-words"
+                        >{{ getFormattedTime(b) }}</span
+                      >
+                      <span
+                        class="text-[9px] sm:text-[10px] text-gray-400 uppercase"
+                        >{{ t("time") }}</span
+                      >
+                    </div>
+                  </div>
 
-            <!-- Transaction Fee Info -->
-            <div
-              v-if="booking.chip_fee_paid && booking.chip_fee_paid > 0"
-              class="flex justify-between items-center text-[10px] sm:text-xs text-gray-400 border-t border-gray-100 pt-2"
-            >
-              <span class="italic"
-                >↳
-                {{ t("inclTransactionFee") || "Incl. Transaction Fee" }}</span
-              >
-              <span>{{ formatAmount(booking.chip_fee_paid) }}</span>
+                  <!-- Pax -->
+                  <div
+                    v-if="b.pax_count"
+                    class="bg-gray-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-gray-100 flex items-center justify-between"
+                  >
+                    <div class="flex items-center gap-2 sm:gap-3">
+                      <Users class="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
+                      <span
+                        class="text-xs sm:text-sm font-medium text-gray-600"
+                        >{{ t("numberOfGuests") }}</span
+                      >
+                    </div>
+                    <span class="font-bold text-sm sm:text-base text-gray-900"
+                      >{{ b.pax_count }} {{ t("people") }}</span
+                    >
+                  </div>
+
+                  <!-- Customer Details -->
+                  <div
+                    class="bg-gray-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-gray-100 space-y-2"
+                  >
+                    <div class="flex items-center gap-2 mb-2">
+                      <svg
+                        class="w-4 h-4 text-gray-400"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                        />
+                      </svg>
+                      <span
+                        class="text-xs font-bold text-gray-500 uppercase tracking-wider"
+                        >{{ t("customerDetails") || "Customer Details" }}</span
+                      >
+                    </div>
+                    <div class="space-y-1.5 text-xs sm:text-sm">
+                      <div class="flex justify-between">
+                        <span class="text-gray-500">{{
+                          t("name") || "Name"
+                        }}</span>
+                        <span class="font-medium text-gray-900">{{
+                          b.customer_name
+                        }}</span>
+                      </div>
+                      <div class="flex justify-between">
+                        <span class="text-gray-500">{{
+                          t("phone") || "Phone"
+                        }}</span>
+                        <span class="font-medium text-gray-900">{{
+                          b.customer_phone
+                        }}</span>
+                      </div>
+                      <div v-if="b.customer_email" class="flex justify-between">
+                        <span class="text-gray-500">{{
+                          t("email") || "Email"
+                        }}</span>
+                        <span class="font-medium text-gray-900 break-all">{{
+                          b.customer_email
+                        }}</span>
+                      </div>
+                      <div
+                        v-if="b.customer_notes"
+                        class="pt-1.5 border-t border-gray-100"
+                      >
+                        <span class="text-gray-500 block mb-1">{{
+                          t("notes") || "Notes"
+                        }}</span>
+                        <span class="text-gray-700 italic"
+                          >"{{ b.customer_notes }}"</span
+                        >
+                      </div>
+                    </div>
+                    <div
+                      v-if="getFormattedCreatedDate(b)"
+                      class="text-[10px] text-gray-400 pt-2 border-t border-gray-100"
+                    >
+                      {{ t("bookedOn") || "Booked on" }}:
+                      {{ getFormattedCreatedDate(b) }}
+                    </div>
+                  </div>
+
+                  <!-- Payment Info -->
+                  <div
+                    v-if="b.total_amount"
+                    class="bg-gray-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-gray-100 space-y-3"
+                  >
+                    <div class="flex items-center gap-2 mb-1">
+                      <Receipt class="w-4 h-4 text-gray-400" />
+                      <span
+                        class="text-xs font-bold text-gray-500 uppercase tracking-wider"
+                        >{{ t("paymentSummary") || "Payment Summary" }}</span
+                      >
+                    </div>
+
+                    <!-- Payment Breakdown -->
+                    <div class="space-y-2 pb-2 border-b border-gray-200">
+                      <!-- Base Price -->
+                      <div
+                        class="flex justify-between items-center text-xs sm:text-sm"
+                      >
+                        <span class="text-gray-500"
+                          >{{ b.theme?.name }} ({{ b.theme?.base_pax || 1 }}
+                          {{ t("people") }})</span
+                        >
+                        <span class="text-gray-900 font-medium">{{
+                          formatAmount(b.base_price)
+                        }}</span>
+                      </div>
+
+                      <!-- Extra Pax -->
+                      <div
+                        v-if="b.extra_pax_fee && b.extra_pax_fee > 0"
+                        class="flex justify-between items-center text-xs sm:text-sm"
+                      >
+                        <span class="text-gray-500"
+                          >{{ t("extra") }} ({{
+                            b.pax_count - (b.theme?.base_pax || 1)
+                          }}
+                          {{ t("people") }})</span
+                        >
+                        <span class="text-gray-900 font-medium">{{
+                          formatAmount(b.extra_pax_fee)
+                        }}</span>
+                      </div>
+
+                      <!-- Special Pricing -->
+                      <div
+                        v-if="
+                          b.special_pricing_applied &&
+                          b.special_pricing_applied !== 0
+                        "
+                        class="flex justify-between items-center text-xs sm:text-sm"
+                      >
+                        <span class="text-gray-500 italic">
+                          {{ b.special_pricing_label || t("specialPrice") }}
+                        </span>
+                        <span class="text-gray-900 font-medium">
+                          {{ b.special_pricing_applied > 0 ? "+" : ""
+                          }}{{ formatAmount(b.special_pricing_applied) }}
+                        </span>
+                      </div>
+
+                      <!-- Addons -->
+                      <div
+                        v-for="addon in b.addons"
+                        :key="addon.addon.name"
+                        class="flex justify-between items-center text-xs sm:text-sm"
+                      >
+                        <span class="text-gray-500"
+                          >{{ addon.addon.name }} x {{ addon.quantity }}</span
+                        >
+                        <span class="text-gray-900 font-medium">{{
+                          formatAmount(addon.price_at_booking)
+                        }}</span>
+                      </div>
+
+                      <!-- Discount -->
+                      <div
+                        v-if="b.discount_amount && b.discount_amount > 0"
+                        class="flex justify-between items-center text-xs sm:text-sm pt-1 border-t border-gray-100 mt-1"
+                      >
+                        <span class="text-red-500 font-medium italic">
+                          {{ t("discount") }}
+                          <span v-if="b.coupon_code"
+                            >({{ b.coupon_code }})</span
+                          >
+                        </span>
+                        <span class="text-red-500 font-medium">
+                          -{{ formatAmount(b.discount_amount) }}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div class="flex justify-between items-center">
+                      <span
+                        class="text-xs sm:text-sm font-medium text-gray-600"
+                        >{{ t("total") }}</span
+                      >
+                      <span
+                        class="font-bold text-base sm:text-lg text-gray-900"
+                        >{{ formatAmount(b.total_amount) }}</span
+                      >
+                    </div>
+
+                    <div
+                      v-if="
+                        b.deposit_amount && b.deposit_amount < b.total_amount
+                      "
+                      class="flex justify-between items-center text-[10px] sm:text-xs pt-2 border-t border-gray-200"
+                    >
+                      <span class="text-green-600 font-medium"
+                        >{{ t("deposit") }} ({{
+                          t("depositPaid") || "Paid"
+                        }})</span
+                      >
+                      <span class="text-green-600 font-bold">{{
+                        formatAmount(b.deposit_amount)
+                      }}</span>
+                    </div>
+
+                    <div
+                      v-if="b.balance_amount && b.balance_amount > 0"
+                      class="flex justify-between items-center text-[10px] sm:text-xs text-amber-600"
+                    >
+                      <span class="font-medium"
+                        >{{ t("balance") }} ({{
+                          t("remaining") || "Remaining"
+                        }})</span
+                      >
+                      <span class="font-bold">{{
+                        formatAmount(b.balance_amount)
+                      }}</span>
+                    </div>
+
+                    <!-- Transaction Fee Info -->
+                    <div
+                      v-if="b.chip_fee_paid && b.chip_fee_paid > 0"
+                      class="flex justify-between items-center text-[10px] sm:text-xs text-gray-400 border-t border-gray-100 pt-2"
+                    >
+                      <span class="italic"
+                        >↳
+                        {{
+                          t("inclTransactionFee") || "Incl. Transaction Fee"
+                        }}</span
+                      >
+                      <span>{{ formatAmount(b.chip_fee_paid) }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>

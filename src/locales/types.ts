@@ -131,6 +131,9 @@ export type TranslationKey =
   | "optionalAddons"
   | "addToBooking"
   | "extraPaxFee"
+  | "added"
+  | "add"
+  | "cartItems"
 
   // Form
   | "fullName"
@@ -371,6 +374,7 @@ export type TranslationKey =
   | "restoredItems"
   | "itemsExpired"
   | "allItemsExpired"
+  | "cartExpiredMessage"
 
   // Customer Details
   | "customerDetails"

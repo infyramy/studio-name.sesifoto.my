@@ -137,6 +137,9 @@ export const translationsBM: Translations = {
   optionalAddons: "Tambahan Pilihan",
   addToBooking: "Tambah ke Tempahan",
   extraPaxFee: "Bayaran pax tambahan:",
+  added: "Ditambah",
+  add: "Tambah",
+  cartItems: "Item Troli",
 
   // Form
   fullName: "Nama Penuh",
@@ -357,9 +360,9 @@ export const translationsBM: Translations = {
   reserveSlot: "Tempah Slot",
   reserveThisSlot: "Tempah slot masa ini?",
   reserveSlotMessage:
-    "Anda akan mempunyai 10 minit untuk melengkapkan tempahan anda.",
+    "Anda akan mempunyai {duration} minit untuk melengkapkan tempahan anda.",
   addToCartConfirm: "Tambah ke troli?",
-  addToCartMessage: "Item ini akan ditempah selama 10 minit.",
+  addToCartMessage: "Item ini akan ditempah selama {duration} minit.",
   slotReserved: "Slot Ditempah",
   slotReservedFor: "Ditempah untuk",
   reservationExpires: "Tempahan tamat dalam",
@@ -395,6 +398,8 @@ export const translationsBM: Translations = {
   restoredItems: "item dipulihkan",
   itemsExpired: "item tamat tempoh",
   allItemsExpired: "Semua item dalam troli telah tamat tempoh.",
+  cartExpiredMessage:
+    "Semua item dalam troli anda telah tamat tempoh. Sila pilih sesi anda semula.",
   hideDetails: "Tutup butiran",
   viewBreakdown: "Lihat butiran",
   setPrice: "Harga Set",
@@ -542,6 +547,9 @@ export const translationsEN: Translations = {
   optionalAddons: "Optional Add-ons",
   addToBooking: "Add to Booking",
   extraPaxFee: "Extra pax fee:",
+  added: "Added",
+  add: "Add",
+  cartItems: "Cart Items",
 
   // Form
   fullName: "Full Name",
@@ -763,9 +771,10 @@ export const translationsEN: Translations = {
   // Hold System
   reserveSlot: "Reserve Slot",
   reserveThisSlot: "Reserve this time slot?",
-  reserveSlotMessage: "You'll have 10 minutes to complete your booking.",
+  reserveSlotMessage:
+    "You'll have {duration} minutes to complete your booking.",
   addToCartConfirm: "Add to cart?",
-  addToCartMessage: "This item will be reserved for 10 minutes.",
+  addToCartMessage: "This item will be reserved for {duration} minutes.",
   slotReserved: "Slot Reserved",
   slotReservedFor: "Reserved for",
   reservationExpires: "Reservation expires in",
@@ -799,6 +808,8 @@ export const translationsEN: Translations = {
   restoredItems: "item(s) restored",
   itemsExpired: "item(s) expired",
   allItemsExpired: "All cart items have expired.",
+  cartExpiredMessage:
+    "All items in your cart have expired. Please select your sessions again.",
   hideDetails: "Hide Details",
   viewBreakdown: "View Breakdown",
   setPrice: "Set Price",

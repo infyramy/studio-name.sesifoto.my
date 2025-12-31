@@ -422,6 +422,7 @@ export const api = {
           quantity: a.quantity,
         })),
         couponCode: request.coupon_code,
+        discountAmount: request.discount_amount,
         sessionId: request.session_id,
       },
     });

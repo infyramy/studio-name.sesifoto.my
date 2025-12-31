@@ -93,12 +93,13 @@ const handleBackdropClick = () => {
           </div>
 
           <!-- Content -->
-          <h3 class="text-2xl font-bold text-gray-900 mb-3 tracking-tight">
+          <h3 class="text-2xl font-bold mb-3 tracking-tight">
             {{ title }}
           </h3>
-          <p class="text-[15px] text-gray-500 leading-relaxed mb-8">
-            {{ message }}
-          </p>
+          <p
+            class="text-[15px] leading-relaxed mb-8"
+            v-html="message.replace(/\n/g, '<br>')"
+          ></p>
 
           <!-- Buttons -->
           <div class="flex gap-3">

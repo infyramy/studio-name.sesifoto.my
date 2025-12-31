@@ -196,9 +196,8 @@ onUnmounted(() => {
   if (intervalId) clearInterval(intervalId);
   if (holdCountdownInterval) clearInterval(holdCountdownInterval);
 
-  // Clear all cart item timers
-  cartItemTimers.forEach((timer) => clearInterval(timer));
-  cartItemTimers.clear();
+  // Clear unified cart hold timer
+  stopUnifiedCartHoldTimer();
 });
 
 // ============================================
@@ -270,6 +269,7 @@ async function restoreBookingState(state: any) {
     if (state.paxCount) paxCount.value = state.paxCount;
     if (state.selectedAddons) selectedAddons.value = state.selectedAddons;
     if (state.customerInfo) customerInfo.value = state.customerInfo;
+    if (state.termsAccepted) termsAccepted.value = state.termsAccepted;
 
     // Scroll to the selected date after a short delay (to allow dates to load)
     if (state.selectedDate) {
@@ -435,8 +435,9 @@ async function restoreBookingState(state: any) {
 }
 
 async function restoreCartItems(savedCartItems: any[]) {
-  const restoredItems = [];
-  const expiredItems = [];
+  const restoredItems: any[] = [];
+  const expiredItems: any[] = [];
+  let latestExpiresAt: Date | null = null;
 
   for (const item of savedCartItems) {
     if (!item.hold?.holdId) continue;
@@ -451,6 +452,12 @@ async function restoreCartItems(savedCartItems: any[]) {
         hold: hold,
       };
       restoredItems.push(restoredItem);
+
+      // Track the latest expiry time (all holds should have same expiry with unified system)
+      const holdExpiry = new Date(hold.expiresAt);
+      if (!latestExpiresAt || holdExpiry > latestExpiresAt) {
+        latestExpiresAt = holdExpiry;
+      }
     } else {
       expiredItems.push(item);
     }
@@ -458,10 +465,10 @@ async function restoreCartItems(savedCartItems: any[]) {
 
   cart.value = restoredItems;
 
-  // Start timers for restored items
-  restoredItems.forEach((_, index) => {
-    startCartItemHoldTimer(index);
-  });
+  // Start unified cart hold timer if there are restored items
+  if (restoredItems.length > 0 && latestExpiresAt) {
+    startUnifiedCartHoldTimer(latestExpiresAt);
+  }
 
   // Show summary
   if (restoredItems.length > 0) {
@@ -553,10 +560,10 @@ const holdExpiresAt = ref<Date | null>(null); // Hold expiry timestamp
 const holdCountdown = ref<string>("10:00"); // Display countdown
 const isCreatingHold = ref(false); // Loading state for hold creation
 
-// Cart mode: holds for each cart item
-const cartItemHolds = ref<Map<string, { expiresAt: Date; countdown: string }>>(
-  new Map()
-);
+// UNIFIED CART HOLD: Single timer for entire cart (resets when new item added)
+const unifiedCartHoldExpiresAt = ref<Date | null>(null);
+const unifiedCartHoldCountdown = ref<string>("10:00");
+let unifiedCartHoldTimer: any = null;
 
 // Page refresh recovery
 const isRecovering = ref(false);
@@ -1078,62 +1085,87 @@ async function handleHoldExpiry() {
   }
 }
 
-// Cart mode: Timer for each cart item
-const cartItemTimers = new Map<string, any>();
+// ============================================
+// UNIFIED CART HOLD TIMER
+// Single timer for entire cart - resets when new item is added
+// ============================================
 
-function startCartItemHoldTimer(index: number) {
-  const item = cart.value[index];
-  if (!item?.hold) return;
-
-  const itemId = item.id;
-
-  // Clear existing timer
-  if (cartItemTimers.has(itemId)) {
-    clearInterval(cartItemTimers.get(itemId));
+function startUnifiedCartHoldTimer(expiresAt: Date) {
+  // Clear any existing timer
+  if (unifiedCartHoldTimer) {
+    clearInterval(unifiedCartHoldTimer);
   }
 
-  const timer = setInterval(() => {
-    const expiresAt = new Date(item.hold.expiresAt);
+  unifiedCartHoldExpiresAt.value = expiresAt;
+
+  unifiedCartHoldTimer = setInterval(() => {
+    if (!unifiedCartHoldExpiresAt.value) {
+      clearInterval(unifiedCartHoldTimer);
+      return;
+    }
+
     const now = new Date();
-    const timeLeft = expiresAt.getTime() - now.getTime();
+    const timeLeft = unifiedCartHoldExpiresAt.value.getTime() - now.getTime();
 
     if (timeLeft <= 0) {
-      clearInterval(timer);
-      cartItemTimers.delete(itemId);
-
-      // Remove expired item from cart
-      const currentIndex = cart.value.findIndex((c) => c.id === itemId);
-      if (currentIndex >= 0) {
-        cart.value.splice(currentIndex, 1);
-        showModal({
-          title: t("reservationExpired"),
-          message: `${item.slot.start} ${t("itemExpiredRemoved")}`,
-          type: "warning",
-          confirmText: t("ok"),
-        });
-
-        if (cart.value.length === 0 && isCartModeEnabled.value) {
-          currentStep.value = 1;
-        }
-      }
+      clearInterval(unifiedCartHoldTimer);
+      handleUnifiedCartExpiry();
     } else {
       const minutes = Math.floor(timeLeft / 60000);
       const seconds = Math.floor((timeLeft % 60000) / 1000);
-      cartItemHolds.value.set(itemId, {
-        expiresAt: expiresAt,
-        countdown: `${minutes}:${seconds.toString().padStart(2, "0")}`,
+      unifiedCartHoldCountdown.value = `${minutes}:${seconds
+        .toString()
+        .padStart(2, "0")}`;
+
+      // Also update each cart item's hold info to reflect unified expiry
+      cart.value.forEach((item) => {
+        if (item.hold) {
+          item.hold.expiresAt = unifiedCartHoldExpiresAt.value!.toISOString();
+        }
       });
+
+      // Warning at 2 minutes
+      if (timeLeft < 120000 && timeLeft > 119000) {
+        console.warn("Cart hold expires in 2 minutes!");
+      }
     }
   }, 1000);
+}
 
-  cartItemTimers.set(itemId, timer);
+async function handleUnifiedCartExpiry() {
+  // Clear all cart items on expiry
+  cart.value = [];
+  unifiedCartHoldExpiresAt.value = null;
+  unifiedCartHoldCountdown.value = "10:00";
+
+  await showModal({
+    title: t("reservationExpired"),
+    message: t("cartExpiredMessage"),
+    type: "warning",
+    confirmText: t("ok"),
+  });
+
+  currentStep.value = 1; // Back to theme selection
+}
+
+function stopUnifiedCartHoldTimer() {
+  if (unifiedCartHoldTimer) {
+    clearInterval(unifiedCartHoldTimer);
+    unifiedCartHoldTimer = null;
+  }
+  unifiedCartHoldExpiresAt.value = null;
+  unifiedCartHoldCountdown.value = "10:00";
 }
 
 function showHoldConfirmationDialog(): Promise<boolean> {
+  const duration = studioStore.studio?.settings?.cart_hold_duration || 10;
   return showModal({
     title: t("reserveThisSlot"),
-    message: `${selectedSlot.value.start} - ${selectedSlot.value.end}\n\n${t(
-      "reserveSlotMessage"
+    message: `<b>${selectedSlot.value.start} - ${
+      selectedSlot.value.end
+    }</b>\n\n${t("reserveSlotMessage").replace(
+      "{duration}",
+      `<b>${duration}</b>`
     )}`,
     type: "info",
     confirmText: t("yes"),
@@ -1146,11 +1178,15 @@ function showAddToCartConfirmationDialog(): Promise<boolean> {
   const themeName = selectedTheme.value?.name || "";
   const slotTime = `${selectedSlot.value.start} - ${selectedSlot.value.end}`;
   const pax = paxCount.value;
+  const duration = studioStore.studio?.settings?.cart_hold_duration || 10;
 
   return showModal({
     title: t("addToCartConfirm"),
-    message: `${themeName}\n${slotTime}\n${pax} ${t("pax")}\n\n${t(
-      "addToCartMessage"
+    message: `<b>${themeName}</b>\n<b>${slotTime}</b>\n<b>${pax} ${t(
+      "pax"
+    )}</b>\n\n${t("addToCartMessage").replace(
+      "{duration}",
+      `<b>${duration}</b>`
     )}`,
     type: "info",
     confirmText: t("addToCart"),
@@ -1233,10 +1269,6 @@ const removeCoupon = () => {
   selectedCouponItemIndex.value = null;
 };
 
-const selectCouponItem = (index: number) => {
-  selectedCouponItemIndex.value = index;
-};
-
 // Cart Functions (only used when cart mode enabled)
 const addToCart = async () => {
   if (!selectedTheme.value || !selectedDate.value || !selectedSlot.value)
@@ -1304,8 +1336,9 @@ const addToCart = async () => {
 
     cart.value.push(cartItem);
 
-    // Start timer for this item
-    startCartItemHoldTimer(cart.value.length - 1);
+    // UNIFIED CART HOLD: Start/reset the unified timer with the new expiry time
+    // Backend extends all existing holds to this same expiry when creating a new hold
+    startUnifiedCartHoldTimer(new Date(hold.expiresAt));
 
     // Reset selection for next item
     selectedTheme.value = null;
@@ -1339,12 +1372,6 @@ const removeCartItem = async (index: number) => {
   // Release hold if exists
   if (item.hold?.holdId) {
     await releaseCartHold(item.hold.holdId);
-
-    // Clear timer
-    if (cartItemTimers.has(item.id)) {
-      clearInterval(cartItemTimers.get(item.id));
-      cartItemTimers.delete(item.id);
-    }
   }
 
   cart.value.splice(index, 1);
@@ -1359,11 +1386,9 @@ const removeCartItem = async (index: number) => {
     selectedCouponItemIndex.value--; // Shift index if needed
   }
 
-  // If only 1 item left and coupon is valid, auto-select it?
-  // Maybe better to just let user select to avoid confusion.
-  // But if cart becomes empty, step resets anyway.
-
+  // If cart becomes empty, stop the unified timer
   if (cart.value.length === 0 && isCartModeEnabled.value) {
+    stopUnifiedCartHoldTimer();
     currentStep.value = 1; // Go back to selection if empty
     removeCoupon(); // Remove coupon if cart is empty
   }
@@ -1684,11 +1709,12 @@ const nextStep = async () => {
         }
 
         // Call payment initiation API with all booking IDs
+        // Pass the calculated amount to prevent double discount (bookings already have discount applied)
         const paymentResult = await api.initiatePayment(
           primaryBookingId,
           paymentType,
           additionalBookingIds.length > 0 ? additionalBookingIds : undefined,
-          totalPaymentAmount > 0 ? undefined : 0 // Pass 0 to trigger zero payment handling
+          totalPaymentAmount // Always pass calculated amount to avoid recalculation from discounted booking amounts
         );
 
         // Clear booking state before redirecting
@@ -1696,8 +1722,11 @@ const nextStep = async () => {
 
         // Handle zero payment (auto-confirmed)
         if (paymentResult.paymentSkipped) {
-          // Bookings were auto-confirmed, redirect to success
-          router.push(`/success/${createdBookings[0].booking_number}`);
+          // Bookings were auto-confirmed, redirect to success with all booking numbers
+          const allBookingNumbers = createdBookings
+            .map((b) => b.booking_number)
+            .join(",");
+          router.push(`/success/${allBookingNumbers}`);
           return;
         }
 
@@ -1707,8 +1736,11 @@ const nextStep = async () => {
           return; // Stop execution after redirect
         }
 
-        // Fallback: If no checkoutUrl (CHIP not configured), redirect to success
-        router.push(`/success/${createdBookings[0].booking_number}`);
+        // Fallback: If no checkoutUrl (CHIP not configured), redirect to success with all booking numbers
+        const allBookingNumbers = createdBookings
+          .map((b) => b.booking_number)
+          .join(",");
+        router.push(`/success/${allBookingNumbers}`);
       } catch (error: any) {
         console.error("Failed to create bookings:", error);
 
@@ -2145,6 +2177,7 @@ watch(
     currentStep,
     paxCount,
     selectedAddons,
+    termsAccepted,
   ],
   () => {
     if (!studioStore.studio) return;
@@ -2178,6 +2211,7 @@ watch(
       cartItems: cart.value,
       customerInfo: customerInfo.value,
       currentStep: currentStep.value,
+      termsAccepted: termsAccepted.value,
       savedAt: new Date().toISOString(),
     };
 
@@ -2357,64 +2391,6 @@ watch(
       </Transition>
 
       <!-- Recovery Dialog -->
-      <Transition
-        enter-active-class="transition duration-300 ease-out"
-        enter-from-class="opacity-0"
-        enter-to-class="opacity-100"
-        leave-active-class="transition duration-200 ease-in"
-        leave-from-class="opacity-100"
-        leave-to-class="opacity-0"
-      >
-        <div
-          v-if="showRecoveryDialog && recoveryState"
-          class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
-        >
-          <div class="bg-white rounded-3xl p-8 max-w-md mx-4 shadow-2xl">
-            <h3 class="text-2xl font-bold mb-4">
-              {{ t("restoreYourBooking") }}
-            </h3>
-            <p class="text-sm text-gray-600 mb-6">
-              {{ t("restoreBookingMessage") }}
-            </p>
-
-            <div class="space-y-2 text-sm mb-6 bg-gray-50 p-4 rounded-xl">
-              <div v-if="recoveryState.selectedTheme">
-                <span class="font-bold">{{ t("theme") }}:</span>
-                {{ recoveryState.selectedTheme.name }}
-              </div>
-              <div v-if="recoveryState.selectedDate">
-                <span class="font-bold">{{ t("date") }}:</span>
-                {{ recoveryState.selectedDate }}
-              </div>
-              <div v-if="recoveryState.selectedSlot">
-                <span class="font-bold">{{ t("time") }}:</span>
-                {{ recoveryState.selectedSlot.start }}
-              </div>
-            </div>
-
-            <div class="flex gap-3">
-              <button
-                @click="restoreBookingState(recoveryState)"
-                :disabled="isRecovering"
-                class="flex-1 bg-gray-900 text-white py-3 rounded-xl font-bold text-sm uppercase tracking-wider flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
-              >
-                <Loader2 v-if="isRecovering" class="w-4 h-4 animate-spin" />
-                {{
-                  isRecovering
-                    ? t("restoring")
-                    : `${t("yes")}, ${t("continue")}`
-                }}
-              </button>
-              <button
-                @click="dismissRecoveryDialog"
-                class="flex-1 bg-gray-100 text-gray-900 py-3 rounded-xl font-bold text-sm uppercase tracking-wider"
-              >
-                {{ t("startFresh") }}
-              </button>
-            </div>
-          </div>
-        </div>
-      </Transition>
 
       <!-- Theme Overview (shown in steps 2-4) -->
 
@@ -2895,7 +2871,12 @@ watch(
                 <div
                   v-for="addon in studioStore.addons"
                   :key="addon.id"
-                  class="bg-white p-4 rounded-2xl border border-gray-100 flex items-center gap-4 transition-all hover:shadow-sm"
+                  class="bg-white p-4 rounded-2xl border flex items-center gap-4 transition-all hover:shadow-sm"
+                  :class="
+                    selectedAddons[addon.id]
+                      ? 'border-gray-900 bg-gray-50/50'
+                      : 'border-gray-100'
+                  "
                 >
                   <!-- Image -->
                   <div
@@ -2921,11 +2902,18 @@ watch(
                   >
                     <div>
                       <div class="flex justify-between items-start mb-1">
-                        <h4 class="font-bold text-gray-900">
-                          {{ addon.name }}
-                        </h4>
+                        <div class="flex flex-col items-start gap-1">
+                          <h4 class="font-bold text-gray-900 leading-tight">
+                            {{ addon.name }}
+                          </h4>
+                          <span
+                            v-if="selectedAddons[addon.id]"
+                            class="bg-gray-900 text-white px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider"
+                            >{{ t("added") }}</span
+                          >
+                        </div>
                         <span
-                          class="bg-gray-100 px-2 py-1 rounded text-xs font-bold text-gray-900"
+                          class="bg-gray-100 px-2 py-1 rounded text-xs font-bold text-gray-900 flex-shrink-0 ml-2"
                           >RM{{ formatPriceWhole(addon.price) }}</span
                         >
                       </div>
@@ -2943,7 +2931,7 @@ watch(
                         @click="selectedAddons[addon.id] = 1"
                         class="px-4 py-2 rounded-lg border border-gray-200 text-sm font-bold hover:bg-gray-50 transition-colors flex items-center gap-2"
                       >
-                        <Plus class="w-4 h-4" /> Tambah
+                        <Plus class="w-4 h-4" /> {{ t("add") }}
                       </button>
 
                       <div
@@ -3022,6 +3010,23 @@ watch(
                   {{ t("addSession") }}
                 </button>
               </div>
+
+              <!-- Unified Cart Hold Timer (Subtle Style) -->
+              <div
+                v-if="unifiedCartHoldExpiresAt && cart.length > 0"
+                class="bg-orange-50 rounded-xl py-3 px-4 flex items-center justify-between border border-orange-100"
+              >
+                <div
+                  class="flex items-center gap-2 text-orange-800 font-bold text-xs uppercase tracking-wider"
+                >
+                  <Clock class="w-4 h-4 animate-pulse" />
+                  <span>{{ t("slotHeld") }}</span>
+                </div>
+                <div class="text-orange-700 font-mono font-bold text-sm">
+                  {{ unifiedCartHoldCountdown }}
+                </div>
+              </div>
+
               <!-- Cart Items -->
               <div
                 v-for="(item, index) in cart || []"
@@ -3049,17 +3054,6 @@ watch(
                     <div class="flex items-center gap-2">
                       <Clock class="w-3.5 h-3.5" />
                       <span>{{ item.slot.start }} - {{ item.slot.end }}</span>
-                    </div>
-
-                    <!-- Hold countdown for this item -->
-                    <div
-                      v-if="cartItemHolds.get(item.id)"
-                      class="flex items-center gap-2 text-amber-600 bg-amber-50 px-2 py-1 rounded-md w-fit mt-1"
-                    >
-                      <Clock class="w-3 h-3" />
-                      <span class="text-xs font-bold">
-                        {{ cartItemHolds.get(item.id)?.countdown }}
-                      </span>
                     </div>
                   </div>
 
@@ -3643,6 +3637,22 @@ watch(
               </p>
             </div>
 
+            <!-- Unified Cart Hold Timer (Subtle Style) -->
+            <div
+              v-if="unifiedCartHoldExpiresAt && cart.length > 0"
+              class="bg-orange-50 rounded-xl py-3 px-4 flex items-center justify-between border border-orange-100"
+            >
+              <div
+                class="flex items-center gap-2 text-orange-800 font-bold text-xs uppercase tracking-wider"
+              >
+                <Clock class="w-4 h-4 animate-pulse" />
+                <span>{{ t("slotHeld") }}</span>
+              </div>
+              <div class="text-orange-700 font-mono font-bold text-sm">
+                {{ unifiedCartHoldCountdown }}
+              </div>
+            </div>
+
             <!-- Booking Summary Card -->
             <div
               class="bg-white rounded-3xl shadow-lg shadow-gray-200/50 border border-gray-100 overflow-hidden"
@@ -3699,15 +3709,6 @@ watch(
                       <span>{{ item.date }}</span>
                       <span class="w-1 h-1 rounded-full bg-gray-300"></span>
                       <span>{{ item.slot.start }} - {{ item.slot.end }}</span>
-
-                      <!-- Hold Timer (if active) -->
-                      <div
-                        v-if="cartItemHolds.get(item.id)"
-                        class="ml-2 inline-flex items-center gap-1.5 bg-orange-50 text-orange-700 px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider"
-                      >
-                        <Clock class="w-3 h-3 animate-pulse" />
-                        <span>{{ cartItemHolds.get(item.id)?.countdown }}</span>
-                      </div>
                     </div>
 
                     <!-- Breakdown Details (Extras) -->
@@ -3830,7 +3831,7 @@ watch(
                     <input
                       type="text"
                       v-model="couponCode"
-                      :placeholder="t('haveCoupon') || 'Ada kod kupon?'"
+                      :placeholder="t('haveCoupon')"
                       class="flex-1 px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:border-gray-900 focus:ring-0 text-sm transition-colors"
                       @keydown.enter.prevent="handleApplyCoupon"
                     />
@@ -3868,55 +3869,6 @@ watch(
                       >
                         <X class="w-4 h-4" />
                       </button>
-                    </div>
-
-                    <!-- Cart Item Selector for Coupon (Cart Mode Specific) -->
-                    <div
-                      v-if="isCartModeEnabled && cartItemCount > 1"
-                      class="border-t border-green-200 pt-3"
-                    >
-                      <p
-                        class="text-[10px] font-bold text-green-800 uppercase tracking-wider mb-2"
-                      >
-                        {{
-                          t("selectSessionForDiscount") ||
-                          "Select session for discount"
-                        }}
-                      </p>
-                      <div class="space-y-2">
-                        <div
-                          v-for="(item, idx) in cart"
-                          :key="item.id"
-                          @click="selectCouponItem(idx)"
-                          class="flex items-center gap-3 p-2 rounded-lg border cursor-pointer transition-all bg-white/50"
-                          :class="
-                            selectedCouponItemIndex === idx
-                              ? 'border-green-500 bg-white shadow-sm'
-                              : 'border-transparent hover:bg-white hover:border-green-200'
-                          "
-                        >
-                          <div
-                            class="w-4 h-4 rounded-full border flex items-center justify-center flex-shrink-0"
-                            :class="
-                              selectedCouponItemIndex === idx
-                                ? 'border-green-600 bg-green-600'
-                                : 'border-gray-300 bg-white'
-                            "
-                          >
-                            <Check
-                              v-if="selectedCouponItemIndex === idx"
-                              class="w-3 h-3 text-white"
-                            />
-                          </div>
-                          <div class="flex-1 min-w-0">
-                            <p
-                              class="text-xs font-bold truncate text-green-900"
-                            >
-                              {{ item.theme.name }}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
                     </div>
                   </div>
                 </div>
@@ -4142,7 +4094,7 @@ watch(
                       <input
                         type="text"
                         v-model="couponCode"
-                        placeholder="Ada kod kupon?"
+                        :placeholder="t('haveCoupon')"
                         class="flex-1 px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:border-gray-900 focus:ring-0 text-sm transition-colors"
                         @keydown.enter.prevent="handleApplyCoupon"
                       />
@@ -4268,21 +4220,13 @@ watch(
             </span>
             <span class="font-bold text-xl sm:text-2xl">
               RM{{
-                isCartModeEnabled && (currentStep === 4 || currentStep === 7)
-                  ? formatPriceWhole(
-                      (cartTotal || 0) +
-                        (studioStore.websiteSettings?.chipFeeMode ===
-                          "on_top" && (cartTotal || 0) > 0
-                          ? 100
-                          : 0)
-                    )
-                  : formatPriceWhole(
-                      (grandTotal || 0) +
-                        (studioStore.websiteSettings?.chipFeeMode ===
-                          "on_top" && (grandTotal || 0) > 0
-                          ? 100
-                          : 0)
-                    )
+                formatPriceWhole(
+                  (grandTotal || 0) +
+                    (studioStore.websiteSettings?.chipFeeMode === "on_top" &&
+                    (grandTotal || 0) > 0
+                      ? 100
+                      : 0)
+                )
               }}
             </span>
           </div>
@@ -4324,10 +4268,7 @@ watch(
                     !customerInfo.name ||
                     !customerInfo.phone ||
                     !customerInfo.email ||
-                    !termsAccepted ||
-                    (validatedCoupon &&
-                      cartItemCount > 1 &&
-                      selectedCouponItemIndex === null))) ||
+                    !termsAccepted)) ||
                 (!isCartModeEnabled &&
                   currentStep === 4 &&
                   (!customerInfo.name ||
@@ -4370,6 +4311,92 @@ watch(
         </div>
       </div>
     </div>
+
+    <!-- Recovery Dialog (Moved to end for stacking order) -->
+    <Transition
+      enter-active-class="transition duration-300 ease-out"
+      enter-from-class="opacity-0"
+      enter-to-class="opacity-100"
+      leave-active-class="transition duration-200 ease-in"
+      leave-from-class="opacity-100"
+      leave-to-class="opacity-0"
+    >
+      <div
+        v-if="showRecoveryDialog && recoveryState"
+        class="fixed inset-0 z-[99] flex items-center justify-center bg-black/50 backdrop-blur-sm"
+      >
+        <div class="bg-white rounded-3xl p-8 max-w-md mx-4 shadow-2xl">
+          <h3 class="text-2xl font-bold mb-4">
+            {{ t("restoreYourBooking") }}
+          </h3>
+          <p class="text-sm text-gray-600 mb-6">
+            {{ t("restoreBookingMessage") }}
+          </p>
+
+          <div
+            class="space-y-2 text-sm mb-6 bg-gray-50 p-4 rounded-xl max-h-60 overflow-y-auto"
+          >
+            <!-- Cart Items Recovery -->
+            <template
+              v-if="
+                recoveryState.cartItems && recoveryState.cartItems.length > 0
+              "
+            >
+              <div class="font-bold mb-2 border-b border-gray-200 pb-2">
+                {{ t("cartItems") }} ({{ recoveryState.cartItems.length }})
+              </div>
+              <div
+                v-for="(item, idx) in recoveryState.cartItems"
+                :key="idx"
+                class="mb-3 last:mb-0 border-b last:border-0 border-dashed border-gray-200 pb-2 last:pb-0"
+              >
+                <div class="font-bold text-gray-900">
+                  {{ item.theme.name }}
+                </div>
+                <div class="text-xs text-gray-500 mt-0.5">
+                  {{ formatDate(item.date) }} • {{ item.slot.start }}
+                </div>
+              </div>
+            </template>
+
+            <!-- Single Session Recovery -->
+            <template v-else>
+              <div v-if="recoveryState.selectedTheme">
+                <span class="font-bold">{{ t("theme") }}:</span>
+                {{ recoveryState.selectedTheme.name }}
+              </div>
+              <div v-if="recoveryState.selectedDate">
+                <span class="font-bold">{{ t("date") }}:</span>
+                {{ recoveryState.selectedDate }}
+              </div>
+              <div v-if="recoveryState.selectedSlot">
+                <span class="font-bold">{{ t("time") }}:</span>
+                {{ recoveryState.selectedSlot.start }}
+              </div>
+            </template>
+          </div>
+
+          <div class="flex gap-3">
+            <button
+              @click="restoreBookingState(recoveryState)"
+              :disabled="isRecovering"
+              class="flex-1 bg-gray-900 text-white py-3 rounded-xl font-bold text-sm uppercase tracking-wider flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+            >
+              <Loader2 v-if="isRecovering" class="w-4 h-4 animate-spin" />
+              {{
+                isRecovering ? t("restoring") : `${t("yes")}, ${t("continue")}`
+              }}
+            </button>
+            <button
+              @click="dismissRecoveryDialog"
+              class="flex-1 bg-gray-100 text-gray-900 py-3 rounded-xl font-bold text-sm uppercase tracking-wider"
+            >
+              {{ t("startFresh") }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
 
     <!-- Global Modal Component -->
     <Modal
