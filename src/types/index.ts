@@ -255,6 +255,7 @@ export interface Booking {
   total_amount: number;
   deposit_amount: number;
   balance_amount: number;
+  chip_fee_paid?: number;
   payment_status: "pending" | "partially_paid" | "paid" | "refunded";
   booking_status:
     | "cart_hold"

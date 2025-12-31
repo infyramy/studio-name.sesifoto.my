@@ -109,7 +109,7 @@ const getWhatsAppUrl = computed(() => {
 <template>
   <div
     class="min-h-screen bg-[#Fcf9f6] flex flex-col items-center justify-center p-4 sm:p-6 relative overflow-hidden"
-    style="font-family: 'Playfair Display', serif"
+    style="font-family: 'Bricolage Grotesque', sans-serif"
   >
     <!-- Background Pattern (Optional) -->
     <div
@@ -166,7 +166,7 @@ const getWhatsAppUrl = computed(() => {
           class="mx-auto w-20 h-20 sm:w-24 sm:h-24 bg-green-50 rounded-full flex items-center justify-center mb-2"
         >
           <div
-            class="w-14 h-14 sm:w-16 sm:h-16 bg-green-100 rounded-full flex items-center justify-center animate-bounce-slow"
+            class="w-14 h-14 sm:w-16 sm:h-16 bg-green-100 rounded-full flex items-center justify-center"
           >
             <CheckCircle2 class="w-7 h-7 sm:w-8 sm:h-8 text-green-600" />
           </div>
@@ -400,6 +400,17 @@ const getWhatsAppUrl = computed(() => {
             <span class="font-bold">{{
               formatAmount(booking.balance_amount)
             }}</span>
+          </div>
+
+          <!-- Transaction Fee Info -->
+          <div
+            v-if="booking.chip_fee_paid && booking.chip_fee_paid > 0"
+            class="flex justify-between items-center text-[10px] sm:text-xs text-gray-400 border-t border-gray-100 pt-2"
+          >
+            <span class="italic"
+              >↳ {{ t("inclTransactionFee") || "Incl. Transaction Fee" }}</span
+            >
+            <span>{{ formatAmount(booking.chip_fee_paid) }}</span>
           </div>
         </div>
       </div>

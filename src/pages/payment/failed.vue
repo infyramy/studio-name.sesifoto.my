@@ -68,8 +68,8 @@ const getWhatsAppUrl = computed(() => {
 
 <template>
   <div
-    class="min-h-screen bg-[#Fcf9f6] font-serif flex flex-col items-center justify-center p-4 sm:p-6 relative overflow-hidden"
-    style="font-family: 'Playfair Display', serif"
+    class="min-h-screen bg-[#Fcf9f6] flex flex-col items-center justify-center p-4 sm:p-6 relative overflow-hidden"
+    style="font-family: 'Bricolage Grotesque', sans-serif"
   >
     <!-- Background Pattern -->
     <div
@@ -100,20 +100,18 @@ const getWhatsAppUrl = computed(() => {
       <!-- Text Content -->
       <div class="text-center space-y-2 sm:space-y-3">
         <h1
-          class="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 tracking-tight font-sans"
+          class="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 tracking-tight"
         >
           {{ errorTitle }}
         </h1>
-        <p
-          class="text-sm sm:text-base text-gray-500 font-sans leading-relaxed px-2"
-        >
+        <p class="text-sm sm:text-base text-gray-500 leading-relaxed px-2">
           {{ errorMessage }}
         </p>
       </div>
 
       <!-- Info Box -->
       <div class="bg-amber-50 border border-amber-100 rounded-xl p-4 space-y-2">
-        <p class="text-xs sm:text-sm text-amber-700 font-sans text-center">
+        <p class="text-xs sm:text-sm text-amber-700 text-center">
           {{
             t("noChargeApplied") ||
             "No charges have been applied to your account."
@@ -126,7 +124,7 @@ const getWhatsAppUrl = computed(() => {
         <!-- Try Again Button -->
         <button
           @click="goToBooking"
-          class="w-full bg-gray-900 text-white font-sans font-bold uppercase tracking-widest text-[10px] sm:text-xs py-3 sm:py-4 rounded-xl hover:bg-black hover:shadow-lg transition-all duration-300 flex items-center justify-center gap-2 group"
+          class="w-full bg-gray-900 text-white font-bold uppercase tracking-widest text-[10px] sm:text-xs py-3 sm:py-4 rounded-xl hover:bg-black hover:shadow-lg transition-all duration-300 flex items-center justify-center gap-2 group"
         >
           <RefreshCcw class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           <span>{{ t("tryAgain") || "Try Again" }}</span>
@@ -138,7 +136,7 @@ const getWhatsAppUrl = computed(() => {
           :href="getWhatsAppUrl"
           target="_blank"
           rel="noopener noreferrer"
-          class="w-full bg-green-500 hover:bg-green-600 text-white font-sans font-bold uppercase tracking-widest text-[10px] sm:text-xs py-3 sm:py-4 rounded-xl transition-all duration-300 flex items-center justify-center gap-2 group shadow-lg hover:shadow-xl"
+          class="w-full bg-green-500 hover:bg-green-600 text-white font-bold uppercase tracking-widest text-[10px] sm:text-xs py-3 sm:py-4 rounded-xl transition-all duration-300 flex items-center justify-center gap-2 group shadow-lg hover:shadow-xl"
         >
           <MessageCircle class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           <span>{{ t("contactStudio") || "Contact Studio" }}</span>
@@ -150,7 +148,7 @@ const getWhatsAppUrl = computed(() => {
         <!-- Back to Home Button -->
         <button
           @click="goHome"
-          class="w-full bg-white text-gray-700 border border-gray-200 font-sans font-bold uppercase tracking-widest text-[10px] sm:text-xs py-3 sm:py-4 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all duration-300 flex items-center justify-center gap-2 group"
+          class="w-full bg-white text-gray-700 border border-gray-200 font-bold uppercase tracking-widest text-[10px] sm:text-xs py-3 sm:py-4 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all duration-300 flex items-center justify-center gap-2 group"
         >
           <span>{{ t("backToHome") }}</span>
           <Home
