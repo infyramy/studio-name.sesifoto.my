@@ -361,7 +361,7 @@ const adjustOpacity = (color: string | undefined, opacity: number) => {
     >
       <!-- Top Left: LS Lensa Studio Branding -->
       <div
-        class="flex items-center gap-3 backdrop-blur-md px-5 py-2.5 rounded-full shadow-lg border border-white/10 hover:bg-black/50 transition-all duration-300"
+        class="flex items-center gap-3 backdrop-blur-md px-5 py-2.5 rounded-full shadow-lg border border-white/10 hover:bg-white/20 transition-all duration-300"
       >
         <Camera class="w-5 h-5 text-white" />
         <span class="text-white font-semibold text-sm tracking-wide uppercase">
@@ -554,12 +554,19 @@ const adjustOpacity = (color: string | undefined, opacity: number) => {
         >
           <!-- Header Section -->
           <div class="space-y-4 w-full">
-            <div class="inline-block">
+            <div class="flex items-end gap-2">
               <img
                 :src="studioStore.studio?.logo_url"
                 class="w-auto h-10"
                 alt=""
               />
+
+              <div
+                v-if="studioStore.studio?.ssm"
+                class="flex items-center gap-2 text-xs tracking-wider text-white/50"
+              >
+                {{ studioStore.studio.ssm }}
+              </div>
             </div>
             <h1
               class="text-3xl xs:text-4xl sm:text-5xl md:text-4.5xl font-black text-white leading-[1.1] tracking-tight drop-shadow-lg break-words font-serif"
@@ -638,62 +645,77 @@ const adjustOpacity = (color: string | undefined, opacity: number) => {
           ></div>
 
           <!-- Footer Info -->
-          <div class="flex flex-col gap-3 sm:gap-4 w-full">
-            <!-- Location -->
-            <a
-              v-if="studioStore.studio?.maps_link"
-              :href="studioStore.studio.maps_link"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="flex items-start sm:items-center gap-2 text-white/80 hover:text-white transition-colors w-full text-left group cursor-pointer"
-            >
-              <MapPin
-                class="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 mt-0.5 sm:mt-0 group-hover:scale-110 transition-transform"
-              />
-              <span
-                class="text-[11px] sm:text-xs font-medium tracking-wide sm:tracking-wider uppercase leading-relaxed break-words border-b border-transparent group-hover:border-white/50 transition-all"
-              >
-                {{ t("visitUs") }}
-              </span>
-            </a>
-            <div
-              v-else
-              class="flex items-start sm:items-center gap-2 text-white/80 w-full text-left"
-            >
-              <MapPin
-                class="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 mt-0.5 sm:mt-0"
-              />
-              <span
-                class="text-[11px] sm:text-xs font-medium tracking-wide sm:tracking-wider uppercase leading-relaxed break-words"
-              >
-                {{ t("visitUs") }}
-              </span>
+          <div class="w-full flex flex-col gap-2">
+            <div class="flex flex-wrap justify-between items-center gap-2">
+              <!-- Location -->
+              <div class="">
+                <a
+                  v-if="studioStore.studio?.maps_link"
+                  :href="studioStore.studio.maps_link"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="inline-flex items-center gap-3 text-white/70 hover:text-white transition-all group cursor-pointer"
+                >
+                  <div
+                    class="p-2 rounded-full bg-white/5 border border-white/5 group-hover:bg-white/10 group-hover:border-white/20 transition-all"
+                  >
+                    <MapPin class="w-3.5 h-3.5" />
+                  </div>
+                  <span
+                    class="text-xs font-medium tracking-wide leading-relaxed border-b border-white/10 group-hover:border-white/50 pb-0.5 transition-all"
+                  >
+                    {{ studioStore.studio?.address || t("visitUs") }}
+                  </span>
+                </a>
+                <div
+                  v-else-if="studioStore.studio?.address"
+                  class="inline-flex items-center gap-3 text-white/60"
+                >
+                  <div
+                    class="p-2 rounded-full bg-white/5 border border-white/5"
+                  >
+                    <MapPin class="w-3.5 h-3.5" />
+                  </div>
+                  <span
+                    class="text-xs font-medium tracking-wide leading-relaxed"
+                  >
+                    {{ studioStore.studio.address }}
+                  </span>
+                </div>
+              </div>
+              <!-- Contact Us -->
+              <div class="">
+                <a
+                  v-if="studioStore.studio?.whatsapp"
+                  :href="studioStore.studio.whatsapp"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="inline-flex items-center gap-3 text-white/70 hover:text-white transition-all group cursor-pointer"
+                >
+                  <div
+                    class="p-2 rounded-full bg-white/5 border border-white/5 group-hover:bg-white/10 group-hover:border-white/20 transition-all"
+                  >
+                    <MessageCircle class="w-3.5 h-3.5" />
+                  </div>
+                  <span
+                    class="text-xs font-medium tracking-wide leading-relaxed border-b border-white/10 group-hover:border-white/50 pb-0.5 transition-all"
+                  >
+                    {{ t("contactUs") }}
+                  </span>
+                </a>
+              </div>
             </div>
 
-            <!-- Row 2: Copyright & Contact -->
-            <div
-              class="flex flex-row flex-wrap items-center justify-between gap-y-2 w-full"
-            >
-              <!-- Copyright -->
+            <div class="flex justify-center">
+              <!-- Legal Info -->
               <div
-                class="text-white/50 sm:text-white/40 text-[10px] sm:text-[12px] uppercase tracking-wide sm:tracking-widest"
+                class="flex flex-col gap-1.5 opacity-50 hover:opacity-100 transition-opacity duration-300 text-white"
               >
-                © {{ new Date().getFullYear() }}
-                {{ studioStore.studio?.name || "Lensa" }}
+                <div class="text-[10px] uppercase tracking-[0.2em] font-medium">
+                  © {{ new Date().getFullYear() }}
+                  {{ studioStore.studio?.name || "Lensa" }}
+                </div>
               </div>
-
-              <!-- Contact Link -->
-              <a
-                v-if="studioStore.studio?.whatsapp"
-                :href="`https://wa.me/${studioStore.studio.whatsapp}`"
-                target="_blank"
-                class="flex items-center gap-1.5 sm:gap-2 text-white/70 sm:text-white/60 hover:text-white transition-colors text-[10px] sm:text-xs font-medium uppercase tracking-wide sm:tracking-widest group"
-              >
-                <span>{{ t("contactUs") }}</span>
-                <MessageCircle
-                  class="w-3.5 h-3.5 sm:w-3 sm:h-3 transition-transform group-hover:translate-x-0.5"
-                />
-              </a>
             </div>
           </div>
         </div>
@@ -932,64 +954,126 @@ const adjustOpacity = (color: string | undefined, opacity: number) => {
         <!-- Footer Info -->
         <div
           :style="{
-            borderColor: adjustOpacity(heroContent?.primaryTextColor, 0.3),
+            borderColor: adjustOpacity(heroContent?.primaryTextColor, 0.2),
           }"
-          class="w-full pt-4 md:pt-6 border-t flex flex-col gap-3 md:gap-4 flex-shrink-0"
+          class="w-full pt-8 mt-4 border-t flex flex-col gap-6 flex-shrink-0"
         >
           <!-- Location -->
-          <a
-            v-if="studioStore.studio?.maps_link"
-            :href="studioStore.studio.maps_link"
-            :style="{
-              '--text-default': adjustOpacity(
-                heroContent?.primaryTextColor,
-                0.6
-              ),
-              '--text-hover': heroContent?.primaryTextColor,
-            }"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="flex items-start md:items-center gap-2.5 md:gap-3 text-[var(--text-default)] hover:text-[var(--text-hover)] transition-colors text-[11px] md:text-[10px] uppercase tracking-wide md:tracking-widest cursor-pointer group"
-          >
-            <MapPin
-              class="w-3.5 h-3.5 md:w-3 md:h-3 transition-colors flex-shrink-0 mt-0.5 md:mt-0"
-            />
-            <span class="leading-relaxed break-words">{{ t("visitUs") }}</span>
-          </a>
-          <div
-            v-else
-            class="flex items-start md:items-center gap-2.5 md:gap-3 text-[11px] md:text-[10px] uppercase tracking-wide md:tracking-widest"
-          >
-            <MapPin
-              class="w-3.5 h-3.5 md:w-3 md:h-3 flex-shrink-0 mt-0.5 md:mt-0"
-            />
-            <span class="leading-relaxed break-words">{{ t("visitUs") }}</span>
+          <div class="w-full">
+            <a
+              v-if="studioStore.studio?.maps_link"
+              :href="studioStore.studio.maps_link"
+              :style="{
+                '--text-default': adjustOpacity(
+                  heroContent?.primaryTextColor,
+                  0.7
+                ),
+                '--text-hover': heroContent?.primaryTextColor,
+                '--bg-icon': adjustOpacity(heroContent?.primaryTextColor, 0.05),
+                '--border-icon': adjustOpacity(
+                  heroContent?.primaryTextColor,
+                  0.2
+                ),
+              }"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="inline-flex items-center gap-4 text-[var(--text-default)] hover:text-[var(--text-hover)] transition-all group cursor-pointer"
+            >
+              <div
+                class="p-2.5 rounded-full border transition-all"
+                style="
+                  background-color: var(--bg-icon);
+                  border-color: var(--border-icon);
+                "
+              >
+                <MapPin class="w-3.5 h-3.5" />
+              </div>
+              <span
+                class="text-[10px] md:text-xs uppercase tracking-[0.2em] font-sans border-b border-transparent group-hover:border-[var(--text-hover)] transition-all pb-0.5 leading-relaxed"
+              >
+                {{ studioStore.studio?.address || t("visitUs") }}
+              </span>
+            </a>
+            <div
+              v-else-if="studioStore.studio?.address"
+              class="inline-flex items-center gap-4 opacity-70"
+              :style="{ color: heroContent?.primaryTextColor }"
+            >
+              <div
+                class="p-2.5 rounded-full border opacity-50"
+                :style="{ borderColor: heroContent?.primaryTextColor }"
+              >
+                <MapPin class="w-3.5 h-3.5" />
+              </div>
+              <span
+                class="text-[10px] md:text-xs uppercase tracking-[0.2em] font-sans leading-relaxed"
+              >
+                {{ studioStore.studio.address }}
+              </span>
+            </div>
           </div>
 
-          <!-- Copyright & Contact -->
-          <div
-            :style="{
-              '--text-default': adjustOpacity(
-                heroContent?.primaryTextColor,
-                0.6
-              ),
-              '--text-hover': heroContent?.primaryTextColor,
-            }"
-            class="flex flex-row flex-wrap items-center justify-between gap-y-2 text-[10px] sm:text-[10px] uppercase tracking-wide md:tracking-widest text-[var(--text-default)] w-full"
-          >
-            <span class="hover:text-[var(--text-hover)] transition-colors"
-              >© {{ new Date().getFullYear() }}
-              {{ studioStore.studio?.name || "Lensa" }}</span
-            >
+          <!-- Contact Us -->
+          <div class="w-full flex justify-between items-center">
             <a
               v-if="studioStore.studio?.whatsapp"
-              :href="`https://wa.me/${studioStore.studio.whatsapp}`"
+              :href="studioStore.studio.whatsapp"
+              :style="{
+                '--text-default': adjustOpacity(
+                  heroContent?.primaryTextColor,
+                  0.7
+                ),
+                '--text-hover': heroContent?.primaryTextColor,
+                '--bg-icon': adjustOpacity(heroContent?.primaryTextColor, 0.05),
+                '--border-icon': adjustOpacity(
+                  heroContent?.primaryTextColor,
+                  0.2
+                ),
+              }"
               target="_blank"
-              class="hover:text-[var(--text-hover)] transition-colors flex items-center gap-2 md:gap-1"
+              rel="noopener noreferrer"
+              class="inline-flex items-center gap-4 text-[var(--text-default)] hover:text-[var(--text-hover)] transition-all group cursor-pointer"
             >
-              <MessageCircle class="w-3.5 h-3.5 md:w-3 md:h-3 mr-1.5" />
-              <span>{{ t("contactUs") }}</span>
+              <div
+                class="p-2.5 rounded-full border transition-all"
+                style="
+                  background-color: var(--bg-icon);
+                  border-color: var(--border-icon);
+                "
+              >
+                <MessageCircle class="w-3.5 h-3.5" />
+              </div>
+              <span
+                class="text-[10px] md:text-xs uppercase tracking-[0.2em] font-sans border-b border-transparent group-hover:border-[var(--text-hover)] transition-all pb-0.5 leading-relaxed"
+              >
+                {{ t("contactUs") }}
+              </span>
             </a>
+
+            <div
+              v-if="studioStore.studio?.ssm"
+              class="text-[10px] md:text-xs uppercase tracking-widest opacity-80"
+              :style="{
+                color: heroContent?.primaryTextColor,
+              }"
+            >
+              {{ studioStore.studio.ssm }}
+            </div>
+          </div>
+
+          <!-- Bottom Row: Legal & Contact -->
+          <div class="flex justify-center">
+            <!-- Legal Info -->
+            <div
+              class="flex flex-col gap-2"
+              :style="{
+                color: adjustOpacity(heroContent?.primaryTextColor, 0.5),
+              }"
+            >
+              <div class="text-[10px] uppercase tracking-[0.25em] font-sans">
+                © {{ new Date().getFullYear() }} {{ studioStore.studio?.name }}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1543,7 +1627,7 @@ const adjustOpacity = (color: string | undefined, opacity: number) => {
 
     <!-- Content Card (Overlay on mobile, side panel on desktop) -->
     <div
-      class="fixed md:relative bottom-0 left-0 right-0 md:w-1/2 lg:w-[45%] md:h-screen flex flex-col justify-center gap-8 p-6 md:p-12 lg:p-10 backdrop-blur-md md:backdrop-blur-none z-10 rounded-t-3xl md:rounded-none overflow-y-auto animate-slide-up"
+      class="fixed md:relative bottom-0 left-0 right-0 md:w-1/2 lg:w-[45%] md:h-screen flex flex-col justify-center gap-5 p-6 md:p-12 lg:p-10 backdrop-blur-md md:backdrop-blur-none z-10 rounded-t-3xl md:rounded-none overflow-y-auto animate-slide-up"
       :class="
         heroContent?.invertTheme
           ? 'bg-black/95 md:bg-black'
@@ -1551,11 +1635,9 @@ const adjustOpacity = (color: string | undefined, opacity: number) => {
       "
     >
       <!-- Header -->
-      <header
-        class="flex justify-between items-start flex-shrink-0 mb-4 md:mb-0"
-      >
+      <header class="flex items-end gap-2 flex-shrink-0">
         <button
-          class="p-2 rounded-full transition-colors"
+          class="rounded-full transition-colors"
           :class="
             heroContent?.invertTheme ? 'hover:bg-white/10' : 'hover:bg-gray-100'
           "
@@ -1565,9 +1647,17 @@ const adjustOpacity = (color: string | undefined, opacity: number) => {
               studioStore.studio?.logo_url || '../../assets/studio-logo-2.webp'
             "
             alt=""
-            class="w-auto h-5 md:h-6"
+            class="w-auto h-10 md:h-12"
           />
         </button>
+
+        <div
+          v-if="studioStore.studio?.ssm"
+          class="text-md tracking-wide opacity-50"
+          :style="{ color: heroContent?.supportingColor }"
+        >
+          {{ studioStore.studio.ssm }}
+        </div>
       </header>
 
       <!-- Main Text -->
@@ -1602,7 +1692,7 @@ const adjustOpacity = (color: string | undefined, opacity: number) => {
       </div>
 
       <!-- Footer / Actions -->
-      <div class="space-y-4 md:space-y-6 flex-shrink-0 pt-4 md:pt-0">
+      <div class="space-y-4 md:space-y-6 flex-shrink-0">
         <!-- Action Section -->
         <div class="flex-shrink-0 pt-4 md:pt-0">
           <div v-if="isBookingOpen" class="flex flex-col gap-2 md:gap-3">
@@ -1696,73 +1786,129 @@ const adjustOpacity = (color: string | undefined, opacity: number) => {
             borderColor: adjustOpacity(heroContent?.supportingColor, 0.2),
           }"
         >
-          <!-- Left: Location -->
-          <div class="flex flex-col gap-3">
-            <a
-              v-if="studioStore.studio?.maps_link"
-              :href="studioStore.studio.maps_link"
-              target="_blank"
-              rel="noopener noreferrer"
-              :style="{
-                '--text-default': heroContent?.supportingColor,
-                '--text-hover': heroContent?.invertTheme
-                  ? '#ffffff'
-                  : heroContent?.headingColor || '#000000',
-                '--border-hover': adjustOpacity(
-                  heroContent?.invertTheme
-                    ? '#ffffff'
-                    : heroContent?.headingColor || '#000000',
-                  0.3
-                ),
-              }"
-              class="flex items-center gap-2 text-[11px] md:text-[10px] font-bold uppercase tracking-wide md:tracking-widest text-[var(--text-default)] hover:text-[var(--text-hover)] transition-colors cursor-pointer border-b border-transparent hover:border-[var(--border-hover)] w-fit pb-0.5"
-            >
-              <MapPin class="w-3.5 h-3.5 md:w-3 md:h-3" />
-              <span class="leading-relaxed">{{ t("visitUs") }}</span>
-            </a>
-            <div
-              v-else
-              :style="{
-                color: heroContent?.supportingColor,
-              }"
-              class="flex items-center gap-2 text-[11px] md:text-[10px] font-bold uppercase tracking-wide md:tracking-widest opacity-60"
-            >
-              <MapPin class="w-3.5 h-3.5 md:w-3 md:h-3" />
-              <span class="leading-relaxed">{{ t("visitUs") }}</span>
-            </div>
-          </div>
+          <!-- Footer Content -->
+          <div class="w-full flex flex-col gap-5">
+            <div class="flex flex-wrap justify-between gap-2">
+              <!-- Left: Location -->
+              <div class="flex flex-col gap-3">
+                <a
+                  v-if="studioStore.studio?.maps_link"
+                  :href="studioStore.studio.maps_link"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  :style="{
+                    '--text-default': heroContent?.supportingColor,
+                    '--text-hover': heroContent?.invertTheme
+                      ? '#ffffff'
+                      : heroContent?.headingColor || '#000000',
+                    '--border-default': adjustOpacity(
+                      heroContent?.supportingColor,
+                      0.2
+                    ),
+                    '--border-hover': adjustOpacity(
+                      heroContent?.invertTheme
+                        ? '#ffffff'
+                        : heroContent?.headingColor || '#000000',
+                      0.5
+                    ),
+                  }"
+                  class="group flex items-center gap-3 text-[var(--text-default)] hover:text-[var(--text-hover)] transition-colors cursor-pointer"
+                >
+                  <div
+                    class="p-2 border rounded-full transition-all"
+                    style="border-color: var(--border-default)"
+                  >
+                    <MapPin class="w-3.5 h-3.5 md:w-3 md:h-3" />
+                  </div>
+                  <span
+                    class="text-[11px] md:text-[10px] font-bold uppercase tracking-wide md:tracking-widest leading-relaxed border-b border-transparent group-hover:border-[var(--border-hover)] transition-all pb-0.5"
+                  >
+                    {{ studioStore.studio?.address || t("visitUs") }}
+                  </span>
+                </a>
+                <div
+                  v-else-if="studioStore.studio?.address"
+                  :style="{
+                    color: heroContent?.supportingColor,
+                    borderColor: adjustOpacity(
+                      heroContent?.supportingColor,
+                      0.2
+                    ),
+                  }"
+                  class="flex items-center gap-3 opacity-60"
+                >
+                  <div
+                    class="p-2 border rounded-full"
+                    :style="{
+                      borderColor: adjustOpacity(
+                        heroContent?.supportingColor,
+                        0.2
+                      ),
+                    }"
+                  >
+                    <MapPin class="w-3.5 h-3.5 md:w-3 md:h-3" />
+                  </div>
+                  <span
+                    class="text-[11px] md:text-[10px] font-bold uppercase tracking-wide md:tracking-widest leading-relaxed"
+                  >
+                    {{ studioStore.studio.address }}
+                  </span>
+                </div>
+              </div>
 
-          <!-- Right: Copyright & Contact -->
-          <div
-            class="flex flex-row items-center justify-between gap-x-6 gap-y-2 w-full md:w-auto"
-          >
-            <!-- Copyright -->
-            <div
-              class="text-[11px] md:text-[10px] font-bold uppercase tracking-wide md:tracking-widest whitespace-nowrap"
-              :style="{ color: heroContent?.supportingColor }"
-            >
-              © {{ new Date().getFullYear() }}
-              {{ studioStore.studio?.name || "Sesifoto" }}
+              <!-- Left: Contact us -->
+              <div class="flex flex-col gap-3">
+                <a
+                  v-if="studioStore.studio?.whatsapp"
+                  :href="studioStore.studio.whatsapp"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  :style="{
+                    '--text-default': heroContent?.supportingColor,
+                    '--text-hover': heroContent?.invertTheme
+                      ? '#ffffff'
+                      : heroContent?.headingColor || '#000000',
+                    '--border-default': adjustOpacity(
+                      heroContent?.supportingColor,
+                      0.2
+                    ),
+                    '--border-hover': adjustOpacity(
+                      heroContent?.invertTheme
+                        ? '#ffffff'
+                        : heroContent?.headingColor || '#000000',
+                      0.5
+                    ),
+                  }"
+                  class="group flex items-center gap-3 text-[var(--text-default)] hover:text-[var(--text-hover)] transition-colors cursor-pointer"
+                >
+                  <div
+                    class="p-2 border rounded-full transition-all"
+                    style="border-color: var(--border-default)"
+                  >
+                    <ArrowUpRight class="w-3.5 h-3.5 md:w-3 md:h-3" />
+                  </div>
+                  <span
+                    class="text-[11px] md:text-[10px] font-bold uppercase tracking-wide md:tracking-widest leading-relaxed border-b border-transparent group-hover:border-[var(--border-hover)] transition-all pb-0.5"
+                  >
+                    {{ t("contactUs") }}
+                  </span>
+                </a>
+              </div>
             </div>
 
-            <!-- Contact Link -->
-            <a
-              v-if="studioStore.studio?.whatsapp"
-              :href="`https://wa.me/${studioStore.studio.whatsapp}`"
-              target="_blank"
-              :style="{
-                '--text-default': heroContent?.supportingColor,
-                '--text-hover': heroContent?.invertTheme
-                  ? '#ffffff'
-                  : heroContent?.headingColor || '#000000',
-              }"
-              class="flex items-center gap-1.5 text-[11px] md:text-[10px] font-bold uppercase tracking-wide md:tracking-widest text-[var(--text-default)] hover:text-[var(--text-hover)] transition-colors group"
-            >
-              <MessageCircle
-                class="w-3.5 h-3.5 md:w-3 md:h-3 transition-transform group-hover:scale-110"
-              />
-              <span>{{ t("contactUs") }}</span>
-            </a>
+            <!-- Right: Copyright & Contact -->
+            <div class="flex justify-center">
+              <!-- Legal -->
+              <div class="flex flex-col">
+                <div
+                  class="text-[10px] font-bold uppercase tracking-wide md:tracking-widest whitespace-nowrap opacity-80"
+                  :style="{ color: heroContent?.supportingColor }"
+                >
+                  © {{ new Date().getFullYear() }}
+                  {{ studioStore.studio?.name || "Sesifoto" }}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>

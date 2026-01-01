@@ -92,6 +92,17 @@ export const useStudioStore = defineStore("studio", () => {
     return addons.value.find((a) => a.id === addonId);
   }
 
+  // Load addons for a specific theme (theme may have custom addons)
+  async function loadAddonsForTheme(themeId: string) {
+    if (!studio.value) return;
+    try {
+      const addonsData = await api.getAddonsByStudio(studio.value.id, themeId);
+      addons.value = addonsData;
+    } catch (err) {
+      console.error("Failed to load theme-specific addons:", err);
+    }
+  }
+
   function reset() {
     studio.value = null;
     themes.value = [];
@@ -127,6 +138,7 @@ export const useStudioStore = defineStore("studio", () => {
     toggleLanguage,
     getThemeById,
     getAddonById,
+    loadAddonsForTheme,
     reset,
   };
 });

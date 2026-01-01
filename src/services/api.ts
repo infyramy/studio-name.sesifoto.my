@@ -62,6 +62,7 @@ const transformStudio = (data: any): Studio => ({
   name: data.name,
   owner_name: data.name, // Not provided by public API
   whatsapp: data.whatsapp || "",
+  ssm: data.ssm,
   instagram: data.instagram,
   facebook: data.facebook,
   tiktok: data.tiktok,
@@ -277,9 +278,13 @@ export const api = {
   },
 
   // ===== Add-ons APIs =====
-  async getAddonsByStudio(studioId: string): Promise<Addon[]> {
+  async getAddonsByStudio(
+    studioId: string,
+    themeId?: string
+  ): Promise<Addon[]> {
     const slug = getStudioSlug();
-    const data = await apiFetch(`/public/studio/${slug}/addons`);
+    const query = themeId ? { themeId } : undefined;
+    const data = await apiFetch(`/public/studio/${slug}/addons`, { query });
     return data.map((a: any) => ({
       ...transformAddon(a),
       studio_id: studioId,
@@ -777,8 +782,8 @@ export const getStudioBySlug = (slug: string) => api.getStudioBySlug(slug);
 export const getThemesByStudio = (studioId: string) =>
   api.getThemesByStudio(studioId);
 export const getThemeById = (themeId: string) => api.getThemeById(themeId);
-export const getAddonsByStudio = (studioId: string) =>
-  api.getAddonsByStudio(studioId);
+export const getAddonsByStudio = (studioId: string, themeId?: string) =>
+  api.getAddonsByStudio(studioId, themeId);
 export const getAvailableTimeSlots = (
   studioId: string,
   themeId: string,

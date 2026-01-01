@@ -846,10 +846,12 @@ async function fetchAvailableDates() {
   }
 }
 
-// Watch for theme changes to reload dates and pricing rules
+// Watch for theme changes to reload dates, pricing rules, and addons
 watch(selectedTheme, async () => {
   if (selectedTheme.value) {
     fetchAvailableDates();
+    // Load theme-specific addons (if the theme has custom addons configured)
+    await studioStore.loadAddonsForTheme(selectedTheme.value.id);
     // Fetch pricing rules for showing surcharge/discount info
     if (studioStore.studio) {
       try {

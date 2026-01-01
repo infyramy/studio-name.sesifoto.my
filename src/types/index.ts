@@ -5,6 +5,7 @@ export interface Studio {
   name: string;
   owner_name: string;
   whatsapp: string;
+  ssm?: string;
   instagram?: string;
   facebook?: string;
   tiktok?: string;
