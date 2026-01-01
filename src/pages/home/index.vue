@@ -15,6 +15,7 @@ import {
   Share2,
   X,
   CalendarOff,
+  Link,
 } from "lucide-vue-next";
 
 const router = useRouter();
@@ -360,7 +361,7 @@ const adjustOpacity = (color: string | undefined, opacity: number) => {
     >
       <!-- Top Left: LS Lensa Studio Branding -->
       <div
-        class="flex items-center gap-3 bg-black/40 backdrop-blur-md px-5 py-2.5 rounded-full shadow-lg border border-white/10 hover:bg-black/50 transition-all duration-300"
+        class="flex items-center gap-3 backdrop-blur-md px-5 py-2.5 rounded-full shadow-lg border border-white/10 hover:bg-black/50 transition-all duration-300"
       >
         <Camera class="w-5 h-5 text-white" />
         <span class="text-white font-semibold text-sm tracking-wide uppercase">
@@ -448,7 +449,7 @@ const adjustOpacity = (color: string | undefined, opacity: number) => {
           class="relative bg-white/10 backdrop-blur-md p-3 rounded-full shadow-lg border border-white/10 hover:bg-white/20 transition-all duration-300 cursor-pointer group z-20"
         >
           <div class="relative w-5 h-5">
-            <Share2
+            <Link
               class="absolute inset-0 w-5 h-5 text-white transition-all duration-300"
               :class="
                 showSocials
@@ -478,7 +479,7 @@ const adjustOpacity = (color: string | undefined, opacity: number) => {
         >
           <div
             v-if="showSocials"
-            class="sm:hidden absolute right-0 top-14 bg-black/80 backdrop-blur-md rounded-full shadow-2xl border border-white/10 p-2 z-50 flex flex-col gap-3"
+            class="sm:hidden absolute right-0 top-14 backdrop-blur-md rounded-full shadow-2xl border border-white/10 p-2 z-50 flex flex-col gap-3"
           >
             <!-- Pinterest -->
             <a
