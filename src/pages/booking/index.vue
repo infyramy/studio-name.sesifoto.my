@@ -27,6 +27,8 @@ import {
   Pencil,
   Mail,
   Phone,
+  Sparkles,
+  Star,
 } from "lucide-vue-next";
 import type { Theme, Coupon } from "@/types";
 import Modal from "@/components/Modal.vue";
@@ -307,6 +309,9 @@ async function restoreBookingState(state: any) {
               start: formatTimeForDisplay(slot.start || "09:00"),
               end: formatTimeForDisplay(slot.end || "09:30"),
               available: slot.status === "available",
+              price: slot.price,
+              isSpecialPricing: slot.is_special_pricing,
+              specialPricingLabel: slot.special_pricing_label,
               originalSlot: slot,
             }));
           } catch (err) {
@@ -349,6 +354,9 @@ async function restoreBookingState(state: any) {
             start: formatTimeForDisplay(slot.start || "09:00"),
             end: formatTimeForDisplay(slot.end || "09:30"),
             available: slot.status === "available",
+            price: slot.price,
+            isSpecialPricing: slot.is_special_pricing,
+            specialPricingLabel: slot.special_pricing_label,
             originalSlot: slot,
           }));
         } catch (err) {
@@ -380,6 +388,9 @@ async function restoreBookingState(state: any) {
             start: formatTimeForDisplay(slot.start || "09:00"),
             end: formatTimeForDisplay(slot.end || "09:30"),
             available: slot.status === "available",
+            price: slot.price,
+            isSpecialPricing: slot.is_special_pricing,
+            specialPricingLabel: slot.special_pricing_label,
             originalSlot: slot,
           }));
         } catch (err) {
@@ -411,6 +422,9 @@ async function restoreBookingState(state: any) {
             start: formatTimeForDisplay(slot.start || "09:00"),
             end: formatTimeForDisplay(slot.end || "09:30"),
             available: slot.status === "available",
+            price: slot.price,
+            isSpecialPricing: slot.is_special_pricing,
+            specialPricingLabel: slot.special_pricing_label,
             originalSlot: slot,
           }));
         } catch (err) {
@@ -906,7 +920,10 @@ const selectDate = async (dateStr: string) => {
         start: formatTimeForDisplay(slot.start || "09:00"),
         end: formatTimeForDisplay(slot.end || "09:30"),
         available: slot.status === "available",
-        originalSlot: slot, // Keep original for booking
+        price: slot.price,
+        isSpecialPricing: slot.is_special_pricing,
+        specialPricingLabel: slot.special_pricing_label,
+        originalSlot: slot,
       }));
     } catch (error) {
       console.error("Failed to load time slots:", error);
@@ -1301,17 +1318,11 @@ const addToCart = async () => {
       }
     }
 
-    // Apply special pricing to session base price only
-    let sessionPrice = selectedTheme.value.base_price;
-    const rule = selectedDatePricingRule.value;
-    if (rule && selectedDateInfo.value?.isSpecial) {
-      if (rule.rule_type === "percentage_increase") {
-        sessionPrice = sessionPrice * (1 + rule.value / 100);
-      } else if (rule.rule_type === "fixed_price") {
-        // fixed_price means add/subtract a fixed amount (surcharge/discount)
-        sessionPrice = sessionPrice + rule.value;
-      }
-    }
+    // Use the slot price (already includes special pricing from backend)
+    // If the selected slot has a price from the backend, use that
+    // Otherwise fall back to theme base_price
+    let sessionPrice =
+      selectedSlot.value?.price || selectedTheme.value.base_price;
 
     const itemTotal = sessionPrice + extraPaxCost + addonsTotal;
 
@@ -1532,6 +1543,9 @@ const nextStep = async () => {
                 start: formatTimeForDisplay(slot.start || "09:00"),
                 end: formatTimeForDisplay(slot.end || "09:30"),
                 available: slot.status === "available",
+                price: slot.price,
+                isSpecialPricing: slot.is_special_pricing,
+                specialPricingLabel: slot.special_pricing_label,
                 originalSlot: slot,
               }));
             } catch (err) {
@@ -1981,20 +1995,11 @@ const addonsTotal = computed(() => {
 const currentItemTotal = computed(() => {
   if (!selectedTheme.value) return 0;
 
-  let sessionPrice = selectedTheme.value.base_price;
-
-  // Apply special pricing to base session price only
-  const rule = selectedDatePricingRule.value;
-  if (rule && selectedDateInfo.value?.isSpecial) {
-    if (rule.rule_type === "percentage_increase") {
-      // Apply percentage modifier (e.g., 20% increase)
-      sessionPrice = sessionPrice * (1 + rule.value / 100);
-    } else if (rule.rule_type === "fixed_price") {
-      // fixed_price means add/subtract a fixed amount (surcharge/discount)
-      // positive value = surcharge, negative value = discount
-      sessionPrice = sessionPrice + rule.value;
-    }
-  }
+  // Use the slot price (already includes special pricing from backend)
+  // If the selected slot has a price from the backend, use that
+  // Otherwise fall back to theme base_price
+  const sessionPrice =
+    selectedSlot.value?.price || selectedTheme.value.base_price;
 
   // Add extras and addons on top of the (possibly modified) session price
   return sessionPrice + extraPaxCost.value + addonsTotal.value;
@@ -2056,6 +2061,13 @@ const grandTotal = computed(() => {
     total = currentItemTotal.value;
   }
   return Math.max(0, total - discountAmount.value);
+});
+
+const isSummaryStep = computed(() => {
+  if (isCartModeEnabled.value) {
+    return currentStep.value === 7;
+  }
+  return currentStep.value === 6;
 });
 
 const paymentType = computed(() => {
@@ -2122,48 +2134,33 @@ const selectedDatePricingRule = computed(() => {
 
 // Format the surcharge/discount message for display
 const specialPricingMessage = computed(() => {
-  const rule = selectedDatePricingRule.value;
-  if (!rule) return null;
+  if (!selectedSlot.value?.isSpecialPricing || !selectedTheme.value)
+    return null;
 
-  if (rule.rule_type === "percentage_increase") {
-    // Positive value = surcharge, negative value = discount
-    if (rule.value > 0) {
-      return `+${rule.value}% ${t("surcharge")}`;
-    } else {
-      return `${rule.value}% ${t("discount")}`;
-    }
-  } else if (rule.rule_type === "fixed_price") {
-    // fixed_price means add/subtract a fixed amount (surcharge/discount)
-    // value is in cents, convert to RM for display
-    const amountInRM = Number(rule.value) / 100;
-    if (amountInRM >= 0) {
-      return `+RM ${amountInRM.toFixed(2)} ${t("surcharge")}`;
-    } else {
-      return `RM ${amountInRM.toFixed(2)} ${t("discount")}`;
-    }
+  const slotPrice = selectedSlot.value.price;
+  const basePrice = selectedTheme.value.base_price;
+  const difference = slotPrice - basePrice;
+
+  if (difference === 0) return null;
+
+  // Convert from sen to RM
+  const amountInRM = Math.abs(difference) / 100;
+
+  if (difference > 0) {
+    return `+RM ${amountInRM.toFixed(2)} ${t("surcharge")}`;
+  } else {
+    return `-RM ${amountInRM.toFixed(2)} ${t("discount")}`;
   }
-
-  return null;
 });
 
 // Calculate the special pricing amount (surcharge/discount)
 const specialPricingAmount = computed(() => {
-  if (!selectedTheme.value) return 0;
-  if (!selectedDatePricingRule.value || !selectedDateInfo.value?.isSpecial)
-    return 0;
+  if (!selectedSlot.value?.isSpecialPricing || !selectedTheme.value) return 0;
 
-  const rule = selectedDatePricingRule.value;
+  const slotPrice = selectedSlot.value.price;
   const basePrice = selectedTheme.value.base_price;
 
-  if (rule.rule_type === "percentage_increase") {
-    // Calculate the percentage amount
-    return basePrice * (rule.value / 100);
-  } else if (rule.rule_type === "fixed_price") {
-    // Fixed amount surcharge/discount
-    return rule.value;
-  }
-
-  return 0;
+  return slotPrice - basePrice; // Returns the surcharge/discount amount in sen
 });
 // ============================================
 // Auto-Save Booking State
@@ -2303,10 +2300,17 @@ watch(
               class="w-16 h-16 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0"
             >
               <img
+                v-if="selectedTheme.images?.[0]"
                 :src="selectedTheme.images[0]"
                 :alt="selectedTheme.name"
                 class="w-full h-full object-cover"
               />
+              <div
+                v-else
+                class="w-full h-full flex items-center justify-center text-gray-300"
+              >
+                <ImageIcon class="w-6 h-6" />
+              </div>
             </div>
 
             <!-- Middle: Title & Date -->
@@ -2460,10 +2464,17 @@ watch(
                   class="relative w-20 h-20 shrink-0 rounded-2xl overflow-hidden bg-gray-100 shadow-sm border border-gray-50"
                 >
                   <img
+                    v-if="theme.images?.[0]"
                     :src="theme.images[0]"
                     :alt="theme.name"
                     class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                   />
+                  <div
+                    v-else
+                    class="w-full h-full flex items-center justify-center text-gray-300"
+                  >
+                    <ImageIcon class="w-8 h-8" />
+                  </div>
                 </div>
 
                 <!-- Middle: Content -->
@@ -2622,27 +2633,15 @@ watch(
                     </div>
 
                     <!-- Special Pricing Indicator -->
-                    <div
-                      v-else-if="d.isSpecial"
-                      class="absolute top-2 right-2 flex flex-col items-end gap-0.5"
-                    >
-                      <div
+                    <div v-else-if="d.isSpecial" class="absolute top-2 right-2">
+                      <Sparkles
                         :class="[
-                          'w-1.5 h-1.5 rounded-full',
-                          selectedDate === d.date ? 'bg-white' : 'bg-amber-400',
-                        ]"
-                      ></div>
-                      <span
-                        v-if="d.isSpecial"
-                        :class="[
-                          'text-[8px] font-bold',
+                          'w-3.5 h-3.5',
                           selectedDate === d.date
-                            ? 'text-white'
-                            : 'text-amber-600',
+                            ? 'text-white fill-white/20'
+                            : 'text-amber-500 fill-amber-500',
                         ]"
-                      >
-                        Special
-                      </span>
+                      />
                     </div>
                   </button>
                 </div>
@@ -2670,29 +2669,40 @@ watch(
               <!-- Special Date Info -->
               <div
                 v-if="isSpecialDateSelected && selectedDateInfo"
-                class="bg-amber-50/80 backdrop-blur-sm border border-amber-100/50 p-4 rounded-2xl flex items-start gap-3 text-amber-900 shadow-sm"
+                class="bg-gradient-to-br from-amber-50 to-orange-50/50 backdrop-blur-sm border border-amber-200/60 p-4 rounded-2xl flex items-start gap-3 shadow-sm relative overflow-hidden"
               >
-                <div class="bg-amber-100 p-2 rounded-full flex-shrink-0">
-                  <Info class="w-4 h-4" />
+                <!-- Decorative background sparkle -->
+                <Sparkles
+                  class="absolute -top-4 -right-4 w-16 h-16 text-amber-100/50 -rotate-12"
+                />
+
+                <div
+                  class="bg-amber-100 p-2 rounded-full flex-shrink-0 relative z-10"
+                >
+                  <Sparkles class="w-4 h-4 text-amber-600" />
                 </div>
-                <div class="text-xs leading-relaxed flex-1">
+                <div class="text-xs leading-relaxed flex-1 relative z-10">
                   <span
-                    class="font-bold block uppercase tracking-wider text-[10px] mb-1 text-amber-700"
+                    class="font-bold block uppercase tracking-wider text-[10px] mb-1 text-amber-600"
                     >{{ t("specialDate") }}</span
                   >
                   <div class="space-y-1">
-                    <p class="font-semibold">
+                    <p class="font-bold text-amber-900 text-sm">
                       {{ selectedDateInfo.specialLabel }}
                     </p>
-                    <p class="text-amber-800">
-                      {{ t("specialPriceApply") }}
-                    </p>
-                    <!-- Show surcharge/discount amount -->
-                    <p
+
+                    <div
                       v-if="specialPricingMessage"
-                      class="font-bold text-amber-900 bg-amber-100 px-2 py-1 rounded-lg inline-block"
+                      class="flex items-center gap-2 mt-1"
                     >
-                      {{ specialPricingMessage }}
+                      <span
+                        class="font-bold text-amber-800 bg-amber-100/80 px-2 py-1 rounded-md border border-amber-200/50"
+                      >
+                        {{ specialPricingMessage }}
+                      </span>
+                    </div>
+                    <p v-else class="text-amber-700/80 italic">
+                      {{ t("specialPriceApply") }}
                     </p>
                   </div>
                 </div>
@@ -4225,7 +4235,8 @@ watch(
                 formatPriceWhole(
                   (grandTotal || 0) +
                     (studioStore.websiteSettings?.chipFeeMode === "on_top" &&
-                    (grandTotal || 0) > 0
+                    (grandTotal || 0) > 0 &&
+                    isSummaryStep
                       ? 100
                       : 0)
                 )
