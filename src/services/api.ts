@@ -640,8 +640,8 @@ export const api = {
         pax_count: data.paxCount || 0,
         customer_name: data.customerName,
         customer_phone: data.customerPhone,
-        customer_email: "",
-        customer_notes: "",
+        customer_email: data.customerEmail || "",
+        customer_notes: data.customerNotes || "",
         consent_tc: true,
         consent_marketing: false,
         base_price: data.basePrice || 0,
@@ -658,7 +658,7 @@ export const api = {
         payment_status: data.paymentStatus as any,
         booking_status: data.bookingStatus as any,
         cart_hold_expires_at: data.cartHoldExpiresAt || null,
-        created_at: new Date().toISOString(),
+        created_at: data.createdAt || new Date().toISOString(),
         updated_at: new Date().toISOString(),
         addons:
           data.addons?.map((a: any) => ({

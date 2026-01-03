@@ -4,7 +4,6 @@ import { useRouter } from "vue-router";
 import { useStudioStore } from "@/stores/studio";
 import { api } from "@/services/api";
 import { format } from "date-fns";
-import type { Booking } from "@/types";
 import { useTranslation } from "@/composables/useTranslation";
 import {
   ArrowLeft,
@@ -63,7 +62,7 @@ const bookingId = ref("");
 const phone = ref("");
 const isLoading = ref(false);
 const error = ref("");
-const foundBooking = ref<Booking | null>(null);
+const foundBooking = ref<any>(null);
 
 const validateForm = () => {
   error.value = "";
@@ -99,7 +98,7 @@ const searchBooking = async () => {
     // Normalize phone number
     const normalizedPhone = phone.value.replace(/[\s-]/g, "");
 
-    // Call API to lookup booking
+    // Call API to lookup booking (api.ts already transforms to snake_case)
     const booking = await api.lookupBooking(
       bookingId.value.trim(),
       normalizedPhone
@@ -499,7 +498,7 @@ const brandColor = computed(() => studioStore.studio?.brand_color || "#000000");
 
             <!-- Payment Info -->
             <div
-              v-if="foundBooking.total_amount"
+              v-if="foundBooking.total_amount !== undefined"
               class="bg-white p-4 rounded-2xl border border-gray-100 space-y-3"
             >
               <div class="flex items-center gap-2 mb-2">
@@ -566,14 +565,15 @@ const brandColor = computed(() => studioStore.studio?.brand_color || "#000000");
                 <!-- Addons -->
                 <div
                   v-for="addon in foundBooking.addons"
-                  :key="addon.addon.name"
+                  :key="addon.addon?.name || addon.name"
                   class="flex justify-between items-center text-sm"
                 >
                   <span class="text-gray-500"
-                    >{{ addon.addon.name }} x {{ addon.quantity }}</span
+                    >{{ addon.addon?.name || addon.name }} x
+                    {{ addon.quantity }}</span
                   >
                   <span class="text-gray-900 font-medium">{{
-                    formatAmount(addon.price_at_booking)
+                    formatAmount(addon.price_at_booking || addon.price)
                   }}</span>
                 </div>
 

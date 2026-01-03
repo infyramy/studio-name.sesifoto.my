@@ -380,9 +380,9 @@ export const translationsBM: Translations = {
   changeSlotConfirm: "Tukar Slot Masa?",
   changeSlotMessage:
     "Menukar masa akan melepaskan tempahan semasa anda. Teruskan?",
-  goingBackWillRelease: "Ke Belakang Akan Melepaskan Tempahan",
+  goingBackWillRelease: "Anda Pasti?",
   goingBackMessage:
-    "Kembali akan melepaskan tempahan slot masa semasa anda. Teruskan?",
+    "Slot anda akan dilepaskan jika kembali ke halaman sebelumnya. Teruskan?",
   restoreYourBooking: "Pulihkan Tempahan Anda?",
   restoreBookingMessage:
     "Kami menjumpai tempahan anda dari beberapa minit yang lalu. Mahu teruskan dari mana anda berhenti?",
@@ -792,7 +792,7 @@ export const translationsEN: Translations = {
   changeSlotConfirm: "Change Time Slot?",
   changeSlotMessage:
     "Changing time will release your current reservation. Continue?",
-  goingBackWillRelease: "Going Back Will Release Hold",
+  goingBackWillRelease: "Are You Sure?",
   goingBackMessage:
     "Going back will release your current time slot reservation. Continue?",
   restoreYourBooking: "Restore Your Booking?",

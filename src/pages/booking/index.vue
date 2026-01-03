@@ -305,16 +305,7 @@ async function restoreBookingState(state: any) {
               selectedTheme.value.id,
               selectedDate.value
             );
-            timeSlots.value = slots.map((slot, index) => ({
-              id: `slot-${index}`,
-              start: formatTimeForDisplay(slot.start || "09:00"),
-              end: formatTimeForDisplay(slot.end || "09:30"),
-              available: slot.status === "available",
-              price: slot.price,
-              isSpecialPricing: slot.is_special_pricing,
-              specialPricingLabel: slot.special_pricing_label,
-              originalSlot: slot,
-            }));
+            timeSlots.value = processTimeSlots(slots, selectedDate.value);
           } catch (err) {
             console.error("Failed to load time slots:", err);
           } finally {
@@ -350,16 +341,7 @@ async function restoreBookingState(state: any) {
             selectedTheme.value.id,
             selectedDate.value
           );
-          timeSlots.value = slots.map((slot, index) => ({
-            id: `slot-${index}`,
-            start: formatTimeForDisplay(slot.start || "09:00"),
-            end: formatTimeForDisplay(slot.end || "09:30"),
-            available: slot.status === "available",
-            price: slot.price,
-            isSpecialPricing: slot.is_special_pricing,
-            specialPricingLabel: slot.special_pricing_label,
-            originalSlot: slot,
-          }));
+          timeSlots.value = processTimeSlots(slots, selectedDate.value);
         } catch (err) {
           console.error("Failed to load time slots:", err);
         } finally {
@@ -384,16 +366,7 @@ async function restoreBookingState(state: any) {
             selectedTheme.value.id,
             selectedDate.value
           );
-          timeSlots.value = slots.map((slot, index) => ({
-            id: `slot-${index}`,
-            start: formatTimeForDisplay(slot.start || "09:00"),
-            end: formatTimeForDisplay(slot.end || "09:30"),
-            available: slot.status === "available",
-            price: slot.price,
-            isSpecialPricing: slot.is_special_pricing,
-            specialPricingLabel: slot.special_pricing_label,
-            originalSlot: slot,
-          }));
+          timeSlots.value = processTimeSlots(slots, selectedDate.value);
         } catch (err) {
           console.error("Failed to load time slots:", err);
         } finally {
@@ -418,16 +391,7 @@ async function restoreBookingState(state: any) {
             selectedTheme.value.id,
             selectedDate.value
           );
-          timeSlots.value = slots.map((slot, index) => ({
-            id: `slot-${index}`,
-            start: formatTimeForDisplay(slot.start || "09:00"),
-            end: formatTimeForDisplay(slot.end || "09:30"),
-            available: slot.status === "available",
-            price: slot.price,
-            isSpecialPricing: slot.is_special_pricing,
-            specialPricingLabel: slot.special_pricing_label,
-            originalSlot: slot,
-          }));
+          timeSlots.value = processTimeSlots(slots, selectedDate.value);
         } catch (err) {
           console.error("Failed to load time slots:", err);
         } finally {
@@ -923,6 +887,51 @@ const selectTheme = (theme: Theme) => {
   // Don't auto-navigate - user must click next button
 };
 
+// Helper function to process time slots and disable past slots for current date
+const processTimeSlots = (slots: any[], dateStr: string) => {
+  // Check if selected date is today
+  const today = new Date();
+  const selectedDateObj = new Date(dateStr + "T00:00:00");
+  const isToday =
+    selectedDateObj.getFullYear() === today.getFullYear() &&
+    selectedDateObj.getMonth() === today.getMonth() &&
+    selectedDateObj.getDate() === today.getDate();
+
+  // Get current time in hours and minutes
+  const currentHour = today.getHours();
+  const currentMinute = today.getMinutes();
+
+  return slots.map((slot, index) => {
+    let isAvailable = slot.status === "available";
+
+    // If it's today, check if the slot time has passed
+    if (isToday && isAvailable) {
+      // Parse the slot start time (format: "HH:MM" in 24-hour format)
+      const slotStart = slot.start || "09:00";
+      const [slotHour, slotMinute] = slotStart.split(":").map(Number);
+
+      // Disable if slot time has already passed
+      if (
+        slotHour < currentHour ||
+        (slotHour === currentHour && slotMinute <= currentMinute)
+      ) {
+        isAvailable = false;
+      }
+    }
+
+    return {
+      id: `slot-${index}`,
+      start: formatTimeForDisplay(slot.start || "09:00"),
+      end: formatTimeForDisplay(slot.end || "09:30"),
+      available: isAvailable,
+      price: slot.price,
+      isSpecialPricing: slot.is_special_pricing,
+      specialPricingLabel: slot.special_pricing_label,
+      originalSlot: slot,
+    };
+  });
+};
+
 const selectDate = async (dateStr: string) => {
   selectedDate.value = dateStr;
   selectedSlot.value = null; // Reset slot
@@ -936,17 +945,9 @@ const selectDate = async (dateStr: string) => {
         selectedTheme.value.id,
         dateStr
       );
-      // Convert API format to component format
-      timeSlots.value = slots.map((slot, index) => ({
-        id: `slot-${index}`,
-        start: formatTimeForDisplay(slot.start || "09:00"),
-        end: formatTimeForDisplay(slot.end || "09:30"),
-        available: slot.status === "available",
-        price: slot.price,
-        isSpecialPricing: slot.is_special_pricing,
-        specialPricingLabel: slot.special_pricing_label,
-        originalSlot: slot,
-      }));
+
+      // Process slots and disable past ones for current date
+      timeSlots.value = processTimeSlots(slots, dateStr);
     } catch (error) {
       console.error("Failed to load time slots:", error);
       timeSlots.value = [];
@@ -1033,6 +1034,13 @@ async function createCartHold(slotData: any): Promise<CartHold> {
       error?.statusCode === 400
     ) {
       throw new Error("SLOT_NO_LONGER_AVAILABLE");
+    }
+    // Handle past time slot error from backend
+    if (
+      error?.data?.message === "SLOT_TIME_HAS_PASSED" ||
+      error?.message === "SLOT_TIME_HAS_PASSED"
+    ) {
+      throw new Error("SLOT_TIME_HAS_PASSED");
     }
     throw error;
   }
@@ -1390,6 +1398,19 @@ const addToCart = async () => {
         type: "error",
         confirmText: t("ok"),
       });
+    } else if (error.message === "SLOT_TIME_HAS_PASSED") {
+      await showModal({
+        title: t("slotTimeHasPassed") || "Slot Time Has Passed",
+        message:
+          t("slotTimeHasPassedMessage") ||
+          "This time slot has already passed. Please select a different time.",
+        type: "error",
+        confirmText: t("ok"),
+      });
+      // Refresh time slots to show updated availability
+      if (selectedDate.value) {
+        await selectDate(selectedDate.value);
+      }
     } else {
       await showModal({
         title: t("error"),
@@ -1560,16 +1581,32 @@ const nextStep = async () => {
                 selectedTheme.value.id,
                 selectedDate.value
               );
-              timeSlots.value = slots.map((slot, index) => ({
-                id: `slot-${index}`,
-                start: formatTimeForDisplay(slot.start || "09:00"),
-                end: formatTimeForDisplay(slot.end || "09:30"),
-                available: slot.status === "available",
-                price: slot.price,
-                isSpecialPricing: slot.is_special_pricing,
-                specialPricingLabel: slot.special_pricing_label,
-                originalSlot: slot,
-              }));
+              timeSlots.value = processTimeSlots(slots, selectedDate.value);
+            } catch (err) {
+              console.error("Failed to load time slots:", err);
+            } finally {
+              loadingSlots.value = false;
+            }
+          }
+        } else if (error.message === "SLOT_TIME_HAS_PASSED") {
+          await showModal({
+            title: t("slotTimeHasPassed") || "Slot Time Has Passed",
+            message:
+              t("slotTimeHasPassedMessage") ||
+              "This time slot has already passed. Please select a different time.",
+            type: "error",
+            confirmText: t("ok"),
+          });
+          // Refresh time slots
+          if (selectedTheme.value && studioStore.studio && selectedDate.value) {
+            loadingSlots.value = true;
+            try {
+              const slots = await api.getAvailableTimeSlots(
+                studioStore.studio.id,
+                selectedTheme.value.id,
+                selectedDate.value
+              );
+              timeSlots.value = processTimeSlots(slots, selectedDate.value);
             } catch (err) {
               console.error("Failed to load time slots:", err);
             } finally {
