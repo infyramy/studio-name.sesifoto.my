@@ -560,13 +560,6 @@ const adjustOpacity = (color: string | undefined, opacity: number) => {
                 class="w-auto h-10"
                 alt=""
               />
-
-              <div
-                v-if="studioStore.studio?.ssm"
-                class="flex items-center gap-2 text-xs tracking-wider text-white/50"
-              >
-                {{ studioStore.studio.ssm }}
-              </div>
             </div>
             <h1
               class="text-3xl xs:text-4xl sm:text-5xl md:text-4.5xl font-black text-white leading-[1.1] tracking-tight drop-shadow-lg break-words font-serif"
@@ -713,7 +706,10 @@ const adjustOpacity = (color: string | undefined, opacity: number) => {
               >
                 <div class="text-[10px] uppercase tracking-[0.2em] font-medium">
                   © {{ new Date().getFullYear() }}
-                  {{ studioStore.studio?.name || "Lensa" }}
+                  {{ studioStore.studio?.name || "Sesifoto" }}
+                  <span v-if="studioStore.studio?.ssm">
+                    ({{ studioStore.studio?.ssm }})
+                  </span>
                 </div>
               </div>
             </div>
@@ -1049,16 +1045,6 @@ const adjustOpacity = (color: string | undefined, opacity: number) => {
                 {{ t("contactUs") }}
               </span>
             </a>
-
-            <div
-              v-if="studioStore.studio?.ssm"
-              class="text-[10px] md:text-xs uppercase tracking-widest opacity-80"
-              :style="{
-                color: heroContent?.primaryTextColor,
-              }"
-            >
-              {{ studioStore.studio.ssm }}
-            </div>
           </div>
 
           <!-- Bottom Row: Legal & Contact -->
@@ -1072,6 +1058,9 @@ const adjustOpacity = (color: string | undefined, opacity: number) => {
             >
               <div class="text-[10px] uppercase tracking-[0.25em] font-sans">
                 © {{ new Date().getFullYear() }} {{ studioStore.studio?.name }}
+                <span v-if="studioStore.studio?.ssm">
+                  ({{ studioStore.studio?.ssm }})
+                </span>
               </div>
             </div>
           </div>
@@ -1650,14 +1639,6 @@ const adjustOpacity = (color: string | undefined, opacity: number) => {
             class="w-auto h-10 md:h-12"
           />
         </button>
-
-        <div
-          v-if="studioStore.studio?.ssm"
-          class="text-md tracking-wide opacity-50"
-          :style="{ color: heroContent?.supportingColor }"
-        >
-          {{ studioStore.studio.ssm }}
-        </div>
       </header>
 
       <!-- Main Text -->
@@ -1906,6 +1887,9 @@ const adjustOpacity = (color: string | undefined, opacity: number) => {
                 >
                   © {{ new Date().getFullYear() }}
                   {{ studioStore.studio?.name || "Sesifoto" }}
+                  <span v-if="studioStore.studio?.ssm">
+                    ({{ studioStore.studio?.ssm }})
+                  </span>
                 </div>
               </div>
             </div>
