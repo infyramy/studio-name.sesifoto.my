@@ -3,13 +3,7 @@ import { computed } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import { useStudioStore } from "@/stores/studio";
 import { useTranslation } from "@/composables/useTranslation";
-import {
-  XCircle,
-  Home,
-  RefreshCcw,
-  MessageCircle,
-  ArrowRight,
-} from "lucide-vue-next";
+import { XCircle, Home, MessageCircle, ArrowRight } from "lucide-vue-next";
 
 const router = useRouter();
 const route = useRoute();
@@ -53,7 +47,6 @@ const errorMessage = computed(() => {
 });
 
 const goHome = () => router.push("/");
-const goToBooking = () => router.push("/booking");
 
 const getWhatsAppUrl = computed(() => {
   if (!studioStore.studio?.whatsapp) return "";
@@ -121,15 +114,6 @@ const getWhatsAppUrl = computed(() => {
 
       <!-- Actions -->
       <div class="space-y-2.5 sm:space-y-3 pt-2">
-        <!-- Try Again Button -->
-        <button
-          @click="goToBooking"
-          class="w-full bg-gray-900 text-white font-bold uppercase tracking-widest text-[10px] sm:text-xs py-3 sm:py-4 rounded-xl hover:bg-black hover:shadow-lg transition-all duration-300 flex items-center justify-center gap-2 group"
-        >
-          <RefreshCcw class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-          <span>{{ t("tryAgain") || "Try Again" }}</span>
-        </button>
-
         <!-- WhatsApp Button -->
         <a
           v-if="getWhatsAppUrl"
