@@ -680,7 +680,7 @@ const adjustOpacity = (color: string | undefined, opacity: number) => {
               <div class="">
                 <a
                   v-if="studioStore.studio?.whatsapp"
-                  :href="studioStore.studio.whatsapp"
+                  :href="`https://wa.me/${studioStore.studio.whatsapp}`"
                   target="_blank"
                   rel="noopener noreferrer"
                   class="inline-flex items-center gap-3 text-white/70 hover:text-white transition-all group cursor-pointer"
@@ -1013,7 +1013,7 @@ const adjustOpacity = (color: string | undefined, opacity: number) => {
           <div class="w-full flex justify-between items-center">
             <a
               v-if="studioStore.studio?.whatsapp"
-              :href="studioStore.studio.whatsapp"
+              :href="`https://wa.me/${studioStore.studio.whatsapp}`"
               :style="{
                 '--text-default': adjustOpacity(
                   heroContent?.primaryTextColor,
@@ -1841,7 +1841,7 @@ const adjustOpacity = (color: string | undefined, opacity: number) => {
               <div class="flex flex-col gap-3">
                 <a
                   v-if="studioStore.studio?.whatsapp"
-                  :href="studioStore.studio.whatsapp"
+                  :href="`https://wa.me/${studioStore.studio.whatsapp}`"
                   target="_blank"
                   rel="noopener noreferrer"
                   :style="{
