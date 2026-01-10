@@ -180,9 +180,16 @@ export type TranslationKey =
   | "surcharge"
   | "fixedPrice"
   | "noAddonsAvailable"
+  | "specialPriceSurcharge"
+  | "specialPriceDiscount"
   | "chipFee"
   | "totalToPay"
   | "totalAmount"
+  | "totalPrice"
+  | "depositAmount"
+  | "amountToPay"
+  | "balanceAtStudio"
+  | "pay"
 
   // Cart
   | "cart"

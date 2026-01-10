@@ -2134,6 +2134,11 @@ const paymentType = computed(() => {
 });
 
 const depositPercentage = computed(() => {
+  // For cart mode, use studio settings percentage
+  if (isCartModeEnabled.value && cart.value.length > 0) {
+    return studioStore.studio?.settings.deposit_percentage || 50;
+  }
+
   // Calculate percentage for display based on theme's deposit amount
   if (!selectedTheme.value || !grandTotal.value) return 50;
 
@@ -2147,7 +2152,8 @@ const depositPercentage = computed(() => {
   return studioStore.studio?.settings.deposit_percentage || 50;
 });
 
-const depositAmount = computed(() => {
+// Single item deposit amount
+const singleItemDepositAmount = computed(() => {
   if (!selectedTheme.value) return 0;
 
   // Use theme's deposit_amount if available (fixed deposit in sen)
@@ -2156,9 +2162,47 @@ const depositAmount = computed(() => {
   }
 
   // Fallback: calculate based on percentage
-  if (!grandTotal.value) return 0;
+  if (!currentItemTotal.value) return 0;
   const percentage = studioStore.studio?.settings.deposit_percentage || 50;
-  return grandTotal.value * (percentage / 100);
+  return currentItemTotal.value * (percentage / 100);
+});
+
+// Cart total deposit amount (sum of deposits for all cart items)
+const cartDepositTotal = computed(() => {
+  if (!isCartModeEnabled.value || cart.value.length === 0) return 0;
+
+  // Calculate total cart value for proportional discount
+  const totalCartValue = cart.value.reduce((sum, item) => sum + item.total, 0);
+
+  let totalDeposit = 0;
+  for (const item of cart.value) {
+    // Calculate proportional discount for this item
+    let itemDiscount = 0;
+    if (validatedCoupon.value && totalCartValue > 0) {
+      const itemProportion = item.total / totalCartValue;
+      itemDiscount = Math.round(discountAmount.value * itemProportion);
+    }
+
+    const itemTotal = item.total - itemDiscount;
+
+    // Use theme's deposit amount or calculate based on studio settings
+    const itemDeposit =
+      item.theme.deposit_amount ||
+      Math.round(
+        itemTotal *
+          ((studioStore.studio?.settings.deposit_percentage || 50) / 100)
+      );
+    totalDeposit += itemDeposit;
+  }
+  return totalDeposit;
+});
+
+// Combined deposit amount (works for both single and cart modes)
+const depositAmount = computed(() => {
+  if (isCartModeEnabled.value && cart.value.length > 0) {
+    return cartDepositTotal.value;
+  }
+  return singleItemDepositAmount.value;
 });
 
 const paymentAmount = computed(() => {
@@ -2202,13 +2246,10 @@ const specialPricingMessage = computed(() => {
 
   if (difference === 0) return null;
 
-  // Convert from sen to RM
-  const amountInRM = Math.abs(difference) / 100;
-
   if (difference > 0) {
-    return `+RM ${amountInRM.toFixed(2)} ${t("surcharge")}`;
+    return t("specialPriceSurcharge") || "Special Price Surcharge";
   } else {
-    return `-RM ${amountInRM.toFixed(2)} ${t("discount")}`;
+    return t("specialPriceDiscount") || "Special Price Discount";
   }
 });
 
@@ -2781,12 +2822,14 @@ watch(
 
                     <div
                       v-if="specialPricingMessage"
-                      class="flex items-center gap-2 mt-1"
+                      class="flex items-center gap-2 mt-1 font-bold text-amber-800 bg-amber-100/80 px-2 py-1 rounded-md border border-amber-200/50"
                     >
-                      <span
-                        class="font-bold text-amber-800 bg-amber-100/80 px-2 py-1 rounded-md border border-amber-200/50"
-                      >
-                        {{ specialPricingMessage }}
+                      <span>{{ specialPricingAmount > 0 ? "+" : "-" }}</span>
+                      <span>{{ specialPricingMessage }}</span>
+                      <span>
+                        {{ specialPricingAmount > 0 ? "+" : "-" }}RM{{
+                          formatPriceWhole(Math.abs(specialPricingAmount))
+                        }}
                       </span>
                     </div>
                     <p v-else class="text-amber-700/80 italic">
@@ -3822,15 +3865,15 @@ watch(
                       class="mt-4 space-y-2"
                     >
                       <!-- Special Pricing -->
+                      <!-- Special Pricing -->
+                      <!-- Special Pricing -->
                       <div
                         v-if="item.specialPricing"
-                        class="flex justify-between text-sm pl-4 relative before:absolute before:left-0 before:text-gray-400"
-                        :class="
-                          item.specialPricing.amount > 0
-                            ? 'before:content-[\'+\']'
-                            : 'before:content-[\'-\']'
-                        "
+                        class="flex justify-between text-sm pl-4 relative"
                       >
+                        <span class="absolute left-0 text-gray-400">
+                          {{ item.specialPricing.amount > 0 ? "+" : "-" }}
+                        </span>
                         <span class="text-gray-500">{{
                           item.specialPricing.message
                         }}</span>
@@ -3842,7 +3885,7 @@ watch(
                               : 'text-green-600'
                           "
                         >
-                          {{ item.specialPricing.amount > 0 ? "" : "-" }}RM{{
+                          {{ item.specialPricing.amount > 0 ? "+" : "-" }}RM{{
                             formatPriceWhole(
                               Math.abs(item.specialPricing.amount)
                             )
@@ -3976,57 +4019,86 @@ watch(
                 <!-- Separator -->
                 <div class="border-t border-gray-100 my-6"></div>
 
-                <!-- Totals (Matches Step 6) -->
-                <div class="space-y-4">
-                  <!-- CHIP Transaction Fee (when on_top mode and amount > 0) -->
+                <!-- Payment Summary -->
+                <div class="space-y-3">
+                  <!-- Jumlah Harga -->
+                  <div class="flex justify-between text-sm">
+                    <span class="text-gray-600">{{
+                      t("totalPrice") || "Jumlah Harga"
+                    }}</span>
+                    <span class="font-medium text-gray-900"
+                      >RM{{ formatPriceWhole(grandTotal) }}</span
+                    >
+                  </div>
+
+                  <!-- Caj Transaksi (when on_top mode and amount > 0) -->
                   <div
                     v-if="
                       studioStore.websiteSettings?.chipFeeMode === 'on_top' &&
                       grandTotal > 0
                     "
-                    class="bg-amber-50 border border-amber-200 rounded-xl p-3"
+                    class="flex justify-between text-sm"
                   >
-                    <div class="flex justify-between text-sm mb-1">
-                      <span class="text-amber-700">
-                        {{ t("chipFee") || "Caj Transaksi" }}
-                      </span>
-                      <span class="font-bold text-amber-700">RM1.00</span>
-                    </div>
-                    <div class="flex justify-between text-sm font-bold">
-                      <span class="text-amber-800">
-                        {{ t("totalToPay") || "Jumlah Bayaran" }}
-                      </span>
-                      <span class="text-amber-800"
-                        >RM{{ formatPriceWhole(grandTotal + 100) }}</span
-                      >
-                    </div>
+                    <span class="text-gray-600">{{
+                      t("chipFee") || "Caj Transaksi"
+                    }}</span>
+                    <span class="font-medium text-gray-900">RM1.00</span>
                   </div>
 
-                  <div class="flex justify-between items-end pt-2">
-                    <span
-                      class="font-bold text-sm uppercase tracking-wider text-gray-900"
-                      >{{ t("totalAmount") }}</span
-                    >
-                    <span class="font-bold text-4xl text-gray-900"
-                      >RM{{
-                        formatPriceWhole(
-                          studioStore.websiteSettings?.chipFeeMode ===
-                            "on_top" && grandTotal > 0
-                            ? grandTotal + 100
-                            : grandTotal
-                        )
-                      }}</span
-                    >
-                  </div>
-
-                  <!-- Payment Note -->
+                  <!-- Deposit row (only for deposit mode) -->
                   <div
                     v-if="paymentType === 'deposit'"
-                    class="bg-gray-50 rounded-xl p-3 text-center text-xs text-gray-500"
+                    class="flex justify-between text-sm"
                   >
-                    {{ t("payDeposit") }} ({{ depositPercentage }}%):
-                    <span class="font-bold text-gray-900"
-                      >RM{{ formatPriceWhole(paymentAmount) }}</span
+                    <span class="text-gray-600">{{
+                      t("depositAmount") || "Deposit"
+                    }}</span>
+                    <span class="font-medium text-gray-900"
+                      >RM{{ formatPriceWhole(depositAmount) }}</span
+                    >
+                  </div>
+
+                  <!-- Separator -->
+                  <div class="border-t border-gray-200 my-2"></div>
+
+                  <!-- Jumlah Perlu Dibayar - Highlighted -->
+                  <div class="bg-gray-900 rounded-xl p-4 -mx-2">
+                    <div class="flex justify-between items-center">
+                      <span
+                        class="text-sm font-medium text-white uppercase tracking-wide"
+                      >
+                        {{ t("amountToPay") || "Jumlah Perlu Dibayar" }}
+                      </span>
+                      <span class="text-2xl font-bold text-white">
+                        RM{{
+                          formatPriceWhole(
+                            paymentType === "deposit"
+                              ? depositAmount +
+                                  (studioStore.websiteSettings?.chipFeeMode ===
+                                    "on_top" && grandTotal > 0
+                                    ? 100
+                                    : 0)
+                              : grandTotal +
+                                  (studioStore.websiteSettings?.chipFeeMode ===
+                                    "on_top" && grandTotal > 0
+                                    ? 100
+                                    : 0)
+                          )
+                        }}
+                      </span>
+                    </div>
+                  </div>
+
+                  <!-- Balance to pay at studio (for deposit mode) -->
+                  <div
+                    v-if="paymentType === 'deposit'"
+                    class="text-center text-xs text-gray-500"
+                  >
+                    {{ t("balanceAtStudio") || "Baki bayar di studio" }}:
+                    <span class="font-bold text-gray-700"
+                      >RM{{
+                        formatPriceWhole(grandTotal - depositAmount)
+                      }}</span
                     >
                   </div>
                 </div>
@@ -4119,15 +4191,14 @@ watch(
                       class="mt-4 space-y-2"
                     >
                       <!-- Special Pricing -->
+                      <!-- Special Pricing -->
                       <div
                         v-if="specialPricingAmount !== 0"
-                        class="flex justify-between text-sm pl-4 relative before:absolute before:left-0 before:text-gray-400"
-                        :class="
-                          specialPricingAmount > 0
-                            ? 'before:content-[\'+\']'
-                            : 'before:content-[\'-\']'
-                        "
+                        class="flex justify-between text-sm pl-4 relative"
                       >
+                        <span class="absolute left-0 text-gray-400">
+                          {{ specialPricingAmount > 0 ? "+" : "-" }}
+                        </span>
                         <span class="text-gray-500">
                           {{ specialPricingMessage || t("specialDate") }}
                         </span>
@@ -4139,7 +4210,7 @@ watch(
                               : 'text-green-600'
                           "
                         >
-                          {{ specialPricingAmount > 0 ? "" : "-" }}RM{{
+                          {{ specialPricingAmount > 0 ? "+" : "-" }}RM{{
                             formatPriceWhole(Math.abs(specialPricingAmount))
                           }}
                         </span>
@@ -4156,7 +4227,7 @@ watch(
                           }})
                         </span>
                         <span class="font-bold text-gray-900"
-                          >RM{{ formatPriceWhole(extraPaxCost) }}</span
+                          >+RM{{ formatPriceWhole(extraPaxCost) }}</span
                         >
                       </div>
 
@@ -4173,7 +4244,7 @@ watch(
                             (x{{ qty }})
                           </span>
                           <span class="font-bold text-gray-900">
-                            RM{{
+                            +RM{{
                               formatPriceWhole(
                                 (studioStore.addons.find((a) => a.id === id)
                                   ?.price || 0) * qty
@@ -4240,57 +4311,88 @@ watch(
                   <!-- Separator -->
                   <div class="border-t border-gray-100"></div>
 
-                  <!-- 4. Totals -->
-                  <div class="space-y-4">
-                    <!-- CHIP Transaction Fee (when on_top mode and amount > 0) -->
+                  <!-- Payment Summary -->
+                  <div class="space-y-3">
+                    <!-- Jumlah Harga -->
+                    <div class="flex justify-between text-sm">
+                      <span class="text-gray-600">{{
+                        t("totalPrice") || "Jumlah Harga"
+                      }}</span>
+                      <span class="font-medium text-gray-900"
+                        >RM{{ formatPriceWhole(grandTotal) }}</span
+                      >
+                    </div>
+
+                    <!-- Caj Transaksi (when on_top mode and amount > 0) -->
                     <div
                       v-if="
                         studioStore.websiteSettings?.chipFeeMode === 'on_top' &&
                         grandTotal > 0
                       "
-                      class="bg-amber-50 border border-amber-200 rounded-xl p-3"
+                      class="flex justify-between text-sm"
                     >
-                      <div class="flex justify-between text-sm mb-1">
-                        <span class="text-amber-700">
-                          {{ t("chipFee") }}
-                        </span>
-                        <span class="font-bold text-amber-700">RM1.00</span>
-                      </div>
-                      <!-- <div class="flex justify-between text-sm font-bold">
-                        <span class="text-amber-800">
-                          {{ t("totalToPay") }}
-                        </span>
-                        <span class="text-amber-800"
-                          >RM{{ formatPriceWhole(grandTotal + 100) }}</span
-                        >
-                      </div> -->
+                      <span class="text-gray-600">{{
+                        t("chipFee") || "Caj Transaksi"
+                      }}</span>
+                      <span class="font-medium text-gray-900">RM1.00</span>
                     </div>
 
-                    <div class="flex justify-between items-end pt-2">
-                      <span
-                        class="font-bold text-sm uppercase tracking-wider text-gray-900"
-                        >{{ t("totalAmount") }}</span
-                      >
-                      <span class="font-bold text-4xl text-gray-900"
-                        >RM{{
-                          formatPriceWhole(
-                            studioStore.websiteSettings?.chipFeeMode ===
-                              "on_top" && grandTotal > 0
-                              ? grandTotal + 100
-                              : grandTotal
-                          )
-                        }}</span
-                      >
-                    </div>
-
-                    <!-- Payment Note (Deposit vs Full) -->
+                    <!-- Deposit row (only for deposit mode) -->
                     <div
-                      class="bg-gray-50 rounded-xl p-3 text-center text-xs text-gray-500"
                       v-if="paymentType === 'deposit'"
+                      class="flex justify-between text-sm"
                     >
-                      {{ t("payDeposit") }} ({{ depositPercentage }}%):
-                      <span class="font-bold text-gray-900"
-                        >RM{{ formatPriceWhole(paymentAmount) }}</span
+                      <span class="text-gray-600">{{
+                        t("depositAmount") || "Deposit"
+                      }}</span>
+                      <span class="font-medium text-gray-900"
+                        >RM{{ formatPriceWhole(depositAmount) }}</span
+                      >
+                    </div>
+
+                    <!-- Separator -->
+                    <div class="border-t border-gray-200 my-2"></div>
+
+                    <!-- Jumlah Perlu Dibayar - Highlighted -->
+                    <div class="bg-gray-900 rounded-xl p-4 -mx-2">
+                      <div class="flex justify-between items-center">
+                        <span
+                          class="text-sm font-medium text-white uppercase tracking-wide"
+                        >
+                          {{ t("amountToPay") || "Jumlah Perlu Dibayar" }}
+                        </span>
+                        <span class="text-2xl font-bold text-white">
+                          RM{{
+                            formatPriceWhole(
+                              paymentType === "deposit"
+                                ? depositAmount +
+                                    (studioStore.websiteSettings
+                                      ?.chipFeeMode === "on_top" &&
+                                    grandTotal > 0
+                                      ? 100
+                                      : 0)
+                                : grandTotal +
+                                    (studioStore.websiteSettings
+                                      ?.chipFeeMode === "on_top" &&
+                                    grandTotal > 0
+                                      ? 100
+                                      : 0)
+                            )
+                          }}
+                        </span>
+                      </div>
+                    </div>
+
+                    <!-- Balance to pay at studio (for deposit mode) -->
+                    <div
+                      v-if="paymentType === 'deposit'"
+                      class="text-center text-xs text-gray-500"
+                    >
+                      {{ t("balanceAtStudio") || "Baki bayar di studio" }}:
+                      <span class="font-bold text-gray-700"
+                        >RM{{
+                          formatPriceWhole(grandTotal - depositAmount)
+                        }}</span
                       >
                     </div>
                   </div>
@@ -4389,12 +4491,40 @@ watch(
               <span v-else-if="isCartModeEnabled && currentStep === 3">{{
                 t("addToCart") || "Add to Cart"
               }}</span>
-              <span v-else-if="isCartModeEnabled && currentStep === 7">{{
-                t("payNow")
-              }}</span>
-              <span v-else-if="!isCartModeEnabled && currentStep === 6">{{
-                t("payNow")
-              }}</span>
+              <span v-else-if="isCartModeEnabled && currentStep === 7">
+                {{ t("pay") || "Bayar" }} RM{{
+                  formatPriceWhole(
+                    paymentType === "deposit"
+                      ? depositAmount +
+                          (studioStore.websiteSettings?.chipFeeMode ===
+                            "on_top" && grandTotal > 0
+                            ? 100
+                            : 0)
+                      : grandTotal +
+                          (studioStore.websiteSettings?.chipFeeMode ===
+                            "on_top" && grandTotal > 0
+                            ? 100
+                            : 0)
+                  )
+                }}
+              </span>
+              <span v-else-if="!isCartModeEnabled && currentStep === 6">
+                {{ t("pay") || "Bayar" }} RM{{
+                  formatPriceWhole(
+                    paymentType === "deposit"
+                      ? depositAmount +
+                          (studioStore.websiteSettings?.chipFeeMode ===
+                            "on_top" && grandTotal > 0
+                            ? 100
+                            : 0)
+                      : grandTotal +
+                          (studioStore.websiteSettings?.chipFeeMode ===
+                            "on_top" && grandTotal > 0
+                            ? 100
+                            : 0)
+                  )
+                }}
+              </span>
               <span v-else>{{ t("next") }}</span>
               <Plus
                 v-if="

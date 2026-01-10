@@ -186,9 +186,16 @@ export const translationsBM: Translations = {
   surcharge: "surcaj",
   fixedPrice: "Harga tetap",
   noAddonsAvailable: "Tiada tambahan tersedia untuk tema ini",
+  specialPriceSurcharge: "Surcaj Harga Istimewa",
+  specialPriceDiscount: "Diskaun Harga Istimewa",
   chipFee: "Caj Transaksi",
   totalToPay: "Jumlah Bayaran",
   totalAmount: "Jumlah Keseluruhan",
+  totalPrice: "Jumlah Harga",
+  depositAmount: "Deposit",
+  amountToPay: "Jumlah Perlu Dibayar",
+  balanceAtStudio: "Baki bayar di studio",
+  pay: "Bayar",
 
   // Cart
   cart: "Troli",
@@ -597,9 +604,16 @@ export const translationsEN: Translations = {
   surcharge: "surcharge",
   fixedPrice: "Fixed price",
   noAddonsAvailable: "No add-ons available for this theme",
+  specialPriceSurcharge: "Special Price Surcharge",
+  specialPriceDiscount: "Special Price Discount",
   chipFee: "Transaction Fee",
   totalToPay: "Total to Pay",
   totalAmount: "Total Amount",
+  totalPrice: "Total Price",
+  depositAmount: "Deposit",
+  amountToPay: "Amount to Pay",
+  balanceAtStudio: "Balance to pay at studio",
+  pay: "Pay",
 
   // Cart
   cart: "Cart",
