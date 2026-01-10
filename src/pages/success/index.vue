@@ -643,7 +643,7 @@ const getWhatsAppUrl = computed(() => {
         <!-- Actions -->
         <div class="space-y-2.5 sm:space-y-3 pt-2">
           <!-- WhatsApp Button -->
-          <a
+          <!-- <a
             v-if="getWhatsAppUrl"
             :href="getWhatsAppUrl"
             target="_blank"
@@ -655,7 +655,7 @@ const getWhatsAppUrl = computed(() => {
             <ArrowRight
               class="w-3.5 h-3.5 sm:w-4 sm:h-4 transition-transform group-hover:translate-x-1"
             />
-          </a>
+          </a> -->
 
           <!-- Back to Home Button -->
           <button
