@@ -46,13 +46,52 @@ const toggleAccordion = (index: number) => {
 const booking = computed(() => bookings.value[0] || null);
 const isMultipleBookings = computed(() => bookings.value.length > 1);
 
+// Helper to check if any booking needs status update
+const hasAnyPendingPayment = (bookingList: Booking[]) => {
+  return bookingList.some((b) => b.payment_status === "pending");
+};
+
+// Fetch booking data with retry for webhook race condition
+const fetchBookingsWithRetry = async (
+  ids: string[],
+  maxRetries: number = 5,
+  delayMs: number = 1500
+): Promise<Booking[]> => {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const fetchedBookings = await Promise.all(
+      ids.map((id) => getBookingById(id.trim()))
+    );
+    const validBookings = fetchedBookings.filter(
+      (b) => b !== null
+    ) as Booking[];
+
+    // If only 1 booking or no pending payments, we're done
+    if (validBookings.length <= 1 || !hasAnyPendingPayment(validBookings)) {
+      return validBookings;
+    }
+
+    // If there are pending payments and retries remaining, wait and retry
+    if (attempt < maxRetries) {
+      console.log(
+        `[Success] Some bookings still pending, retrying in ${delayMs}ms (attempt ${
+          attempt + 1
+        }/${maxRetries})`
+      );
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+
+  // Return whatever we have after max retries
+  console.log("[Success] Max retries reached, showing current status");
+  return await Promise.all(ids.map((id) => getBookingById(id.trim()))).then(
+    (results) => results.filter((b) => b !== null) as Booking[]
+  );
+};
+
 // Fetch all booking data
 onMounted(async () => {
   try {
-    const fetchedBookings = await Promise.all(
-      bookingIds.map((id) => getBookingById(id.trim()))
-    );
-    bookings.value = fetchedBookings.filter((b) => b !== null) as Booking[];
+    bookings.value = await fetchBookingsWithRetry(bookingIds);
     if (bookings.value.length === 0) {
       error.value = t("bookingNotFound");
     }
@@ -102,23 +141,23 @@ const getFormattedCreatedDate = (b: Booking) => {
   }
 };
 
-const paymentStatusLabel = computed(() => {
-  if (!booking.value) return "";
-  switch (booking.value.payment_status) {
+const getPaymentStatusLabel = (b: Booking | null) => {
+  if (!b) return "";
+  switch (b.payment_status) {
     case "paid":
-      return t("fullPayment") || "Full Payment";
+      return t("fullPayment");
     case "partially_paid":
-      return t("depositPaid") || "Deposit Paid";
+      return t("depositPaid");
     case "pending":
-      return t("paymentPending") || "Payment Pending";
+      return t("paymentPending");
     default:
-      return booking.value.payment_status;
+      return b.payment_status;
   }
-});
+};
 
-const paymentStatusColor = computed(() => {
-  if (!booking.value) return "bg-gray-100 text-gray-600";
-  switch (booking.value.payment_status) {
+const getPaymentStatusColor = (b: Booking | null) => {
+  if (!b) return "bg-gray-100 text-gray-600";
+  switch (b.payment_status) {
     case "paid":
       return "bg-green-100 text-green-700";
     case "partially_paid":
@@ -128,7 +167,7 @@ const paymentStatusColor = computed(() => {
     default:
       return "bg-gray-100 text-gray-600";
   }
-});
+};
 
 const goHome = () => router.push("/");
 
@@ -232,65 +271,16 @@ const getWhatsAppUrl = computed(() => {
             <span
               :class="[
                 'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] sm:text-xs font-bold uppercase tracking-wider',
-                paymentStatusColor,
+                getPaymentStatusColor(booking),
               ]"
             >
               <CreditCard class="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-              {{ paymentStatusLabel }}
+              {{ getPaymentStatusLabel(booking) }}
             </span>
           </div>
         </div>
 
-        <!-- Multiple Bookings (Cart Mode) -->
-        <div
-          v-else
-          class="bg-gray-50 rounded-xl p-3 sm:p-4 border border-gray-100 space-y-3"
-        >
-          <div class="text-center">
-            <span
-              class="block text-[10px] sm:text-xs font-bold text-gray-400 uppercase tracking-widest mb-2"
-              >{{ bookings.length }} {{ t("bookings") }}</span
-            >
-          </div>
-
-          <!-- Booking IDs with Payment Status -->
-          <div class="space-y-2">
-            <div
-              v-for="(b, index) in bookings"
-              :key="b.booking_number"
-              class="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-gray-100"
-            >
-              <div class="flex items-center gap-2 min-w-0">
-                <span class="text-xs text-gray-400 font-medium"
-                  >{{ index + 1 }}.</span
-                >
-                <span
-                  class="font-mono text-sm font-bold text-gray-900 truncate"
-                  >{{ b.booking_number }}</span
-                >
-              </div>
-              <span
-                :class="[
-                  'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase',
-                  b.payment_status === 'paid'
-                    ? 'bg-green-100 text-green-700'
-                    : b.payment_status === 'partially_paid'
-                    ? 'bg-blue-100 text-blue-700'
-                    : 'bg-amber-100 text-amber-700',
-                ]"
-              >
-                <CreditCard class="w-2.5 h-2.5" />
-                {{
-                  b.payment_status === "paid"
-                    ? t("fullPayment")
-                    : b.payment_status === "partially_paid"
-                    ? t("depositPaid")
-                    : t("pending")
-                }}
-              </span>
-            </div>
-          </div>
-        </div>
+        <!-- Multiple Bookings (Cart Mode) Summary Removed as per request -->
 
         <!-- Booking Details -->
         <div class="space-y-4">
@@ -313,7 +303,7 @@ const getWhatsAppUrl = computed(() => {
               }"
             >
               <div class="flex flex-col gap-1">
-                <div class="flex items-center gap-2">
+                <div class="flex flex-wrap items-center gap-2">
                   <span
                     class="text-[10px] font-bold text-gray-500 uppercase tracking-wider"
                     >{{ t("booking") }} {{ bIndex + 1 }}</span
@@ -321,6 +311,16 @@ const getWhatsAppUrl = computed(() => {
                   <span class="font-mono text-xs text-gray-400">{{
                     b.booking_number
                   }}</span>
+
+                  <span
+                    :class="[
+                      'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase',
+                      getPaymentStatusColor(b),
+                    ]"
+                  >
+                    <!-- <CreditCard class="w-2.5 h-2.5" /> -->
+                    {{ getPaymentStatusLabel(b) }}
+                  </span>
                 </div>
                 <h3 class="font-bold text-gray-900 text-sm leading-tight">
                   {{ b.theme?.name }}
@@ -438,30 +438,24 @@ const getWhatsAppUrl = computed(() => {
                       </svg>
                       <span
                         class="text-xs font-bold text-gray-500 uppercase tracking-wider"
-                        >{{ t("customerDetails") || "Customer Details" }}</span
+                        >{{ t("customerDetails") }}</span
                       >
                     </div>
                     <div class="space-y-1.5 text-xs sm:text-sm">
                       <div class="flex justify-between">
-                        <span class="text-gray-500">{{
-                          t("name") || "Name"
-                        }}</span>
+                        <span class="text-gray-500">{{ t("name") }}</span>
                         <span class="font-medium text-gray-900">{{
                           b.customer_name
                         }}</span>
                       </div>
                       <div class="flex justify-between">
-                        <span class="text-gray-500">{{
-                          t("phone") || "Phone"
-                        }}</span>
+                        <span class="text-gray-500">{{ t("phone") }}</span>
                         <span class="font-medium text-gray-900">{{
                           b.customer_phone
                         }}</span>
                       </div>
                       <div v-if="b.customer_email" class="flex justify-between">
-                        <span class="text-gray-500">{{
-                          t("email") || "Email"
-                        }}</span>
+                        <span class="text-gray-500">{{ t("email") }}</span>
                         <span class="font-medium text-gray-900 break-all">{{
                           b.customer_email
                         }}</span>
@@ -471,7 +465,7 @@ const getWhatsAppUrl = computed(() => {
                         class="pt-1.5 border-t border-gray-100"
                       >
                         <span class="text-gray-500 block mb-1">{{
-                          t("notes") || "Notes"
+                          t("notes")
                         }}</span>
                         <span class="text-gray-700 italic"
                           >"{{ b.customer_notes }}"</span
@@ -482,7 +476,7 @@ const getWhatsAppUrl = computed(() => {
                       v-if="getFormattedCreatedDate(b)"
                       class="text-[10px] text-gray-400 pt-2 border-t border-gray-100"
                     >
-                      {{ t("bookedOn") || "Booked on" }}:
+                      {{ t("bookedOn") }}:
                       {{ getFormattedCreatedDate(b) }}
                     </div>
                   </div>
@@ -496,7 +490,7 @@ const getWhatsAppUrl = computed(() => {
                       <Receipt class="w-4 h-4 text-gray-400" />
                       <span
                         class="text-xs font-bold text-gray-500 uppercase tracking-wider"
-                        >{{ t("paymentSummary") || "Payment Summary" }}</span
+                        >{{ t("paymentSummary") }}</span
                       >
                     </div>
 

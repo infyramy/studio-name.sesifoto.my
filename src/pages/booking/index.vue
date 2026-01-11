@@ -887,6 +887,33 @@ const selectTheme = (theme: Theme) => {
   // Don't auto-navigate - user must click next button
 };
 
+// Helper to convert time string to minutes for comparison
+const timeToMinutes = (timeStr: string): number => {
+  if (!timeStr) return 0;
+  // Handle both 24-hour format (09:00) and display format (9:00 AM)
+  let hours: number;
+  let minutes: number;
+
+  if (timeStr.includes("AM") || timeStr.includes("PM")) {
+    // Display format: "9:00 AM" or "12:30 PM"
+    const isPM = timeStr.toUpperCase().includes("PM");
+    const timePart = timeStr.replace(/\s*(AM|PM)\s*/i, "");
+    const parts = timePart.split(":").map(Number);
+    hours = parts[0] || 0;
+    minutes = parts[1] || 0;
+
+    if (isPM && hours !== 12) hours += 12;
+    if (!isPM && hours === 12) hours = 0;
+  } else {
+    // 24-hour format: "09:00" or "14:30"
+    const parts = timeStr.split(":").map(Number);
+    hours = parts[0] || 0;
+    minutes = parts[1] || 0;
+  }
+
+  return hours * 60 + minutes;
+};
+
 // Helper function to process time slots and disable past slots for current date
 const processTimeSlots = (slots: any[], dateStr: string) => {
   // Check if selected date is today
@@ -900,6 +927,11 @@ const processTimeSlots = (slots: any[], dateStr: string) => {
   // Get current time in hours and minutes
   const currentHour = today.getHours();
   const currentMinute = today.getMinutes();
+
+  // Get cart items for the same theme and date to check for overlap
+  const cartItemsForThemeAndDate = cart.value.filter(
+    (item) => item.theme.id === selectedTheme.value?.id && item.date === dateStr
+  );
 
   return slots.map((slot, index) => {
     let isAvailable = slot.status === "available";
@@ -916,6 +948,27 @@ const processTimeSlots = (slots: any[], dateStr: string) => {
         (slotHour === currentHour && slotMinute <= currentMinute)
       ) {
         isAvailable = false;
+      }
+    }
+
+    // Check if this slot overlaps with any cart item (for the same theme and date)
+    if (isAvailable && cartItemsForThemeAndDate.length > 0) {
+      const slotStartMinutes = timeToMinutes(slot.start || "09:00");
+      const slotEndMinutes = timeToMinutes(slot.end || "09:30");
+
+      for (const cartItem of cartItemsForThemeAndDate) {
+        // Cart item slot times are in display format (e.g., "9:00 AM")
+        const cartSlotStartMinutes = timeToMinutes(cartItem.slot.start);
+        const cartSlotEndMinutes = timeToMinutes(cartItem.slot.end);
+
+        // Check for overlap: slot starts before cart item ends AND slot ends after cart item starts
+        if (
+          slotStartMinutes < cartSlotEndMinutes &&
+          slotEndMinutes > cartSlotStartMinutes
+        ) {
+          isAvailable = false;
+          break;
+        }
       }
     }
 
