@@ -294,6 +294,8 @@ export type TranslationKey =
   | "paymentCancelledMessage"
   | "paymentExpired"
   | "paymentExpiredMessage"
+  | "paymentUnavailable"
+  | "paymentUnavailableMessage"
   | "noChargeApplied"
   | "bookingFailed"
   | "noTermsConfigured"

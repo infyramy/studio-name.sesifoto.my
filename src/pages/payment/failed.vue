@@ -21,6 +21,8 @@ const errorTitle = computed(() => {
       return t("paymentCancelled") || "Payment Cancelled";
     case "payment_expired":
       return t("paymentExpired") || "Payment Expired";
+    case "payment_unavailable":
+      return t("paymentUnavailable") || "Payment Unavailable";
     default:
       return t("paymentFailed") || "Payment Failed";
   }
@@ -37,6 +39,11 @@ const errorMessage = computed(() => {
       return (
         t("paymentExpiredMessage") ||
         "The payment session has expired. Please try again."
+      );
+    case "payment_unavailable":
+      return (
+        t("paymentUnavailableMessage") ||
+        "Cannot proceed with payment at the moment. Please contact the studio."
       );
     default:
       return (

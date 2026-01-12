@@ -305,6 +305,9 @@ export const translationsBM: Translations = {
     "Anda telah membatalkan pembayaran. Tempahan anda tidak disahkan.",
   paymentExpired: "Pembayaran Tamat Tempoh",
   paymentExpiredMessage: "Sesi pembayaran telah tamat tempoh. Sila cuba lagi.",
+  paymentUnavailable: "Pembayaran Tidak Tersedia",
+  paymentUnavailableMessage:
+    "Tidak dapat meneruskan pembayaran buat masa ini. Sila hubungi studio.",
   noChargeApplied: "Tiada caj dikenakan ke akaun anda.",
   bookingFailed: "Gagal membuat tempahan. Sila cuba lagi.",
   noTermsConfigured: "Tiada terma dan syarat dikonfigurasikan.",
@@ -724,6 +727,9 @@ export const translationsEN: Translations = {
     "You cancelled the payment. Your booking has not been confirmed.",
   paymentExpired: "Payment Expired",
   paymentExpiredMessage: "The payment session has expired. Please try again.",
+  paymentUnavailable: "Payment Unavailable",
+  paymentUnavailableMessage:
+    "Cannot proceed with payment at the moment. Please contact the studio.",
   noChargeApplied: "No charges have been applied to your account.",
   bookingFailed: "Failed to create booking. Please try again.",
   noTermsConfigured: "No terms and conditions configured.",

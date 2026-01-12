@@ -1872,6 +1872,15 @@ const nextStep = async () => {
       } catch (error: any) {
         console.error("Failed to create bookings:", error);
 
+        // Check for payment unavailable error (CHIP no payment method)
+        if (
+          error.message?.includes("Cannot proceed with payment") ||
+          error.data?.message?.includes("Cannot proceed with payment")
+        ) {
+          router.push("/payment/failed?error=payment_unavailable");
+          return;
+        }
+
         // Show error to user
         await showModal({
           title: t("error") || "Error",
@@ -1981,6 +1990,15 @@ const nextStep = async () => {
         router.push(`/success/${createdBooking.booking_number}`);
       } catch (error: any) {
         console.error("Failed to create booking:", error);
+
+        // Check for payment unavailable error (CHIP no payment method)
+        if (
+          error.message?.includes("Cannot proceed with payment") ||
+          error.data?.message?.includes("Cannot proceed with payment")
+        ) {
+          router.push("/payment/failed?error=payment_unavailable");
+          return;
+        }
 
         // Show error to user
         await showModal({
