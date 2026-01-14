@@ -407,6 +407,14 @@ export const api = {
   async createBooking(request: BookingRequest): Promise<Booking> {
     const slug = getStudioSlug();
 
+    // Get referral code from sessionStorage if available
+    let referralCode: string | undefined;
+    try {
+      referralCode = sessionStorage.getItem("referral_code") || undefined;
+    } catch {
+      // sessionStorage not available
+    }
+
     const data = await apiFetch("/public/bookings", {
       method: "POST",
       body: {
@@ -429,6 +437,7 @@ export const api = {
         couponCode: request.coupon_code,
         discountAmount: request.discount_amount,
         sessionId: request.session_id,
+        referralCode: referralCode,
       },
     });
 

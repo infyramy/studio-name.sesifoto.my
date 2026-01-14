@@ -88,7 +88,7 @@ const routes: RouteRecordRaw[] = [
 const router = createRouter({
   history: createWebHistory(),
   routes,
-  scrollBehavior(to, from, savedPosition) {
+  scrollBehavior(_to, _from, savedPosition) {
     if (savedPosition) {
       return savedPosition;
     }
@@ -97,8 +97,21 @@ const router = createRouter({
 });
 
 // Global navigation guard to load studio data
-router.beforeEach(async (to, from, next) => {
+router.beforeEach(async (to, _from, next) => {
   const studioStore = useStudioStore();
+
+  // Check for referral code in query parameter (e.g., ?r=REFCODE123)
+  if (to.query.r) {
+    try {
+      const referralCode = (to.query.r as string).toUpperCase();
+      sessionStorage.setItem("referral_code", referralCode);
+      console.log(
+        `[Referral] Stored referral code from query: ${referralCode}`
+      );
+    } catch (error) {
+      console.error("Failed to store referral code from query:", error);
+    }
+  }
 
   // Skip studio check for studio-not-found and not-found pages
   if (to.name === "studio-not-found" || to.name === "not-found") {
