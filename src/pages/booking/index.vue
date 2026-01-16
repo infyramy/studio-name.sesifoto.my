@@ -4,6 +4,7 @@ import { useRouter } from "vue-router";
 import { useStudioStore } from "@/stores/studio";
 import { useTranslation } from "@/composables/useTranslation";
 import { useCurrency } from "@/composables/useCurrency";
+import { useSanitize } from "@/composables/useSanitize";
 import { createBooking, api } from "@/services/api";
 import {
   ChevronLeft,
@@ -34,6 +35,8 @@ import type { Theme, Coupon } from "@/types";
 import Modal from "@/components/Modal.vue";
 import ImageCarousel from "@/components/ImageCarousel.vue";
 import { marked } from "marked";
+
+const { sanitize } = useSanitize();
 
 const router = useRouter();
 const studioStore = useStudioStore();
@@ -3674,7 +3677,7 @@ watch(
 
                     <div
                       class="space-y-4 text-sm sm:text-base leading-relaxed"
-                      v-html="termsContentHtml"
+                      v-html="sanitize(termsContentHtml)"
                     />
                   </div>
 
@@ -3770,7 +3773,7 @@ watch(
 
                     <div
                       class="space-y-4 text-sm sm:text-base leading-relaxed"
-                      v-html="termsContentHtml"
+                      v-html="sanitize(termsContentHtml)"
                     />
                   </div>
 

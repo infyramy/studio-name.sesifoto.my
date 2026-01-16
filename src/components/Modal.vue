@@ -7,6 +7,9 @@ import {
   Info,
   XCircle,
 } from "lucide-vue-next";
+import { useSanitize } from "@/composables/useSanitize";
+
+const { sanitize } = useSanitize();
 
 interface Props {
   show: boolean;
@@ -98,7 +101,7 @@ const handleBackdropClick = () => {
           </h3>
           <p
             class="text-[15px] leading-relaxed mb-8"
-            v-html="message.replace(/\n/g, '<br>')"
+            v-html="sanitize(message.replace(/\n/g, '<br>'))"
           ></p>
 
           <!-- Buttons -->
