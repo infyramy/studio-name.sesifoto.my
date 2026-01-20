@@ -172,7 +172,7 @@ const adjustOpacity = (color: string | undefined, opacity: number) => {
       <div class="absolute inset-0 z-0">
         <img
           src="https://i.postimg.cc/t4wCcRhG/untitled-10.jpg"
-          class="w-full h-full object-cover blur-2xl opacity-20 scale-110"
+          class="w-full h-full object-cover blur-2xl opacity-20 scale-110 rounded-lg"
         />
         <div
           class="absolute inset-0 bg-gradient-to-b from-black via-black/80 to-black"
@@ -195,7 +195,7 @@ const adjustOpacity = (color: string | undefined, opacity: number) => {
             <img
               v-if="studioStore.studio?.logo_url"
               :src="studioStore.studio.logo_url"
-              class="w-full h-auto object-contain drop-shadow-[0_0_20px_rgba(255,255,255,0.15)]"
+              class="w-full h-auto object-contain drop-shadow-[0_0_20px_rgba(255,255,255,0.15)] rounded-lg"
             />
             <Camera v-else class="w-12 h-12 text-white/50" />
           </div>
@@ -263,7 +263,7 @@ const adjustOpacity = (color: string | undefined, opacity: number) => {
             v-if="studioStore.studio?.logo_url"
             :src="studioStore.studio.logo_url"
             alt="Studio Logo"
-            class="h-12 md:h-14 w-auto"
+            class="h-12 md:h-14 w-auto rounded-lg"
           />
           <Camera v-else class="w-10 h-10 text-white/90" />
         </div>
@@ -271,7 +271,7 @@ const adjustOpacity = (color: string | undefined, opacity: number) => {
         <div class="space-y-4 relative z-10">
           <h1
             class="text-3xl md:text-5xl font-black text-white tracking-tight leading-[1.1] uppercase drop-shadow-lg"
-            style="font-family: 'Bricolage Grotesque', sans-serif"
+            style="font-family: &quot;Bricolage Grotesque&quot;, sans-serif"
           >
             {{ t("bookingUnavailable") }}
           </h1>
@@ -333,7 +333,7 @@ const adjustOpacity = (color: string | undefined, opacity: number) => {
   <div
     v-if="currentStyle === 'rustic' && !isLoading && isBookingOpen"
     class="min-h-screen w-full relative overflow-hidden flex flex-col font-sans rustic-container"
-    style="font-family: 'Bricolage Grotesque', sans-serif"
+    style="font-family: &quot;Bricolage Grotesque&quot;, sans-serif"
   >
     <!-- Rustic Background Images with Crossfade -->
     <div class="fixed inset-0 z-0 bg-black">
@@ -557,7 +557,7 @@ const adjustOpacity = (color: string | undefined, opacity: number) => {
             <div class="flex items-end gap-2">
               <img
                 :src="studioStore.studio?.logo_url"
-                class="w-auto h-10"
+                class="w-auto h-10 sm:h-12 rounded-lg"
                 alt=""
               />
             </div>
@@ -782,7 +782,11 @@ const adjustOpacity = (color: string | undefined, opacity: number) => {
           }"
           class="flex items-center gap-3 backdrop-blur-sm py-2 px-4 rounded-full border border-amber-500/30 shadow-xl"
         >
-          <img :src="studioStore.studio?.logo_url" alt="" class="w-auto h-4" />
+          <img
+            :src="studioStore.studio?.logo_url"
+            alt=""
+            class="w-auto h-4 rounded-lg"
+          />
           <span
             :style="{ color: heroContent?.primaryTextColor }"
             class="text-xs tracking-widest uppercase font-medium"
@@ -818,7 +822,7 @@ const adjustOpacity = (color: string | undefined, opacity: number) => {
             :style="{
               backgroundImage: `linear-gradient(to right, transparent, ${adjustOpacity(
                 heroContent?.primaryTextColor,
-                0.5
+                0.5,
               )})`,
             }"
           ></div>
@@ -834,7 +838,7 @@ const adjustOpacity = (color: string | undefined, opacity: number) => {
             :style="{
               backgroundImage: `linear-gradient(to left, transparent, ${adjustOpacity(
                 heroContent?.primaryTextColor,
-                0.5
+                0.5,
               )})`,
             }"
           ></div>
@@ -892,12 +896,12 @@ const adjustOpacity = (color: string | undefined, opacity: number) => {
               :style="{
                 '--text-default': adjustOpacity(
                   heroContent?.primaryTextColor,
-                  0.6
+                  0.6,
                 ),
                 '--text-hover': heroContent?.primaryTextColor,
                 '--border-default': adjustOpacity(
                   heroContent?.primaryTextColor,
-                  0.3
+                  0.3,
                 ),
                 '--border-hover': heroContent?.primaryTextColor,
               }"
@@ -962,13 +966,13 @@ const adjustOpacity = (color: string | undefined, opacity: number) => {
               :style="{
                 '--text-default': adjustOpacity(
                   heroContent?.primaryTextColor,
-                  0.7
+                  0.7,
                 ),
                 '--text-hover': heroContent?.primaryTextColor,
                 '--bg-icon': adjustOpacity(heroContent?.primaryTextColor, 0.05),
                 '--border-icon': adjustOpacity(
                   heroContent?.primaryTextColor,
-                  0.2
+                  0.2,
                 ),
               }"
               target="_blank"
@@ -1017,13 +1021,13 @@ const adjustOpacity = (color: string | undefined, opacity: number) => {
               :style="{
                 '--text-default': adjustOpacity(
                   heroContent?.primaryTextColor,
-                  0.7
+                  0.7,
                 ),
                 '--text-hover': heroContent?.primaryTextColor,
                 '--bg-icon': adjustOpacity(heroContent?.primaryTextColor, 0.05),
                 '--border-icon': adjustOpacity(
                   heroContent?.primaryTextColor,
-                  0.2
+                  0.2,
                 ),
               }"
               target="_blank"
@@ -1348,7 +1352,7 @@ const adjustOpacity = (color: string | undefined, opacity: number) => {
     :class="
       heroContent?.invertTheme ? 'bg-black text-white' : 'bg-white text-black'
     "
-    style="font-family: 'Bricolage Grotesque', sans-serif"
+    style="font-family: &quot;Bricolage Grotesque&quot;, sans-serif"
   >
     <!-- Social Icons (Top Right) -->
     <div class="absolute top-6 right-6 z-30 md:z-20">
@@ -1636,7 +1640,7 @@ const adjustOpacity = (color: string | undefined, opacity: number) => {
               studioStore.studio?.logo_url || '../../assets/studio-logo-2.webp'
             "
             alt=""
-            class="w-auto h-10 md:h-12"
+            class="w-auto h-10 md:h-12 rounded-lg"
           />
         </button>
       </header>
@@ -1658,7 +1662,7 @@ const adjustOpacity = (color: string | undefined, opacity: number) => {
                 heroContent?.highlightColor || '#9ca3af'
               } 0%, ${adjustOpacity(
                 heroContent?.highlightColor || '#9ca3af',
-                0.7
+                0.7,
               )} 100%)`,
             }"
             >{{ heroContent?.highlightText }}</span
@@ -1701,7 +1705,7 @@ const adjustOpacity = (color: string | undefined, opacity: number) => {
               :style="{
                 '--btn-border-default': adjustOpacity(
                   heroContent?.supportingColor,
-                  0.3
+                  0.3,
                 ),
                 '--btn-border-hover': heroContent?.invertTheme
                   ? '#ffffff'
@@ -1784,13 +1788,13 @@ const adjustOpacity = (color: string | undefined, opacity: number) => {
                       : heroContent?.headingColor || '#000000',
                     '--border-default': adjustOpacity(
                       heroContent?.supportingColor,
-                      0.2
+                      0.2,
                     ),
                     '--border-hover': adjustOpacity(
                       heroContent?.invertTheme
                         ? '#ffffff'
                         : heroContent?.headingColor || '#000000',
-                      0.5
+                      0.5,
                     ),
                   }"
                   class="group flex items-center gap-3 text-[var(--text-default)] hover:text-[var(--text-hover)] transition-colors cursor-pointer"
@@ -1813,7 +1817,7 @@ const adjustOpacity = (color: string | undefined, opacity: number) => {
                     color: heroContent?.supportingColor,
                     borderColor: adjustOpacity(
                       heroContent?.supportingColor,
-                      0.2
+                      0.2,
                     ),
                   }"
                   class="flex items-center gap-3 opacity-60"
@@ -1823,7 +1827,7 @@ const adjustOpacity = (color: string | undefined, opacity: number) => {
                     :style="{
                       borderColor: adjustOpacity(
                         heroContent?.supportingColor,
-                        0.2
+                        0.2,
                       ),
                     }"
                   >
@@ -1851,13 +1855,13 @@ const adjustOpacity = (color: string | undefined, opacity: number) => {
                       : heroContent?.headingColor || '#000000',
                     '--border-default': adjustOpacity(
                       heroContent?.supportingColor,
-                      0.2
+                      0.2,
                     ),
                     '--border-hover': adjustOpacity(
                       heroContent?.invertTheme
                         ? '#ffffff'
                         : heroContent?.headingColor || '#000000',
-                      0.5
+                      0.5,
                     ),
                   }"
                   class="group flex items-center gap-3 text-[var(--text-default)] hover:text-[var(--text-hover)] transition-colors cursor-pointer"
