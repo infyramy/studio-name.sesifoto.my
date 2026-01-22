@@ -288,7 +288,7 @@ async function restoreBookingState(state: any) {
     if (state.mode === "single" && state.confirmedSlot?.hold?.holdId) {
       const holds = await getActiveHolds();
       const hold = holds.find(
-        (h) => h.holdId === state.confirmedSlot.hold.holdId
+        (h) => h.holdId === state.confirmedSlot.hold.holdId,
       );
 
       if (hold) {
@@ -306,7 +306,7 @@ async function restoreBookingState(state: any) {
             const slots = await api.getAvailableTimeSlots(
               studioStore.studio.id,
               selectedTheme.value.id,
-              selectedDate.value
+              selectedDate.value,
             );
             timeSlots.value = processTimeSlots(slots, selectedDate.value);
           } catch (err) {
@@ -342,7 +342,7 @@ async function restoreBookingState(state: any) {
           const slots = await api.getAvailableTimeSlots(
             studioStore.studio.id,
             selectedTheme.value.id,
-            selectedDate.value
+            selectedDate.value,
           );
           timeSlots.value = processTimeSlots(slots, selectedDate.value);
         } catch (err) {
@@ -367,7 +367,7 @@ async function restoreBookingState(state: any) {
           const slots = await api.getAvailableTimeSlots(
             studioStore.studio.id,
             selectedTheme.value.id,
-            selectedDate.value
+            selectedDate.value,
           );
           timeSlots.value = processTimeSlots(slots, selectedDate.value);
         } catch (err) {
@@ -392,7 +392,7 @@ async function restoreBookingState(state: any) {
           const slots = await api.getAvailableTimeSlots(
             studioStore.studio.id,
             selectedTheme.value.id,
-            selectedDate.value
+            selectedDate.value,
           );
           timeSlots.value = processTimeSlots(slots, selectedDate.value);
         } catch (err) {
@@ -763,7 +763,7 @@ async function fetchAvailableDates() {
     if (websiteSettings?.bookingWindowStart) {
       // Parse as local date by appending time
       const windowStart = new Date(
-        websiteSettings.bookingWindowStart + "T00:00:00"
+        websiteSettings.bookingWindowStart + "T00:00:00",
       );
       startDate = windowStart > today ? windowStart : today;
     }
@@ -772,7 +772,7 @@ async function fetchAvailableDates() {
     let endDate = new Date(startDate);
     if (websiteSettings?.bookingWindowEnd) {
       const windowEnd = new Date(
-        websiteSettings.bookingWindowEnd + "T00:00:00"
+        websiteSettings.bookingWindowEnd + "T00:00:00",
       );
       endDate = windowEnd;
     } else {
@@ -782,11 +782,11 @@ async function fetchAvailableDates() {
     // Validation: If booking window end is before today, booking has passed
     if (websiteSettings?.bookingWindowEnd) {
       const windowEnd = new Date(
-        websiteSettings.bookingWindowEnd + "T00:00:00"
+        websiteSettings.bookingWindowEnd + "T00:00:00",
       );
       if (windowEnd < today) {
         console.log(
-          "[fetchAvailableDates] Booking window has passed, no dates available"
+          "[fetchAvailableDates] Booking window has passed, no dates available",
         );
         dates.value = [];
         loadingDates.value = false;
@@ -797,7 +797,7 @@ async function fetchAvailableDates() {
     // Validation: Ensure endDate is not before startDate
     if (endDate < startDate) {
       console.warn(
-        "[fetchAvailableDates] endDate < startDate, adjusting endDate to startDate + 29 days"
+        "[fetchAvailableDates] endDate < startDate, adjusting endDate to startDate + 29 days",
       );
       endDate = new Date(startDate);
       endDate.setDate(startDate.getDate() + 29);
@@ -821,7 +821,7 @@ async function fetchAvailableDates() {
       studio.id,
       selectedTheme.value.id,
       startDateStr,
-      endDateStr
+      endDateStr,
     );
 
     // Transform backend response to frontend format
@@ -933,7 +933,8 @@ const processTimeSlots = (slots: any[], dateStr: string) => {
 
   // Get cart items for the same theme and date to check for overlap
   const cartItemsForThemeAndDate = cart.value.filter(
-    (item) => item.theme.id === selectedTheme.value?.id && item.date === dateStr
+    (item) =>
+      item.theme.id === selectedTheme.value?.id && item.date === dateStr,
   );
 
   return slots.map((slot, index) => {
@@ -999,7 +1000,7 @@ const selectDate = async (dateStr: string) => {
       const slots = await api.getAvailableTimeSlots(
         studioStore.studio.id,
         selectedTheme.value.id,
-        dateStr
+        dateStr,
       );
 
       // Process slots and disable past ones for current date
@@ -1068,7 +1069,7 @@ async function createCartHold(slotData: any): Promise<CartHold> {
       slotData.date,
       slotData.startTime,
       slotData.endTime,
-      getSessionId()
+      getSessionId(),
     );
 
     return {
@@ -1270,7 +1271,7 @@ function showHoldConfirmationDialog(): Promise<boolean> {
       selectedSlot.value.end
     }</b>\n\n${t("reserveSlotMessage").replace(
       "{duration}",
-      `<b>${duration}</b>`
+      `<b>${duration}</b>`,
     )}`,
     type: "info",
     confirmText: t("yes"),
@@ -1288,10 +1289,10 @@ function showAddToCartConfirmationDialog(): Promise<boolean> {
   return showModal({
     title: t("addToCartConfirm"),
     message: `<b>${themeName}</b>\n<b>${slotTime}</b>\n<b>${pax} ${t(
-      "pax"
+      "pax",
     )}</b>\n\n${t("addToCartMessage").replace(
       "{duration}",
-      `<b>${duration}</b>`
+      `<b>${duration}</b>`,
     )}`,
     type: "info",
     confirmText: t("addToCart"),
@@ -1392,7 +1393,7 @@ const addToCart = async () => {
     // Calculate item total with date price modifier
     const extraPax = Math.max(
       0,
-      paxCount.value - (selectedTheme.value.base_pax || 0)
+      paxCount.value - (selectedTheme.value.base_pax || 0),
     );
     const extraPaxCost = extraPax * selectedTheme.value.extra_pax_price;
 
@@ -1529,7 +1530,7 @@ const scrollToSelectedDate = () => {
   // Wait for DOM to update with dates
   nextTick(() => {
     const selectedDateElement = dateScroller.value?.querySelector(
-      `[data-date="${selectedDate.value}"]`
+      `[data-date="${selectedDate.value}"]`,
     ) as HTMLElement | null;
 
     if (selectedDateElement && dateScroller.value) {
@@ -1574,7 +1575,7 @@ const parseTime = (timeStr: string): string => {
   if (timeStr.toUpperCase().includes("PM") && hours !== 12) {
     time = `${String(hours + 12).padStart(2, "0")}:${String(minutes).padStart(
       2,
-      "0"
+      "0",
     )}`;
   } else if (timeStr.toUpperCase().includes("AM") && hours === 12) {
     // Handle 12:xx AM -> 00:xx
@@ -1582,7 +1583,7 @@ const parseTime = (timeStr: string): string => {
   } else {
     time = `${String(hours).padStart(2, "0")}:${String(minutes).padStart(
       2,
-      "0"
+      "0",
     )}`;
   }
   return time;
@@ -1635,7 +1636,7 @@ const nextStep = async () => {
               const slots = await api.getAvailableTimeSlots(
                 studioStore.studio.id,
                 selectedTheme.value.id,
-                selectedDate.value
+                selectedDate.value,
               );
               timeSlots.value = processTimeSlots(slots, selectedDate.value);
             } catch (err) {
@@ -1660,7 +1661,7 @@ const nextStep = async () => {
               const slots = await api.getAvailableTimeSlots(
                 studioStore.studio.id,
                 selectedTheme.value.id,
-                selectedDate.value
+                selectedDate.value,
               );
               timeSlots.value = processTimeSlots(slots, selectedDate.value);
             } catch (err) {
@@ -1720,7 +1721,7 @@ const nextStep = async () => {
 
           const cartTotalAmount = cart.value.reduce(
             (sum, item) => sum + item.total,
-            0
+            0,
           );
           const itemTotal = cart.value[itemIndex].total;
           const proportion = itemTotal / cartTotalAmount;
@@ -1820,7 +1821,7 @@ const nextStep = async () => {
         let totalPaymentAmount = 0;
         for (const item of cart.value) {
           const itemDiscount = calculateProportionalDiscount(
-            cart.value.indexOf(item)
+            cart.value.indexOf(item),
           );
           const itemTotal = item.total - itemDiscount;
 
@@ -1831,7 +1832,7 @@ const nextStep = async () => {
               Math.round(
                 itemTotal *
                   ((studioStore.studio?.settings.deposit_percentage || 50) /
-                    100)
+                    100),
               );
             totalPaymentAmount += depositAmount;
           } else {
@@ -1845,7 +1846,7 @@ const nextStep = async () => {
           primaryBookingId,
           paymentType,
           additionalBookingIds.length > 0 ? additionalBookingIds : undefined,
-          totalPaymentAmount // Always pass calculated amount to avoid recalculation from discounted booking amounts
+          totalPaymentAmount, // Always pass calculated amount to avoid recalculation from discounted booking amounts
         );
 
         // Clear booking state before redirecting
@@ -1970,7 +1971,7 @@ const nextStep = async () => {
           createdBooking.id,
           paymentType,
           undefined, // No additional booking IDs for single mode
-          paymentAmount <= 0 ? 0 : undefined // Pass 0 to trigger zero payment handling
+          paymentAmount <= 0 ? 0 : undefined, // Pass 0 to trigger zero payment handling
         );
 
         // Clear booking state before redirecting
@@ -2108,7 +2109,7 @@ const extraPaxCost = computed(() => {
   if (!selectedTheme.value) return 0;
   const extra = Math.max(
     0,
-    paxCount.value - (selectedTheme.value.base_pax || 0)
+    paxCount.value - (selectedTheme.value.base_pax || 0),
   );
   return extra * selectedTheme.value.extra_pax_price;
 });
@@ -2219,7 +2220,7 @@ const depositPercentage = computed(() => {
   // If theme has a deposit_amount, calculate percentage from that
   if (selectedTheme.value.deposit_amount) {
     return Math.round(
-      (selectedTheme.value.deposit_amount / grandTotal.value) * 100
+      (selectedTheme.value.deposit_amount / grandTotal.value) * 100,
     );
   }
 
@@ -2264,7 +2265,7 @@ const cartDepositTotal = computed(() => {
       item.theme.deposit_amount ||
       Math.round(
         itemTotal *
-          ((studioStore.studio?.settings.deposit_percentage || 50) / 100)
+          ((studioStore.studio?.settings.deposit_percentage || 50) / 100),
       );
     totalDeposit += itemDeposit;
   }
@@ -2394,14 +2395,14 @@ watch(
       console.error("Failed to save booking state:", error);
     }
   },
-  { deep: true }
+  { deep: true },
 );
 </script>
 
 <template>
   <div
     class="min-h-screen relative text-gray-900 pb-20"
-    style="font-family: 'Bricolage Grotesque', sans-serif"
+    style="font-family: &quot;Bricolage Grotesque&quot;, sans-serif"
   >
     <!-- Rustic Background Images with Crossfade -->
     <!-- <div class="fixed inset-0 z-0 bg-black">
@@ -2815,8 +2816,8 @@ watch(
                       d.isBlackout
                         ? 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed opacity-60'
                         : selectedDate === d.date
-                        ? 'bg-gray-900 text-white shadow-xl scale-105 ring-4 ring-gray-100'
-                        : 'bg-white text-gray-900 border border-gray-100 hover:border-gray-300 hover:text-gray-600',
+                          ? 'bg-gray-900 text-white shadow-xl scale-105 ring-4 ring-gray-100'
+                          : 'bg-white text-gray-900 border border-gray-100 hover:border-gray-300 hover:text-gray-600',
                     ]"
                   >
                     <span
@@ -2958,8 +2959,8 @@ watch(
                     !slot.available
                       ? 'bg-gray-50 text-gray-300 border-transparent cursor-not-allowed'
                       : selectedSlot?.id === slot.id
-                      ? 'bg-gray-900 text-white border-gray-900 shadow-lg'
-                      : 'bg-white text-gray-600 border-gray-200 hover:border-gray-900 hover:text-gray-900',
+                        ? 'bg-gray-900 text-white border-gray-900 shadow-lg'
+                        : 'bg-white text-gray-600 border-gray-200 hover:border-gray-900 hover:text-gray-900',
                   ]"
                 >
                   <span class="font-bold text-sm"
@@ -3348,7 +3349,7 @@ watch(
                         >+RM{{
                           formatPriceWhole(
                             Math.max(0, item.pax - (item.theme.base_pax || 0)) *
-                              item.theme.extra_pax_price
+                              item.theme.extra_pax_price,
                           )
                         }}</span
                       >
@@ -3372,7 +3373,7 @@ watch(
                           >+RM{{
                             formatPriceWhole(
                               (studioStore.addons.find((a) => a.id === id)
-                                .price || 0) * qty
+                                .price || 0) * qty,
                             )
                           }}</span
                         >
@@ -3961,7 +3962,7 @@ watch(
                         >
                           {{ item.specialPricing.amount > 0 ? "+" : "-" }}RM{{
                             formatPriceWhole(
-                              Math.abs(item.specialPricing.amount)
+                              Math.abs(item.specialPricing.amount),
                             )
                           }}
                         </span>
@@ -3984,8 +3985,8 @@ watch(
                             formatPriceWhole(
                               Math.max(
                                 0,
-                                item.pax - (item.theme.base_pax || 0)
-                              ) * item.theme.extra_pax_price
+                                item.pax - (item.theme.base_pax || 0),
+                              ) * item.theme.extra_pax_price,
                             )
                           }}
                         </span>
@@ -4010,7 +4011,7 @@ watch(
                             +RM{{
                               formatPriceWhole(
                                 (studioStore.addons.find((a) => a.id === id)
-                                  ?.price || 0) * qty
+                                  ?.price || 0) * qty,
                               )
                             }}
                           </span>
@@ -4156,7 +4157,7 @@ watch(
                                   (studioStore.websiteSettings?.chipFeeMode ===
                                     "on_top" && grandTotal > 0
                                     ? 100
-                                    : 0)
+                                    : 0),
                           )
                         }}
                       </span>
@@ -4321,7 +4322,7 @@ watch(
                             +RM{{
                               formatPriceWhole(
                                 (studioStore.addons.find((a) => a.id === id)
-                                  ?.price || 0) * qty
+                                  ?.price || 0) * qty,
                               )
                             }}
                           </span>
@@ -4450,7 +4451,7 @@ watch(
                                       ?.chipFeeMode === "on_top" &&
                                     grandTotal > 0
                                       ? 100
-                                      : 0)
+                                      : 0),
                             )
                           }}
                         </span>
@@ -4502,7 +4503,7 @@ watch(
                     (grandTotal || 0) > 0 &&
                     isSummaryStep
                       ? 100
-                      : 0)
+                      : 0),
                 )
               }}
             </span>
@@ -4578,7 +4579,7 @@ watch(
                           (studioStore.websiteSettings?.chipFeeMode ===
                             "on_top" && grandTotal > 0
                             ? 100
-                            : 0)
+                            : 0),
                   )
                 }}
               </span>
@@ -4595,7 +4596,7 @@ watch(
                           (studioStore.websiteSettings?.chipFeeMode ===
                             "on_top" && grandTotal > 0
                             ? 100
-                            : 0)
+                            : 0),
                   )
                 }}
               </span>
@@ -4835,5 +4836,54 @@ watch(
 .slide-right-leave-from {
   opacity: 1;
   transform: translateX(0);
+}
+
+/* Prose styling for markdown content (terms & conditions) */
+:deep(.prose) {
+  @apply text-sm;
+}
+
+:deep(.prose h1) {
+  @apply text-2xl font-bold mt-6 mb-4;
+}
+
+:deep(.prose h2) {
+  @apply text-xl font-bold mt-5 mb-3;
+}
+
+:deep(.prose h3) {
+  @apply text-lg font-semibold mt-4 mb-2;
+}
+
+:deep(.prose p) {
+  @apply my-3;
+}
+
+:deep(.prose ul) {
+  @apply my-3 ml-6 list-disc;
+}
+
+:deep(.prose ol) {
+  @apply my-3 ml-6 list-decimal;
+}
+
+:deep(.prose li) {
+  @apply my-1;
+}
+
+:deep(.prose strong) {
+  @apply font-semibold;
+}
+
+:deep(.prose code) {
+  @apply bg-gray-100 px-1 py-0.5 rounded text-xs;
+}
+
+:deep(.prose hr) {
+  @apply my-6 border-gray-200;
+}
+
+:deep(.prose a) {
+  @apply text-gray-900 underline;
 }
 </style>
