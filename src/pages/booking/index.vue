@@ -1963,7 +1963,8 @@ const nextStep = async () => {
         // Calculate payment amount to check for zero payment
         let paymentAmount = grandTotal.value;
         if (paymentType === "deposit") {
-          paymentAmount = depositAmount.value;
+          // Use effective deposit to respect coupon discounts
+          paymentAmount = effectiveDepositAmount.value;
         }
 
         // Initiate payment with CHIP
@@ -2272,7 +2273,7 @@ const cartDepositTotal = computed(() => {
   return totalDeposit;
 });
 
-// Combined deposit amount (works for both single and cart modes)
+// Combined deposit amount (works for both single and cart modes) - before discount
 const depositAmount = computed(() => {
   if (isCartModeEnabled.value && cart.value.length > 0) {
     return cartDepositTotal.value;
@@ -2280,11 +2281,44 @@ const depositAmount = computed(() => {
   return singleItemDepositAmount.value;
 });
 
+// Calculate the original balance (total - deposit) before any discount
+const originalBalance = computed(() => {
+  let total = 0;
+  if (isCartModeEnabled.value && cart.value.length > 0) {
+    total = cartTotal.value;
+  } else {
+    total = currentItemTotal.value;
+  }
+  return total - depositAmount.value;
+});
+
+// Effective deposit amount - discount is applied to deposit FIRST
+// Example: Total RM150, Deposit RM50, Coupon RM10 → Deposit becomes RM40
+const effectiveDepositAmount = computed(() => {
+  return Math.max(0, depositAmount.value - discountAmount.value);
+});
+
+// Calculate remaining discount after deposit is zeroed (if coupon > deposit)
+const remainingDiscountAfterDeposit = computed(() => {
+  return Math.max(0, discountAmount.value - depositAmount.value);
+});
+
+// Effective balance - any remaining discount after deposit is applied here
+// Example: Total RM150, Deposit RM50, Coupon RM60 → Deposit RM0, Balance RM100-10=RM90
+const effectiveBalance = computed(() => {
+  return Math.max(
+    0,
+    originalBalance.value - remainingDiscountAfterDeposit.value,
+  );
+});
+
 const paymentAmount = computed(() => {
   if (paymentType.value === "full") {
-    return grandTotal.value;
+    // For full payment, pay the entire discounted amount
+    return effectiveDepositAmount.value + effectiveBalance.value;
   }
-  return depositAmount.value;
+  // For deposit payment, only pay the effective deposit (after discount applied)
+  return effectiveDepositAmount.value;
 });
 
 const selectedDateInfo = computed(() => {
@@ -4148,14 +4182,17 @@ watch(
                         RM{{
                           formatPriceWhole(
                             paymentType === "deposit"
-                              ? depositAmount +
+                              ? effectiveDepositAmount +
                                   (studioStore.websiteSettings?.chipFeeMode ===
-                                    "on_top" && grandTotal > 0
+                                    "on_top" &&
+                                  effectiveDepositAmount + effectiveBalance > 0
                                     ? 100
                                     : 0)
-                              : grandTotal +
+                              : effectiveDepositAmount +
+                                  effectiveBalance +
                                   (studioStore.websiteSettings?.chipFeeMode ===
-                                    "on_top" && grandTotal > 0
+                                    "on_top" &&
+                                  effectiveDepositAmount + effectiveBalance > 0
                                     ? 100
                                     : 0),
                           )
@@ -4171,9 +4208,7 @@ watch(
                   >
                     {{ t("balanceAtStudio") || "Baki bayar di studio" }}:
                     <span class="font-bold text-gray-700"
-                      >RM{{
-                        formatPriceWhole(grandTotal - depositAmount)
-                      }}</span
+                      >RM{{ formatPriceWhole(effectiveBalance) }}</span
                     >
                   </div>
                 </div>
@@ -4440,16 +4475,19 @@ watch(
                           RM{{
                             formatPriceWhole(
                               paymentType === "deposit"
-                                ? depositAmount +
+                                ? effectiveDepositAmount +
                                     (studioStore.websiteSettings
                                       ?.chipFeeMode === "on_top" &&
-                                    grandTotal > 0
+                                    effectiveDepositAmount + effectiveBalance >
+                                      0
                                       ? 100
                                       : 0)
-                                : grandTotal +
+                                : effectiveDepositAmount +
+                                    effectiveBalance +
                                     (studioStore.websiteSettings
                                       ?.chipFeeMode === "on_top" &&
-                                    grandTotal > 0
+                                    effectiveDepositAmount + effectiveBalance >
+                                      0
                                       ? 100
                                       : 0),
                             )
@@ -4465,9 +4503,7 @@ watch(
                     >
                       {{ t("balanceAtStudio") || "Baki bayar di studio" }}:
                       <span class="font-bold text-gray-700"
-                        >RM{{
-                          formatPriceWhole(grandTotal - depositAmount)
-                        }}</span
+                        >RM{{ formatPriceWhole(effectiveBalance) }}</span
                       >
                     </div>
                   </div>
@@ -4570,14 +4606,17 @@ watch(
                 {{ t("pay") || "Bayar" }} RM{{
                   formatPriceWhole(
                     paymentType === "deposit"
-                      ? depositAmount +
+                      ? effectiveDepositAmount +
                           (studioStore.websiteSettings?.chipFeeMode ===
-                            "on_top" && grandTotal > 0
+                            "on_top" &&
+                          effectiveDepositAmount + effectiveBalance > 0
                             ? 100
                             : 0)
-                      : grandTotal +
+                      : effectiveDepositAmount +
+                          effectiveBalance +
                           (studioStore.websiteSettings?.chipFeeMode ===
-                            "on_top" && grandTotal > 0
+                            "on_top" &&
+                          effectiveDepositAmount + effectiveBalance > 0
                             ? 100
                             : 0),
                   )
@@ -4587,14 +4626,17 @@ watch(
                 {{ t("pay") || "Bayar" }} RM{{
                   formatPriceWhole(
                     paymentType === "deposit"
-                      ? depositAmount +
+                      ? effectiveDepositAmount +
                           (studioStore.websiteSettings?.chipFeeMode ===
-                            "on_top" && grandTotal > 0
+                            "on_top" &&
+                          effectiveDepositAmount + effectiveBalance > 0
                             ? 100
                             : 0)
-                      : grandTotal +
+                      : effectiveDepositAmount +
+                          effectiveBalance +
                           (studioStore.websiteSettings?.chipFeeMode ===
-                            "on_top" && grandTotal > 0
+                            "on_top" &&
+                          effectiveDepositAmount + effectiveBalance > 0
                             ? 100
                             : 0),
                   )
