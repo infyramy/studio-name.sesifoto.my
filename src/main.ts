@@ -5,6 +5,7 @@ import App from "./App.vue";
 import "./style.css";
 import { useStudioStore } from "./stores/studio";
 import { watch } from "vue";
+import { useVersionCheck } from "./composables/useVersionCheck";
 
 // Prevent zoom on input focus (iOS Safari)
 const preventZoomOnInputFocus = () => {
@@ -65,6 +66,10 @@ app.use(pinia);
 app.use(router);
 
 app.mount("#app");
+
+// Initialize version checking to detect new builds
+const versionCheck = useVersionCheck();
+versionCheck.initialize();
 
 // Get studio store after pinia is initialized
 const studioStore = useStudioStore();

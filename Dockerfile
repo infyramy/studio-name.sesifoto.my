@@ -35,7 +35,14 @@ RUN echo 'server { \
     gzip_min_length 1024; \
     gzip_types text/plain text/css text/xml text/javascript application/javascript application/xml+rss application/json; \
     \
-    # Cache static assets \
+    # Prevent caching of index.html to ensure version checking works \
+    location = /index.html { \
+        add_header Cache-Control "no-cache, no-store, must-revalidate"; \
+        add_header Pragma "no-cache"; \
+        add_header Expires "0"; \
+    } \
+    \
+    # Cache static assets (Vite adds hashes to filenames, so safe to cache) \
     location ~* \.(jpg|jpeg|png|gif|ico|css|js|svg|webp)$ { \
         expires 1y; \
         add_header Cache-Control "public, immutable"; \
