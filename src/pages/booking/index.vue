@@ -758,24 +758,46 @@ async function fetchAvailableDates() {
       today: formatDateLocal(today),
     });
 
-    // Determine start date: use booking window start if set and in the future, otherwise use today
+    // Determine start date: prioritize theme custom availability, then global booking window
     let startDate = new Date(today);
-    if (websiteSettings?.bookingWindowStart) {
-      // Parse as local date by appending time
+    
+    // Check if theme has custom availability with start date
+    if (
+      selectedTheme.value?.use_custom_availability &&
+      selectedTheme.value?.available_start_date
+    ) {
+      const themeStart = new Date(
+        selectedTheme.value.available_start_date + "T00:00:00",
+      );
+      startDate = themeStart > today ? themeStart : today;
+    } else if (websiteSettings?.bookingWindowStart) {
+      // Fall back to global booking window start
       const windowStart = new Date(
         websiteSettings.bookingWindowStart + "T00:00:00",
       );
       startDate = windowStart > today ? windowStart : today;
     }
 
-    // Determine end date: use booking window end if set, otherwise limit to 30 days from start
+    // Determine end date: prioritize theme custom availability, then global booking window
     let endDate = new Date(startDate);
-    if (websiteSettings?.bookingWindowEnd) {
+    
+    // Check if theme has custom availability with end date
+    if (
+      selectedTheme.value?.use_custom_availability &&
+      selectedTheme.value?.available_end_date
+    ) {
+      const themeEnd = new Date(
+        selectedTheme.value.available_end_date + "T00:00:00",
+      );
+      endDate = themeEnd;
+    } else if (websiteSettings?.bookingWindowEnd) {
+      // Fall back to global booking window end
       const windowEnd = new Date(
         websiteSettings.bookingWindowEnd + "T00:00:00",
       );
       endDate = windowEnd;
     } else {
+      // Default: 30 days from start
       endDate.setDate(startDate.getDate() + 29); // 30 days total
     }
 
@@ -810,6 +832,11 @@ async function fetchAvailableDates() {
     console.log("[fetchAvailableDates] Date range:", {
       startDate: startDateStr,
       endDate: endDateStr,
+      themeCustomAvailability: selectedTheme.value?.use_custom_availability,
+      themeStartDate: selectedTheme.value?.available_start_date,
+      themeEndDate: selectedTheme.value?.available_end_date,
+      globalStartDate: websiteSettings?.bookingWindowStart,
+      globalEndDate: websiteSettings?.bookingWindowEnd,
     });
 
     // Store range for reference
@@ -2334,15 +2361,151 @@ const isBlackoutDateSelected = computed(() => {
   return selectedDateInfo.value?.isBlackout || false;
 });
 
-// Get the pricing rule for the selected date (if any)
-const selectedDatePricingRule = computed(() => {
-  if (!selectedDate.value) return null;
+// Get all pricing rules for the selected date (if any)
+const selectedDatePricingRules = computed(() => {
+  if (!selectedDate.value) return [];
   const dateStr = selectedDate.value;
 
-  return pricingRules.value.find((rule) => {
+  return pricingRules.value.filter((rule) => {
     return dateStr >= rule.date_range_start && dateStr <= rule.date_range_end;
   });
 });
+
+// Get unique pricing information from time slots for the selected date
+const datePricingInfo = computed(() => {
+  if (!selectedDate.value || !timeSlots.value.length || !selectedTheme.value) return null;
+
+  const basePrice = selectedTheme.value.base_price;
+  
+  // Group slots by pricing label and price
+  const pricingMap = new Map<string, {
+    label: string;
+    slots: Array<{ start: string; end: string; price: number; displayStart?: string; displayEnd?: string }>;
+    minPrice: number;
+    maxPrice: number;
+    basePrice: number;
+  }>();
+
+  timeSlots.value.forEach((slot) => {
+    if (
+      slot.isSpecialPricing && 
+      slot.specialPricingLabel && 
+      slot.originalSlot &&
+      slot.originalSlot.start && 
+      slot.originalSlot.end &&
+      typeof slot.price === 'number'
+    ) {
+      const label = slot.specialPricingLabel;
+      if (!pricingMap.has(label)) {
+        pricingMap.set(label, {
+          label,
+          slots: [],
+          minPrice: Infinity,
+          maxPrice: -Infinity,
+          basePrice,
+        });
+      }
+      const info = pricingMap.get(label)!;
+      const slotPrice = slot.price;
+      // Use original 24-hour format times for proper sorting
+      const originalStart = slot.originalSlot?.start || slot.start;
+      const originalEnd = slot.originalSlot?.end || slot.end;
+      info.slots.push({
+        start: originalStart, // Use 24-hour format for sorting
+        end: originalEnd, // Use 24-hour format for sorting
+        price: slotPrice,
+        displayStart: slot.start, // Keep formatted version for display
+        displayEnd: slot.end, // Keep formatted version for display
+      });
+      info.minPrice = Math.min(info.minPrice, slotPrice);
+      info.maxPrice = Math.max(info.maxPrice, slotPrice);
+    }
+  });
+
+  // Convert to array and calculate differences
+  return Array.from(pricingMap.values())
+    .filter((info) => info.slots.length > 0)
+    .map((info) => {
+      const minDiff = info.minPrice - basePrice;
+      const maxDiff = info.maxPrice - basePrice;
+      
+      // Sort slots by start time (using 24-hour format for proper sorting)
+      // Need to find the latest end time across all slots, not just the last one in sorted order
+      const sortedSlots = [...info.slots].sort((a, b) => a.start.localeCompare(b.start));
+      
+      // Find overall time range (earliest start to latest end)
+      // Use display format for showing to user
+      const earliestStart = sortedSlots[0]?.displayStart || sortedSlots[0]?.start || '';
+      
+      // Find the latest end time by comparing all end times (in 24-hour format)
+      const latestEndSlot = [...info.slots].sort((a, b) => {
+        // Compare end times in 24-hour format for proper sorting
+        return a.end.localeCompare(b.end);
+      })[info.slots.length - 1];
+      const latestEnd = latestEndSlot?.displayEnd || latestEndSlot?.end || '';
+      
+      // Check if this pricing rule applies to all time slots
+      // If all available slots have this special pricing, it means the rule applies to all slots (no time restriction)
+      const totalAvailableSlots = timeSlots.value.length;
+      const appliesToAllSlots = info.slots.length === totalAvailableSlots;
+      
+      return {
+        ...info,
+        minDiff,
+        maxDiff,
+        hasTimeRange: info.slots.length > 0 && !appliesToAllSlots, // Only show time range if it doesn't apply to all slots
+        earliestStart,
+        latestEnd,
+        totalSlots: info.slots.length,
+        appliesToAllSlots,
+      };
+    });
+});
+
+// Helper to group time slots that are close together (within 30 minutes gap)
+function groupTimeSlots(slots: Array<{ start: string; end: string; price: number; displayStart?: string; displayEnd?: string }>): Array<{ start: string; end: string; price: number }> {
+  if (slots.length === 0) return [];
+  
+  const groups: Array<{ start: string; end: string; price: number }> = [];
+  let currentGroup: { start: string; end: string; price: number } | null = null;
+  
+  for (const slot of slots) {
+    if (!currentGroup) {
+      // Start a new group - use display format if available
+      currentGroup = { 
+        start: slot.displayStart || slot.start,
+        end: slot.displayEnd || slot.end,
+        price: slot.price 
+      };
+    } else {
+      // Check if this slot is close to the current group (within 30 minutes)
+      // Use original 24-hour format for time calculations
+      const currentEndMinutes = timeToMinutes(slot.end); // Use original end time for calculation
+      const slotStartMinutes = timeToMinutes(slot.start); // Use original start time for calculation
+      const gap = slotStartMinutes - currentEndMinutes;
+      
+      // If same price and gap is <= 30 minutes, extend the group
+      if (slot.price === currentGroup.price && gap <= 30 && gap >= 0) {
+        currentGroup.end = slot.displayEnd || slot.end;
+      } else {
+        // Save current group and start a new one
+        groups.push(currentGroup);
+        currentGroup = { 
+          start: slot.displayStart || slot.start,
+          end: slot.displayEnd || slot.end,
+          price: slot.price 
+        };
+      }
+    }
+  }
+  
+  // Don't forget the last group
+  if (currentGroup) {
+    groups.push(currentGroup);
+  }
+  
+  return groups;
+}
 
 // Format the surcharge/discount message for display
 const specialPricingMessage = computed(() => {
@@ -2907,31 +3070,108 @@ watch(
               <!-- Special Date Info -->
               <div
                 v-if="isSpecialDateSelected && selectedDateInfo"
-                class="bg-gradient-to-br from-amber-50 to-orange-50/50 backdrop-blur-sm border border-amber-200/60 p-4 rounded-2xl flex items-start gap-3 shadow-sm relative overflow-hidden"
+                class="bg-gradient-to-br from-amber-50 to-orange-50/50 backdrop-blur-sm border border-amber-200/60 p-4 rounded-2xl shadow-sm relative overflow-hidden"
               >
                 <!-- Decorative background sparkle -->
                 <Sparkles
                   class="absolute -top-4 -right-4 w-16 h-16 text-amber-100/50 -rotate-12"
                 />
 
-                <div
-                  class="bg-amber-100 p-2 rounded-full flex-shrink-0 relative z-10"
-                >
-                  <Sparkles class="w-4 h-4 text-amber-600" />
-                </div>
-                <div class="text-xs leading-relaxed flex-1 relative z-10">
-                  <span
-                    class="font-bold block uppercase tracking-wider text-[10px] mb-1 text-amber-600"
-                    >{{ t("specialDate") }}</span
+                <div class="flex items-start gap-3 relative z-10">
+                  <!-- <div
+                    class="bg-amber-100 p-2 rounded-full flex-shrink-0 relative z-10"
                   >
-                  <div class="space-y-1">
-                    <p class="font-bold text-amber-900 text-sm">
-                      {{ selectedDateInfo.specialLabel }}
-                    </p>
+                    <Sparkles class="w-4 h-4 text-amber-600" />
+                  </div> -->
+                  <div class="text-xs leading-relaxed flex-1 relative z-10 space-y-2">
+                    <div>
+                      <span
+                        class="font-bold block uppercase tracking-wider text-[10px] mb-1 text-amber-600"
+                        >{{ t("specialDate") }}</span
+                      >
+                      <!-- <p class="font-bold text-amber-900 text-sm">
+                        {{ selectedDateInfo.specialLabel || t("specialPrice") }}
+                      </p> -->
+                    </div>
 
+                    <!-- Pricing Info from Time Slots -->
+                    <div v-if="datePricingInfo && datePricingInfo.length > 0" class="space-y-2">
+                      <div
+                        v-for="(info, idx) in datePricingInfo"
+                        :key="idx"
+                        class="bg-amber-100/80 px-3 py-2 rounded-lg border border-amber-200/50 space-y-1.5"
+                      >
+                        <!-- Rule Name -->
+                        <p class="font-semibold text-amber-900 text-xs">
+                          {{ info.label }}
+                        </p>
+                        
+                        <!-- Price (shown when applies to all slots) -->
+                        <div v-if="info.appliesToAllSlots" class="flex items-center gap-2 text-[11px]">
+                          <span class="text-amber-900 font-semibold">
+                            RM{{ formatPriceWhole(info.minPrice) }}
+                            <span v-if="info.minPrice !== info.maxPrice" class="text-amber-700 text-[10px]">
+                              - RM{{ formatPriceWhole(info.maxPrice) }}
+                            </span>
+                          </span>
+                        </div>
+                        
+                        <!-- Time Ranges with Prices (only shown if rule has time restriction) -->
+                        <div v-else-if="info.hasTimeRange" class="space-y-1.5">
+                          <!-- Show overall time range for clarity -->
+                          <div class="flex items-center gap-2 text-[11px]">
+                            <Clock class="w-3 h-3 text-amber-700 flex-shrink-0" />
+                            <span class="text-amber-800 font-mono flex-1">
+                              {{ info.earliestStart }} - {{ info.latestEnd }}
+                            </span>
+                            <span class="text-amber-900 font-semibold">
+                              RM{{ formatPriceWhole(info.minPrice) }}
+                              <span v-if="info.minPrice !== info.maxPrice" class="text-amber-700 text-[10px]">
+                                - RM{{ formatPriceWhole(info.maxPrice) }}
+                              </span>
+                            </span>
+                          </div>
+                        </div>
+                        
+                        <!-- Price Difference Summary -->
+                        <div v-if="info.minDiff !== 0 || info.maxDiff !== 0" class="flex items-center gap-1.5 pt-1 border-t border-amber-200/50">
+                          <span class="text-[10px] text-amber-700">
+                            <template v-if="info.minDiff === info.maxDiff">
+                              <!-- Same price for all slots -->
+                              {{ info.minDiff > 0 ? "+" : "-" }}RM{{
+                                formatPriceWhole(Math.abs(info.minDiff))
+                              }}
+                              {{ 
+                                info.minDiff > 0 
+                                  ? (t("specialPriceSurcharge") || "surcharge")
+                                  : (t("specialPriceDiscount") || "discount")
+                              }}
+                            </template>
+                            <template v-else>
+                              <!-- Different prices for different slots -->
+                              {{ info.minDiff > 0 ? "+" : "-" }}RM{{
+                                formatPriceWhole(Math.abs(info.minDiff))
+                              }}
+                              {{ 
+                                info.minDiff > 0 
+                                  ? (t("specialPriceSurcharge") || "surcharge")
+                                  : (t("specialPriceDiscount") || "discount")
+                              }}
+                              <span v-if="info.maxDiff !== info.minDiff" class="ml-1">
+                                to {{ info.maxDiff > 0 ? "+" : "-" }}RM{{
+                                  formatPriceWhole(Math.abs(info.maxDiff))
+                                }}
+                              </span>
+                            </template>
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Fallback: Show generic message if no time-based info -->
                     <div
-                      v-if="specialPricingMessage"
-                      class="flex items-center gap-2 mt-1 font-bold text-amber-800 bg-amber-100/80 px-2 py-1 rounded-md border border-amber-200/50"
+                      v-else-if="specialPricingMessage"
+                      class="flex items-center gap-2 font-bold text-amber-800 bg-amber-100/80 px-2 py-1 rounded-md border border-amber-200/50"
                     >
                       <span>{{ specialPricingAmount > 0 ? "+" : "-" }}</span>
                       <span>{{ specialPricingMessage }}</span>
@@ -2941,8 +3181,8 @@ watch(
                         }}
                       </span>
                     </div>
-                    <p v-else class="text-amber-700/80 italic">
-                      {{ t("specialPriceApply") }}
+                    <p v-else class="text-amber-700/80 italic text-xs">
+                      {{ t("specialPriceApply") || "Special pricing applies to this date" }}
                     </p>
                   </div>
                 </div>
@@ -3090,7 +3330,7 @@ watch(
                 >
                   <Plus class="w-4 h-4" />
                   <span
-                    >{{ paxCount - (selectedTheme!.base_pax || 0) }} Extra Pax
+                    >{{ paxCount - (selectedTheme!.base_pax || 0) }} {{ t('extraPaxLabel') }}
                     (RM{{
                       formatPriceWhole(selectedTheme.extra_pax_price)
                     }}/head)</span
@@ -3116,7 +3356,7 @@ watch(
                   class="bg-gray-50 border border-dashed border-gray-200 rounded-2xl p-8 text-center"
                 >
                   <p class="text-gray-500">
-                    No add-ons available for this theme
+                    {{ t('noAddonsAvailable') }}
                   </p>
                 </div>
 
@@ -3375,7 +3615,7 @@ watch(
                       class="flex justify-between items-center text-gray-600"
                     >
                       <span
-                        >Extra Pax (x{{
+                        >{{ t('extraPaxLabel') }} (x{{
                           Math.max(0, item.pax - (item.theme.base_pax || 0))
                         }})</span
                       >
@@ -4010,7 +4250,7 @@ watch(
                         class="flex justify-between text-sm pl-4 relative before:content-['+'] before:absolute before:left-0 before:text-gray-400"
                       >
                         <span class="text-gray-500"
-                          >Extra Pax (x{{
+                          >{{ t('extraPaxLabel') }} (x{{
                             Math.max(0, item.pax - (item.theme.base_pax || 0))
                           }})</span
                         >
@@ -4332,7 +4572,7 @@ watch(
                         class="flex justify-between text-sm pl-4 relative before:content-['+'] before:absolute before:left-0 before:text-gray-400"
                       >
                         <span class="text-gray-500">
-                          Extra Pax (x{{
+                          {{ t('extraPaxLabel') }} (x{{
                             paxCount - (selectedTheme!.base_pax || 0)
                           }})
                         </span>

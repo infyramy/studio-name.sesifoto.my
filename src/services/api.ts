@@ -112,6 +112,9 @@ const transformTheme = (data: any): Theme => ({
   is_deposit: data.paymentMode === "deposit",
   deposit_amount: data.depositAmount, // Fixed deposit amount in sen
   payment_mode: data.paymentMode, // "deposit" or "full"
+  use_custom_availability: data.useCustomAvailability || false,
+  available_start_date: data.availableStartDate,
+  available_end_date: data.availableEndDate,
 });
 
 const transformAddon = (data: any): Addon => ({

@@ -90,6 +90,9 @@ export interface Theme {
   is_deposit?: boolean; // Display-only flag to mark price as deposit
   deposit_amount?: number; // Fixed deposit amount in sen (e.g., 10000 = RM 100)
   payment_mode?: "deposit" | "full"; // Payment mode for this theme
+  use_custom_availability?: boolean; // Whether theme uses custom availability
+  available_start_date?: string; // YYYY-MM-DD - Theme availability start date
+  available_end_date?: string; // YYYY-MM-DD - Theme availability end date
 }
 
 // Working Hours Types
