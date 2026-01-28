@@ -1845,6 +1845,7 @@ const nextStep = async () => {
         const additionalBookingIds = createdBookings.slice(1).map((b) => b.id);
 
         // Calculate total payment amount based on payment type
+        // Use effective amounts (coupon-discounted) so CHIP receives the correct total.
         let totalPaymentAmount = 0;
         for (const item of cart.value) {
           const itemDiscount = calculateProportionalDiscount(
@@ -1854,14 +1855,16 @@ const nextStep = async () => {
 
           if (paymentType === "deposit") {
             // Use theme's deposit amount or calculate based on studio settings
-            const depositAmount =
+            const rawDeposit =
               item.theme.deposit_amount ||
               Math.round(
                 itemTotal *
                   ((studioStore.studio?.settings.deposit_percentage || 50) /
                     100),
               );
-            totalPaymentAmount += depositAmount;
+            // Apply proportional discount to deposit (same as payment summary)
+            const effectiveDeposit = Math.max(0, rawDeposit - itemDiscount);
+            totalPaymentAmount += effectiveDeposit;
           } else {
             totalPaymentAmount += itemTotal;
           }
@@ -1995,11 +1998,14 @@ const nextStep = async () => {
         }
 
         // Initiate payment with CHIP
+        // Always pass the calculated amount (coupon-discounted). Backend uses it when provided;
+        // otherwise it falls back to booking.depositAmount which is pre-coupon.
+        const amountToSend = paymentAmount <= 0 ? 0 : paymentAmount;
         const paymentResult = await api.initiatePayment(
           createdBooking.id,
           paymentType,
           undefined, // No additional booking IDs for single mode
-          paymentAmount <= 0 ? 0 : undefined, // Pass 0 to trigger zero payment handling
+          amountToSend,
         );
 
         // Clear booking state before redirecting
