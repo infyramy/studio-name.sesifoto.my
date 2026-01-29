@@ -760,7 +760,7 @@ async function fetchAvailableDates() {
 
     // Determine start date: prioritize theme custom availability, then global booking window
     let startDate = new Date(today);
-    
+
     // Check if theme has custom availability with start date
     if (
       selectedTheme.value?.use_custom_availability &&
@@ -780,7 +780,7 @@ async function fetchAvailableDates() {
 
     // Determine end date: prioritize theme custom availability, then global booking window
     let endDate = new Date(startDate);
-    
+
     // Check if theme has custom availability with end date
     if (
       selectedTheme.value?.use_custom_availability &&
@@ -1845,16 +1845,15 @@ const nextStep = async () => {
         const additionalBookingIds = createdBookings.slice(1).map((b) => b.id);
 
         // Calculate total payment amount based on payment type
-        // Use effective amounts (coupon-discounted) so CHIP receives the correct total.
+        // Coupon is applied to balance first, then deposit (same as payment summary).
         let totalPaymentAmount = 0;
         for (const item of cart.value) {
           const itemDiscount = calculateProportionalDiscount(
             cart.value.indexOf(item),
           );
-          const itemTotal = item.total - itemDiscount;
+          const itemTotal = item.total;
 
           if (paymentType === "deposit") {
-            // Use theme's deposit amount or calculate based on studio settings
             const rawDeposit =
               item.theme.deposit_amount ||
               Math.round(
@@ -1862,11 +1861,16 @@ const nextStep = async () => {
                   ((studioStore.studio?.settings.deposit_percentage || 50) /
                     100),
               );
-            // Apply proportional discount to deposit (same as payment summary)
-            const effectiveDeposit = Math.max(0, rawDeposit - itemDiscount);
+            const itemBalance = itemTotal - rawDeposit;
+            // Apply discount to balance first, then remainder to deposit
+            const remainingDiscount = Math.max(0, itemDiscount - itemBalance);
+            const effectiveDeposit = Math.max(
+              0,
+              rawDeposit - remainingDiscount,
+            );
             totalPaymentAmount += effectiveDeposit;
           } else {
-            totalPaymentAmount += itemTotal;
+            totalPaymentAmount += itemTotal - itemDiscount;
           }
         }
 
@@ -2276,29 +2280,17 @@ const singleItemDepositAmount = computed(() => {
   return currentItemTotal.value * (percentage / 100);
 });
 
-// Cart total deposit amount (sum of deposits for all cart items)
+// Cart total deposit amount (sum of RAW deposits for all cart items - discount from balance first)
 const cartDepositTotal = computed(() => {
   if (!isCartModeEnabled.value || cart.value.length === 0) return 0;
 
-  // Calculate total cart value for proportional discount
-  const totalCartValue = cart.value.reduce((sum, item) => sum + item.total, 0);
-
   let totalDeposit = 0;
   for (const item of cart.value) {
-    // Calculate proportional discount for this item
-    let itemDiscount = 0;
-    if (validatedCoupon.value && totalCartValue > 0) {
-      const itemProportion = item.total / totalCartValue;
-      itemDiscount = Math.round(discountAmount.value * itemProportion);
-    }
-
-    const itemTotal = item.total - itemDiscount;
-
-    // Use theme's deposit amount or calculate based on studio settings
+    // Raw deposit per item (from original item total, not discounted) for "discount from balance first"
     const itemDeposit =
       item.theme.deposit_amount ||
       Math.round(
-        itemTotal *
+        item.total *
           ((studioStore.studio?.settings.deposit_percentage || 50) / 100),
       );
     totalDeposit += itemDeposit;
@@ -2325,24 +2317,32 @@ const originalBalance = computed(() => {
   return total - depositAmount.value;
 });
 
-// Effective deposit amount - discount is applied to deposit FIRST
-// Example: Total RM150, Deposit RM50, Coupon RM10 → Deposit becomes RM40
-const effectiveDepositAmount = computed(() => {
-  return Math.max(0, depositAmount.value - discountAmount.value);
+// Discount is applied to BALANCE first, then to deposit.
+// Amount of discount that applies to balance (capped by balance).
+// Note: originalBalance can be negative if deposit > total, so we clamp it to 0
+const discountAppliedToBalance = computed(() => {
+  const balance = Math.max(0, originalBalance.value);
+  return Math.min(discountAmount.value, balance);
 });
 
-// Calculate remaining discount after deposit is zeroed (if coupon > deposit)
-const remainingDiscountAfterDeposit = computed(() => {
-  return Math.max(0, discountAmount.value - depositAmount.value);
+// Remaining discount after balance is zeroed (applied to deposit).
+// Use clamped balance to prevent negative balance from inflating the remaining discount
+const remainingDiscountAfterBalance = computed(() => {
+  const balance = Math.max(0, originalBalance.value);
+  return Math.max(0, discountAmount.value - balance);
 });
 
-// Effective balance - any remaining discount after deposit is applied here
-// Example: Total RM150, Deposit RM50, Coupon RM60 → Deposit RM0, Balance RM100-10=RM90
+// Effective balance - discount applied to balance first
+// Example: Total RM150, Deposit RM50, Balance RM100, Coupon RM30 → Balance RM70
 const effectiveBalance = computed(() => {
-  return Math.max(
-    0,
-    originalBalance.value - remainingDiscountAfterDeposit.value,
-  );
+  const balance = Math.max(0, originalBalance.value);
+  return Math.max(0, balance - discountAppliedToBalance.value);
+});
+
+// Effective deposit amount - remaining discount (after balance) applied to deposit
+// Example: Total RM150, Deposit RM50, Balance RM100, Coupon RM120 → Balance RM0, Deposit RM30
+const effectiveDepositAmount = computed(() => {
+  return Math.max(0, depositAmount.value - remainingDiscountAfterBalance.value);
 });
 
 const paymentAmount = computed(() => {
@@ -2379,27 +2379,37 @@ const selectedDatePricingRules = computed(() => {
 
 // Get unique pricing information from time slots for the selected date
 const datePricingInfo = computed(() => {
-  if (!selectedDate.value || !timeSlots.value.length || !selectedTheme.value) return null;
+  if (!selectedDate.value || !timeSlots.value.length || !selectedTheme.value)
+    return null;
 
   const basePrice = selectedTheme.value.base_price;
-  
+
   // Group slots by pricing label and price
-  const pricingMap = new Map<string, {
-    label: string;
-    slots: Array<{ start: string; end: string; price: number; displayStart?: string; displayEnd?: string }>;
-    minPrice: number;
-    maxPrice: number;
-    basePrice: number;
-  }>();
+  const pricingMap = new Map<
+    string,
+    {
+      label: string;
+      slots: Array<{
+        start: string;
+        end: string;
+        price: number;
+        displayStart?: string;
+        displayEnd?: string;
+      }>;
+      minPrice: number;
+      maxPrice: number;
+      basePrice: number;
+    }
+  >();
 
   timeSlots.value.forEach((slot) => {
     if (
-      slot.isSpecialPricing && 
-      slot.specialPricingLabel && 
+      slot.isSpecialPricing &&
+      slot.specialPricingLabel &&
       slot.originalSlot &&
-      slot.originalSlot.start && 
+      slot.originalSlot.start &&
       slot.originalSlot.end &&
-      typeof slot.price === 'number'
+      typeof slot.price === "number"
     ) {
       const label = slot.specialPricingLabel;
       if (!pricingMap.has(label)) {
@@ -2434,27 +2444,30 @@ const datePricingInfo = computed(() => {
     .map((info) => {
       const minDiff = info.minPrice - basePrice;
       const maxDiff = info.maxPrice - basePrice;
-      
+
       // Sort slots by start time (using 24-hour format for proper sorting)
       // Need to find the latest end time across all slots, not just the last one in sorted order
-      const sortedSlots = [...info.slots].sort((a, b) => a.start.localeCompare(b.start));
-      
+      const sortedSlots = [...info.slots].sort((a, b) =>
+        a.start.localeCompare(b.start),
+      );
+
       // Find overall time range (earliest start to latest end)
       // Use display format for showing to user
-      const earliestStart = sortedSlots[0]?.displayStart || sortedSlots[0]?.start || '';
-      
+      const earliestStart =
+        sortedSlots[0]?.displayStart || sortedSlots[0]?.start || "";
+
       // Find the latest end time by comparing all end times (in 24-hour format)
       const latestEndSlot = [...info.slots].sort((a, b) => {
         // Compare end times in 24-hour format for proper sorting
         return a.end.localeCompare(b.end);
       })[info.slots.length - 1];
-      const latestEnd = latestEndSlot?.displayEnd || latestEndSlot?.end || '';
-      
+      const latestEnd = latestEndSlot?.displayEnd || latestEndSlot?.end || "";
+
       // Check if this pricing rule applies to all time slots
       // If all available slots have this special pricing, it means the rule applies to all slots (no time restriction)
       const totalAvailableSlots = timeSlots.value.length;
       const appliesToAllSlots = info.slots.length === totalAvailableSlots;
-      
+
       return {
         ...info,
         minDiff,
@@ -2469,19 +2482,27 @@ const datePricingInfo = computed(() => {
 });
 
 // Helper to group time slots that are close together (within 30 minutes gap)
-function groupTimeSlots(slots: Array<{ start: string; end: string; price: number; displayStart?: string; displayEnd?: string }>): Array<{ start: string; end: string; price: number }> {
+function groupTimeSlots(
+  slots: Array<{
+    start: string;
+    end: string;
+    price: number;
+    displayStart?: string;
+    displayEnd?: string;
+  }>,
+): Array<{ start: string; end: string; price: number }> {
   if (slots.length === 0) return [];
-  
+
   const groups: Array<{ start: string; end: string; price: number }> = [];
   let currentGroup: { start: string; end: string; price: number } | null = null;
-  
+
   for (const slot of slots) {
     if (!currentGroup) {
       // Start a new group - use display format if available
-      currentGroup = { 
+      currentGroup = {
         start: slot.displayStart || slot.start,
         end: slot.displayEnd || slot.end,
-        price: slot.price 
+        price: slot.price,
       };
     } else {
       // Check if this slot is close to the current group (within 30 minutes)
@@ -2489,27 +2510,27 @@ function groupTimeSlots(slots: Array<{ start: string; end: string; price: number
       const currentEndMinutes = timeToMinutes(slot.end); // Use original end time for calculation
       const slotStartMinutes = timeToMinutes(slot.start); // Use original start time for calculation
       const gap = slotStartMinutes - currentEndMinutes;
-      
+
       // If same price and gap is <= 30 minutes, extend the group
       if (slot.price === currentGroup.price && gap <= 30 && gap >= 0) {
         currentGroup.end = slot.displayEnd || slot.end;
       } else {
         // Save current group and start a new one
         groups.push(currentGroup);
-        currentGroup = { 
+        currentGroup = {
           start: slot.displayStart || slot.start,
           end: slot.displayEnd || slot.end,
-          price: slot.price 
+          price: slot.price,
         };
       }
     }
   }
-  
+
   // Don't forget the last group
   if (currentGroup) {
     groups.push(currentGroup);
   }
-  
+
   return groups;
 }
 
@@ -3089,7 +3110,9 @@ watch(
                   >
                     <Sparkles class="w-4 h-4 text-amber-600" />
                   </div> -->
-                  <div class="text-xs leading-relaxed flex-1 relative z-10 space-y-2">
+                  <div
+                    class="text-xs leading-relaxed flex-1 relative z-10 space-y-2"
+                  >
                     <div>
                       <span
                         class="font-bold block uppercase tracking-wider text-[10px] mb-1 text-amber-600"
@@ -3101,7 +3124,10 @@ watch(
                     </div>
 
                     <!-- Pricing Info from Time Slots -->
-                    <div v-if="datePricingInfo && datePricingInfo.length > 0" class="space-y-2">
+                    <div
+                      v-if="datePricingInfo && datePricingInfo.length > 0"
+                      class="space-y-2"
+                    >
                       <div
                         v-for="(info, idx) in datePricingInfo"
                         :key="idx"
@@ -3111,46 +3137,60 @@ watch(
                         <p class="font-semibold text-amber-900 text-xs">
                           {{ info.label }}
                         </p>
-                        
+
                         <!-- Price (shown when applies to all slots) -->
-                        <div v-if="info.appliesToAllSlots" class="flex items-center gap-2 text-[11px]">
+                        <div
+                          v-if="info.appliesToAllSlots"
+                          class="flex items-center gap-2 text-[11px]"
+                        >
                           <span class="text-amber-900 font-semibold">
                             RM{{ formatPriceWhole(info.minPrice) }}
-                            <span v-if="info.minPrice !== info.maxPrice" class="text-amber-700 text-[10px]">
+                            <span
+                              v-if="info.minPrice !== info.maxPrice"
+                              class="text-amber-700 text-[10px]"
+                            >
                               - RM{{ formatPriceWhole(info.maxPrice) }}
                             </span>
                           </span>
                         </div>
-                        
+
                         <!-- Time Ranges with Prices (only shown if rule has time restriction) -->
                         <div v-else-if="info.hasTimeRange" class="space-y-1.5">
                           <!-- Show overall time range for clarity -->
                           <div class="flex items-center gap-2 text-[11px]">
-                            <Clock class="w-3 h-3 text-amber-700 flex-shrink-0" />
+                            <Clock
+                              class="w-3 h-3 text-amber-700 flex-shrink-0"
+                            />
                             <span class="text-amber-800 font-mono flex-1">
                               {{ info.earliestStart }} - {{ info.latestEnd }}
                             </span>
                             <span class="text-amber-900 font-semibold">
                               RM{{ formatPriceWhole(info.minPrice) }}
-                              <span v-if="info.minPrice !== info.maxPrice" class="text-amber-700 text-[10px]">
+                              <span
+                                v-if="info.minPrice !== info.maxPrice"
+                                class="text-amber-700 text-[10px]"
+                              >
                                 - RM{{ formatPriceWhole(info.maxPrice) }}
                               </span>
                             </span>
                           </div>
                         </div>
-                        
+
                         <!-- Price Difference Summary -->
-                        <div v-if="info.minDiff !== 0 || info.maxDiff !== 0" class="flex items-center gap-1.5 pt-1 border-t border-amber-200/50">
+                        <div
+                          v-if="info.minDiff !== 0 || info.maxDiff !== 0"
+                          class="flex items-center gap-1.5 pt-1 border-t border-amber-200/50"
+                        >
                           <span class="text-[10px] text-amber-700">
                             <template v-if="info.minDiff === info.maxDiff">
                               <!-- Same price for all slots -->
                               {{ info.minDiff > 0 ? "+" : "-" }}RM{{
                                 formatPriceWhole(Math.abs(info.minDiff))
                               }}
-                              {{ 
-                                info.minDiff > 0 
-                                  ? (t("specialPriceSurcharge") || "surcharge")
-                                  : (t("specialPriceDiscount") || "discount")
+                              {{
+                                info.minDiff > 0
+                                  ? t("specialPriceSurcharge") || "surcharge"
+                                  : t("specialPriceDiscount") || "discount"
                               }}
                             </template>
                             <template v-else>
@@ -3158,12 +3198,15 @@ watch(
                               {{ info.minDiff > 0 ? "+" : "-" }}RM{{
                                 formatPriceWhole(Math.abs(info.minDiff))
                               }}
-                              {{ 
-                                info.minDiff > 0 
-                                  ? (t("specialPriceSurcharge") || "surcharge")
-                                  : (t("specialPriceDiscount") || "discount")
+                              {{
+                                info.minDiff > 0
+                                  ? t("specialPriceSurcharge") || "surcharge"
+                                  : t("specialPriceDiscount") || "discount"
                               }}
-                              <span v-if="info.maxDiff !== info.minDiff" class="ml-1">
+                              <span
+                                v-if="info.maxDiff !== info.minDiff"
+                                class="ml-1"
+                              >
                                 to {{ info.maxDiff > 0 ? "+" : "-" }}RM{{
                                   formatPriceWhole(Math.abs(info.maxDiff))
                                 }}
@@ -3188,7 +3231,10 @@ watch(
                       </span>
                     </div>
                     <p v-else class="text-amber-700/80 italic text-xs">
-                      {{ t("specialPriceApply") || "Special pricing applies to this date" }}
+                      {{
+                        t("specialPriceApply") ||
+                        "Special pricing applies to this date"
+                      }}
                     </p>
                   </div>
                 </div>
@@ -3336,8 +3382,8 @@ watch(
                 >
                   <Plus class="w-4 h-4" />
                   <span
-                    >{{ paxCount - (selectedTheme!.base_pax || 0) }} {{ t('extraPaxLabel') }}
-                    (RM{{
+                    >{{ paxCount - (selectedTheme!.base_pax || 0) }}
+                    {{ t("extraPaxLabel") }} (RM{{
                       formatPriceWhole(selectedTheme.extra_pax_price)
                     }}/head)</span
                   >
@@ -3362,7 +3408,7 @@ watch(
                   class="bg-gray-50 border border-dashed border-gray-200 rounded-2xl p-8 text-center"
                 >
                   <p class="text-gray-500">
-                    {{ t('noAddonsAvailable') }}
+                    {{ t("noAddonsAvailable") }}
                   </p>
                 </div>
 
@@ -3621,7 +3667,7 @@ watch(
                       class="flex justify-between items-center text-gray-600"
                     >
                       <span
-                        >{{ t('extraPaxLabel') }} (x{{
+                        >{{ t("extraPaxLabel") }} (x{{
                           Math.max(0, item.pax - (item.theme.base_pax || 0))
                         }})</span
                       >
@@ -4256,7 +4302,7 @@ watch(
                         class="flex justify-between text-sm pl-4 relative before:content-['+'] before:absolute before:left-0 before:text-gray-400"
                       >
                         <span class="text-gray-500"
-                          >{{ t('extraPaxLabel') }} (x{{
+                          >{{ t("extraPaxLabel") }} (x{{
                             Math.max(0, item.pax - (item.theme.base_pax || 0))
                           }})</span
                         >
@@ -4409,7 +4455,7 @@ watch(
                       t("depositAmount") || "Deposit"
                     }}</span>
                     <span class="font-medium text-gray-900"
-                      >RM{{ formatPriceWhole(depositAmount) }}</span
+                      >RM{{ formatPriceWhole(effectiveDepositAmount) }}</span
                     >
                   </div>
 
@@ -4578,7 +4624,7 @@ watch(
                         class="flex justify-between text-sm pl-4 relative before:content-['+'] before:absolute before:left-0 before:text-gray-400"
                       >
                         <span class="text-gray-500">
-                          {{ t('extraPaxLabel') }} (x{{
+                          {{ t("extraPaxLabel") }} (x{{
                             paxCount - (selectedTheme!.base_pax || 0)
                           }})
                         </span>
@@ -4702,7 +4748,7 @@ watch(
                         t("depositAmount") || "Deposit"
                       }}</span>
                       <span class="font-medium text-gray-900"
-                        >RM{{ formatPriceWhole(depositAmount) }}</span
+                        >RM{{ formatPriceWhole(effectiveDepositAmount) }}</span
                       >
                     </div>
 
