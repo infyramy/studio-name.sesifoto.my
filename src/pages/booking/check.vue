@@ -77,8 +77,8 @@ const validateForm = () => {
     return false;
   }
 
-  // Validate Malaysian phone format
-  const phoneRegex = /^01\d{8,9}$/;
+  // Validate Malaysian phone format (accepts 01XXXXXXXX, +60XXXXXXXXX, or 60XXXXXXXXX)
+  const phoneRegex = /^(\+?6?01)[0-46-9][0-9]{7,8}$/;
   if (!phoneRegex.test(phone.value.replace(/[\s-]/g, ""))) {
     error.value = t("pleaseEnterValidPhone");
     return false;
@@ -101,7 +101,7 @@ const searchBooking = async () => {
     // Call API to lookup booking (api.ts already transforms to snake_case)
     const booking = await api.lookupBooking(
       bookingId.value.trim(),
-      normalizedPhone
+      normalizedPhone,
     );
 
     if (!booking) {
@@ -137,7 +137,7 @@ const formattedTime = computed(() => {
     return `${hour12}:${minutes || "00"} ${ampm}`;
   };
   return `${formatTime(foundBooking.value.start_time)} - ${formatTime(
-    foundBooking.value.end_time
+    foundBooking.value.end_time,
   )}`;
 });
 
@@ -146,7 +146,7 @@ const formattedCreatedDate = computed(() => {
   try {
     return format(
       new Date(foundBooking.value.created_at),
-      "d MMM yyyy, h:mm a"
+      "d MMM yyyy, h:mm a",
     );
   } catch {
     return "";
@@ -229,7 +229,7 @@ const getWhatsAppUrl = computed(() => {
   const message = encodeURIComponent(
     `Hi, saya ingin bertanya tentang tempahan saya.\n\n` +
       `ID Tempahan: ${foundBooking.value.booking_number}\n` +
-      `Nama: ${foundBooking.value.customer_name}`
+      `Nama: ${foundBooking.value.customer_name}`,
   );
   return `https://wa.me/${phoneNum}?text=${message}`;
 });
@@ -240,7 +240,7 @@ const brandColor = computed(() => studioStore.studio?.brand_color || "#000000");
 <template>
   <div
     class="min-h-screen relative text-gray-900 pb-20"
-    style="font-family: 'Bricolage Grotesque', sans-serif"
+    style="font-family: &quot;Bricolage Grotesque&quot;, sans-serif"
   >
     <!-- Content Wrapper -->
     <div class="relative z-20 max-w-2xl mx-auto">
