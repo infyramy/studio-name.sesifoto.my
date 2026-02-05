@@ -527,6 +527,7 @@ const selectedDate = ref<string | null>(null);
 const selectedSlot = ref<any | null>(null);
 const paxCount = ref(1);
 const selectedAddons = ref<Record<string, number>>({});
+const expandedAddonDesc = ref<Record<string, boolean>>({});
 const customerInfo = ref({
   name: "",
   phone: "",
@@ -572,6 +573,7 @@ const galleryState = ref({
   show: false,
   images: [] as string[],
   initialIndex: 0,
+  description: "" as string,
 });
 
 const openGallery = (theme: Theme) => {
@@ -580,6 +582,7 @@ const openGallery = (theme: Theme) => {
       show: true,
       images: theme.images,
       initialIndex: 0,
+      description: theme.description_long || theme.description_short,
     };
   }
 };
@@ -2841,7 +2844,7 @@ watch(
               v-else
               v-for="theme in studioStore.themes"
               :key="theme.id"
-              class="bg-white rounded-2xl p-4 sm:p-6 border transition-all duration-300 cursor-pointer group hover:shadow-lg relative overflow-hidden"
+              class="bg-white rounded-2xl p-4 sm:p-6 border transition-all duration-300 cursor-pointer group hover:shadow-lg relative"
               :class="
                 selectedTheme?.id === theme.id
                   ? 'border-black shadow-sm'
@@ -2849,6 +2852,15 @@ watch(
               "
               @click="selectTheme(theme)"
             >
+              <!-- Popular Badge (On Top Right Border) -->
+              <div
+                v-if="theme.popular"
+                class="absolute -top-3 right-0 z-20 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-gray-900 to-gray-800 text-white text-[10px] font-bold uppercase tracking-widest shadow-lg shadow-gray-400/20 border-2 border-white ring-1 ring-gray-100"
+              >
+                <Sparkles class="w-3 h-3 text-amber-400" fill="currentColor" />
+                <span class="text-amber-400">{{ t("popular") }}</span>
+              </div>
+
               <!-- Mobile Checkmark (Absolute) -->
               <div
                 v-if="selectedTheme?.id === theme.id"
@@ -3415,111 +3427,120 @@ watch(
                 <div
                   v-for="addon in studioStore.addons"
                   :key="addon.id"
-                  class="bg-white p-4 rounded-2xl border flex items-center gap-4 transition-all hover:shadow-sm"
+                  class="bg-white p-4 rounded-2xl border transition-all hover:shadow-sm"
                   :class="
                     selectedAddons[addon.id]
                       ? 'border-gray-900 bg-gray-50/50'
                       : 'border-gray-100'
                   "
                 >
-                  <!-- Image -->
-                  <div
-                    class="w-24 h-24 rounded-xl bg-gray-100 flex-shrink-0 overflow-hidden"
-                  >
-                    <img
-                      v-if="addon.image"
-                      :src="addon.image"
-                      :alt="addon.name"
-                      class="w-full h-full object-cover"
-                    />
+                  <div class="flex gap-4">
+                    <!-- Image -->
                     <div
-                      v-else
-                      class="w-full h-full flex items-center justify-center text-gray-300"
+                      class="w-20 h-20 rounded-xl bg-gray-100 flex-shrink-0 overflow-hidden"
                     >
-                      <ImageIcon class="w-8 h-8" />
+                      <img
+                        v-if="addon.image"
+                        :src="addon.image"
+                        :alt="addon.name"
+                        class="w-full h-full object-cover"
+                      />
+                      <div
+                        v-else
+                        class="w-full h-full flex items-center justify-center text-gray-300"
+                      >
+                        <ImageIcon class="w-6 h-6" />
+                      </div>
                     </div>
-                  </div>
 
-                  <!-- Content -->
-                  <div
-                    class="flex-1 min-w-0 h-24 flex flex-col justify-between py-1"
-                  >
-                    <div>
-                      <div class="flex justify-between items-start mb-1">
-                        <div class="flex flex-col items-start gap-1">
+                    <!-- Content & Actions -->
+                    <div class="flex-1 min-w-0 flex flex-col justify-between">
+                      <!-- Top Row: Name + Price -->
+                      <div class="flex items-start justify-between gap-2">
+                        <div class="flex-1 min-w-0">
                           <h4 class="font-bold text-gray-900 leading-tight">
                             {{ addon.name }}
                           </h4>
-                          <span
-                            v-if="selectedAddons[addon.id]"
-                            class="bg-gray-900 text-white px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider"
-                            >{{ t("added") }}</span
+                          <p
+                            v-if="addon.description"
+                            class="text-xs text-gray-500 mt-0.5 cursor-pointer hover:text-gray-700"
+                            :class="
+                              expandedAddonDesc[addon.id] ? '' : 'line-clamp-1'
+                            "
+                            @click="
+                              expandedAddonDesc[addon.id] =
+                                !expandedAddonDesc[addon.id]
+                            "
                           >
+                            {{ addon.description }}
+                          </p>
                         </div>
                         <span
-                          class="bg-gray-100 px-2 py-1 rounded text-xs font-bold text-gray-900 flex-shrink-0 ml-2"
+                          class="bg-gray-100 px-2 py-1 rounded text-xs font-bold text-gray-900 flex-shrink-0"
                           >RM{{ formatPriceWhole(addon.price) }}</span
                         >
                       </div>
-                      <p
-                        class="text-sm text-gray-500 line-clamp-2 leading-relaxed"
-                      >
-                        {{ addon.description }}
-                      </p>
-                    </div>
 
-                    <!-- Actions -->
-                    <div class="flex justify-end">
-                      <button
-                        v-if="!selectedAddons[addon.id]"
-                        @click="selectedAddons[addon.id] = 1"
-                        class="px-4 py-2 rounded-lg border border-gray-200 text-sm font-bold hover:bg-gray-50 transition-colors flex items-center gap-2"
-                      >
-                        <Plus class="w-4 h-4" /> {{ t("add") }}
-                      </button>
-
-                      <div
-                        v-else
-                        class="flex items-center gap-4 bg-gray-50 rounded-lg px-2 py-1"
-                      >
-                        <!-- If addon_type is 'single', show a simple Remove button -->
-                        <button
-                          v-if="addon.addon_type === 'single'"
-                          @click="delete selectedAddons[addon.id]"
-                          class="px-2 py-1 text-sm font-bold text-red-500 hover:text-red-700 flex items-center gap-1"
+                      <!-- Bottom Row: Actions -->
+                      <div class="flex justify-end items-center gap-2 mt-2">
+                        <!-- Added indicator -->
+                        <span
+                          v-if="selectedAddons[addon.id]"
+                          class="bg-gray-900 text-white px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider"
+                          >{{ t("added") }}</span
                         >
-                          <Trash2 class="w-4 h-4" /> Remove
+
+                        <button
+                          v-if="!selectedAddons[addon.id]"
+                          @click="selectedAddons[addon.id] = 1"
+                          class="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-bold hover:bg-gray-50 transition-colors flex items-center gap-1.5"
+                        >
+                          <Plus class="w-3.5 h-3.5" /> {{ t("add") }}
                         </button>
 
-                        <!-- Else show the quantity counter -->
-                        <template v-else>
+                        <div
+                          v-else
+                          class="flex items-center gap-3 bg-gray-100 rounded-lg px-2 py-1"
+                        >
+                          <!-- If addon_type is 'single', show a simple Remove button -->
                           <button
-                            @click="
-                              selectedAddons[addon.id] > 0
-                                ? selectedAddons[addon.id]--
-                                : null;
-                              if (selectedAddons[addon.id] === 0)
-                                delete selectedAddons[addon.id];
-                            "
-                            class="w-8 h-8 flex items-center justify-center text-gray-500 hover:text-gray-900"
+                            v-if="addon.addon_type === 'single'"
+                            @click="delete selectedAddons[addon.id]"
+                            class="px-2 py-1 text-xs font-bold text-red-500 hover:text-red-700 flex items-center gap-1"
                           >
-                            <Minus class="w-4 h-4" />
+                            <Trash2 class="w-3.5 h-3.5" /> Remove
                           </button>
-                          <span class="font-bold w-4 text-center">{{
-                            selectedAddons[addon.id]
-                          }}</span>
-                          <button
-                            @click="selectedAddons[addon.id]++"
-                            class="w-8 h-8 flex items-center justify-center text-gray-500 hover:text-gray-900"
-                            :disabled="
-                              addon.max_quantity &&
-                              addon.max_quantity > 0 &&
-                              selectedAddons[addon.id] >= addon.max_quantity
-                            "
-                          >
-                            <Plus class="w-4 h-4" />
-                          </button>
-                        </template>
+
+                          <!-- Else show the quantity counter -->
+                          <template v-else>
+                            <button
+                              @click="
+                                selectedAddons[addon.id] > 0
+                                  ? selectedAddons[addon.id]--
+                                  : null;
+                                if (selectedAddons[addon.id] === 0)
+                                  delete selectedAddons[addon.id];
+                              "
+                              class="w-7 h-7 flex items-center justify-center text-gray-500 hover:text-gray-900 rounded-full hover:bg-white"
+                            >
+                              <Minus class="w-3.5 h-3.5" />
+                            </button>
+                            <span class="font-bold w-4 text-center text-sm">{{
+                              selectedAddons[addon.id]
+                            }}</span>
+                            <button
+                              @click="selectedAddons[addon.id]++"
+                              class="w-7 h-7 flex items-center justify-center text-gray-500 hover:text-gray-900 rounded-full hover:bg-white"
+                              :disabled="
+                                addon.max_quantity &&
+                                addon.max_quantity > 0 &&
+                                selectedAddons[addon.id] >= addon.max_quantity
+                              "
+                            >
+                              <Plus class="w-3.5 h-3.5" />
+                            </button>
+                          </template>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -5057,6 +5078,7 @@ watch(
       :show="galleryState.show"
       :images="galleryState.images"
       :initialIndex="galleryState.initialIndex"
+      :description="galleryState.description"
       @close="closeGallery"
     />
   </div>

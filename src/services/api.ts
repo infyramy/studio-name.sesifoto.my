@@ -98,6 +98,7 @@ const transformTheme = (data: any): Theme => ({
   description_short: data.descriptionShort || "",
   description_long: data.descriptionLong || "",
   images: data.images || [],
+  popular: Boolean(data.popular ?? data.isPopular),
   base_price: data.basePrice,
   base_pax: data.basePax,
   extra_pax_price: data.extraPaxPrice || 0,
@@ -121,6 +122,7 @@ const transformAddon = (data: any): Addon => ({
   id: data.id,
   studio_id: "",
   name: data.name,
+  description: data.description,
   price: data.price,
   max_quantity: data.maxQuantity || null,
   addon_type: data.addonType || "quantity", // Map from backend
@@ -190,7 +192,7 @@ export const api = {
     // Get website settings to update studio settings
     try {
       const settings = await apiFetch(
-        `/public/studio/${slug}/website-settings`
+        `/public/studio/${slug}/website-settings`,
       );
       studio.settings = {
         cart_mode_enabled: settings.cartModeEnabled,
@@ -283,7 +285,7 @@ export const api = {
   // ===== Add-ons APIs =====
   async getAddonsByStudio(
     studioId: string,
-    themeId?: string
+    themeId?: string,
   ): Promise<Addon[]> {
     const slug = getStudioSlug();
     const query = themeId ? { themeId } : undefined;
@@ -359,7 +361,7 @@ export const api = {
     studioId: string,
     themeId: string,
     startDate: string,
-    endDate: string
+    endDate: string,
   ): Promise<DateSlotInfo[]> {
     const slug = getStudioSlug();
     const data = await apiFetch(`/public/studio/${slug}/available-dates`, {
@@ -371,14 +373,14 @@ export const api = {
   async getAvailableTimeSlots(
     studioId: string,
     themeId: string,
-    date: string
+    date: string,
   ): Promise<TimeSlot[]> {
     const slug = getStudioSlug();
     const data = await apiFetch(
       `/public/studio/${slug}/themes/${themeId}/slots`,
       {
         query: { date },
-      }
+      },
     );
     return data.map(transformTimeSlot);
   },
@@ -483,7 +485,7 @@ export const api = {
 
   async getBookingByIdAndPhone(
     bookingNumber: string,
-    phone: string
+    phone: string,
   ): Promise<Booking | null> {
     try {
       const data = await apiFetch("/public/bookings/lookup", {
@@ -613,13 +615,13 @@ export const api = {
   // Lookup booking by booking number and phone (for check booking page)
   async lookupBooking(
     bookingNumber: string,
-    phone: string
+    phone: string,
   ): Promise<Booking | null> {
     try {
       const data = await apiFetch(
         `/public/bookings/lookup?bookingNumber=${encodeURIComponent(
-          bookingNumber
-        )}&phone=${encodeURIComponent(phone)}`
+          bookingNumber,
+        )}&phone=${encodeURIComponent(phone)}`,
       );
 
       return {
@@ -689,7 +691,7 @@ export const api = {
     bookingId: string,
     paymentType: "full" | "deposit" = "deposit",
     additionalBookingIds?: string[],
-    amount?: number
+    amount?: number,
   ): Promise<{
     checkoutUrl: string | null;
     paymentSkipped?: boolean;
@@ -733,7 +735,7 @@ export const api = {
     date: string,
     startTime: string,
     endTime: string,
-    sessionId: string
+    sessionId: string,
   ): Promise<{
     holdId: string;
     themeId: string;
@@ -759,14 +761,14 @@ export const api = {
 
   async releaseSlotHold(
     holdId: string,
-    sessionId: string
+    sessionId: string,
   ): Promise<{ success: boolean }> {
     const slug = getStudioSlug();
     return apiFetch(
       `/public/studio/${slug}/holds/${holdId}?sessionId=${sessionId}`,
       {
         method: "DELETE",
-      }
+      },
     );
   },
 
@@ -799,12 +801,12 @@ export const getAddonsByStudio = (studioId: string, themeId?: string) =>
 export const getAvailableTimeSlots = (
   studioId: string,
   themeId: string,
-  date: string
+  date: string,
 ) => api.getAvailableTimeSlots(studioId, themeId, date);
 export const createBooking = (request: BookingRequest) =>
   api.createBooking(request);
 export const getBookingById = async (
-  bookingNumber: string
+  bookingNumber: string,
 ): Promise<Booking> => {
   const booking = await api.getBookingByNumber(bookingNumber);
   if (!booking) {

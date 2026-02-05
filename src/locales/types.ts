@@ -102,6 +102,7 @@ export type TranslationKey =
   | "perPerson"
   | "perSession"
   | "startingFrom"
+  | "popular"
   | "select"
 
   // Calendar

@@ -76,6 +76,7 @@ export interface Theme {
   description_short: string;
   description_long: string;
   images: string[];
+  popular?: boolean;
   base_price: number;
   base_pax: number;
   extra_pax_price: number;
@@ -182,6 +183,7 @@ export interface Addon {
   id: string;
   studio_id: string;
   name: string;
+  description?: string; // Optional description
   price: number;
   max_quantity: number | null; // null = unlimited
   addon_type: "single" | "quantity"; // New field

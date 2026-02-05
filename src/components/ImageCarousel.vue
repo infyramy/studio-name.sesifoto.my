@@ -11,6 +11,7 @@ const props = defineProps<{
   show: boolean;
   images: string[];
   initialIndex?: number;
+  description?: string;
 }>();
 
 const emit = defineEmits<{
@@ -29,14 +30,14 @@ watch(
     } else {
       document.body.style.overflow = "";
     }
-  }
+  },
 );
 
 watch(
   () => currentIndex.value,
   () => {
     isLoading.value = true;
-  }
+  },
 );
 
 const next = () => {
@@ -146,14 +147,30 @@ const handleSwipe = () => {
             leave-from-class="opacity-100 scale-100"
             leave-to-class="opacity-0 scale-95"
           >
-            <img
+            <div
               v-if="images[currentIndex]"
               :key="images[currentIndex]"
-              :src="images[currentIndex]"
-              class="max-w-full max-h-full object-contain rounded-lg shadow-2xl user-select-none"
-              alt="Theme preview"
-              @load="isLoading = false"
-            />
+              class="relative flex items-center justify-center w-full h-full"
+            >
+              <img
+                :src="images[currentIndex]"
+                class="max-w-full max-h-full object-contain rounded-lg shadow-2xl user-select-none"
+                alt="Theme preview"
+                @load="isLoading = false"
+              />
+
+              <!-- Description Overlay -->
+              <div
+                v-if="description"
+                class="absolute bottom-4 left-0 right-0 mx-auto max-w-2xl px-6 text-left z-20 pointer-events-none"
+              >
+                <div
+                  class="bg-black/60 backdrop-blur-sm text-white/90 p-4 rounded-xl shadow-lg border border-white/10 inline-block text-sm sm:text-base leading-relaxed max-h-[20vh] overflow-y-auto pointer-events-auto"
+                >
+                  {{ description }}
+                </div>
+              </div>
+            </div>
             <div
               v-else
               class="w-full h-full flex items-center justify-center text-gray-500"

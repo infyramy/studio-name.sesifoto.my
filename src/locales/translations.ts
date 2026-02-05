@@ -108,6 +108,7 @@ export const translationsBM: Translations = {
   perPerson: "seorang",
   perSession: "sesi",
   startingFrom: "Bermula dari",
+  popular: "Paling Popular",
   select: "Pilih",
 
   // Calendar
@@ -528,6 +529,7 @@ export const translationsEN: Translations = {
   perPerson: "per person",
   perSession: "per session",
   startingFrom: "Starting from",
+  popular: "Most Popular",
   select: "Select",
 
   // Calendar
