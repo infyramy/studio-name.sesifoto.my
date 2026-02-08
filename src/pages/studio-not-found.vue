@@ -1,185 +1,249 @@
 <script setup lang="ts">
 import { useTranslation } from "@/composables/useTranslation";
-import { Camera, ArrowRight, RefreshCw } from "lucide-vue-next";
+import { useStudioStore } from "@/stores/studio";
+import { RefreshCw, Film } from "lucide-vue-next";
+import { ref, onMounted } from "vue";
 import { useRouter } from "vue-router";
 
+const { t } = useTranslation();
+const studioStore = useStudioStore();
 const router = useRouter();
 
-const { t } = useTranslation();
+// Simple parallax effect for floating elements
+const mouseX = ref(0);
+const mouseY = ref(0);
+const isRetrying = ref(false);
 
-const goToMainSite = () => {
-  window.location.href = "https://sesifoto.my";
+const handleMouseMove = (e: MouseEvent) => {
+  mouseX.value = (e.clientX / window.innerWidth - 0.5) * 20;
+  mouseY.value = (e.clientY / window.innerHeight - 0.5) * 20;
 };
 
-const refreshPage = () => {
-  console.log("refreshPage");
-  window.location.href = `https://${window.location.hostname}.sesifoto.my`;
+const retryLoadStudio = async () => {
+  isRetrying.value = true;
+  try {
+    await studioStore.loadStudio();
+    // If successful, navigate to home page
+    router.push("/");
+  } catch (error) {
+    // Studio still not found, stay on this page
+    console.error("Failed to load studio:", error);
+  } finally {
+    isRetrying.value = false;
+  }
 };
+
+onMounted(() => {
+  window.addEventListener("mousemove", handleMouseMove);
+});
 </script>
 
 <template>
   <div
-    class="min-h-screen bg-[#FDFBF9] flex items-center justify-center p-6 relative overflow-hidden font-sans"
+    class="min-h-screen bg-[#FFFBF5] relative overflow-hidden font-sans flex flex-col items-center justify-center p-6 selection:bg-amber-200 selection:text-amber-900"
   >
-    <!-- Subtle Grain Texture -->
+    <!-- Animated Grid Background -->
     <div
-      class="absolute inset-0 opacity-[0.4] pointer-events-none mix-blend-multiply"
+      class="absolute inset-0 z-0 opacity-[0.4]"
       style="
-        background-image: url('data:image/svg+xml,%3Csvg viewBox=\'0 0 200 200\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cfilter id=\'noiseFilter\'%3E%3CfeTurbulence type=\'fractalNoise\' baseFrequency=\'0.65\' numOctaves=\'3\' stitchTiles=\'stitch\'/%3E%3C/filter%3E%3Crect width=\'100%25\' height=\'100%25\' filter=\'url(%23noiseFilter)\'/%3E%3C/svg%3E');
+        background-image: radial-gradient(#e5e7eb 1px, transparent 1px);
+        background-size: 24px 24px;
       "
     ></div>
 
-    <!-- Ambient Glows -->
+    <!-- Floating Shapes (Background) -->
     <div
-      class="absolute top-[-10%] right-[-5%] w-[600px] h-[600px] bg-rose-50/60 rounded-full blur-[100px] pointer-events-none animate-pulse-slow"
+      class="absolute top-20 left-10 w-32 h-32 bg-rose-200 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-float-slow"
+      :style="{
+        transform: `translate(${mouseX * -0.5}px, ${mouseY * -0.5}px)`,
+      }"
     ></div>
     <div
-      class="absolute bottom-[-10%] left-[-5%] w-[600px] h-[600px] bg-amber-50/60 rounded-full blur-[100px] pointer-events-none animate-pulse-slow"
-      style="animation-delay: 2s"
+      class="absolute top-40 right-20 w-44 h-44 bg-amber-200 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-float-medium"
+      :style="{ transform: `translate(${mouseX * 0.8}px, ${mouseY * 0.8}px)` }"
+    ></div>
+    <div
+      class="absolute bottom-20 left-1/3 w-56 h-56 bg-cyan-200 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-float-fast"
+      :style="{ transform: `translate(${mouseX * 0.2}px, ${mouseY * 0.2}px)` }"
     ></div>
 
-    <div class="relative w-full max-w-lg mx-auto text-center z-10 fade-in">
-      <!-- Minimalist Icon -->
-      <div class="mb-10 relative inline-flex justify-center items-center group">
-        <div
-          class="w-28 h-28 rounded-full bg-white border border-stone-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex items-center justify-center relative z-10 transition-transform duration-700 hover:scale-105"
-        >
-          <Camera class="w-10 h-10 text-stone-400 stroke-[1.5]" />
-          <div class="absolute inset-0 flex items-center justify-center">
-            <div
-              class="w-14 h-[1.5px] bg-rose-300/80 rotate-45 rounded-full"
-            ></div>
-          </div>
-        </div>
-
-        <!-- Subtle Rings -->
-        <div
-          class="absolute inset-0 rounded-full border border-stone-100/50 scale-125 transition-transform duration-1000 group-hover:scale-110"
-        ></div>
-        <div
-          class="absolute inset-0 rounded-full border border-stone-100/30 scale-150 transition-transform duration-1000 group-hover:scale-125"
-        ></div>
-      </div>
-
-      <!-- Main Content -->
-      <div class="space-y-6 mb-10">
-        <div class="inline-block">
-          <span
-            class="px-3 py-1 rounded-full border border-stone-200 bg-white/50 text-[10px] font-bold tracking-widest text-stone-400 uppercase backdrop-blur-sm"
-          >
-            Error 404
-          </span>
-        </div>
-
+    <!-- Main Content Container -->
+    <div class="relative z-10 max-w-2xl mx-auto text-center">
+      <!-- Big Fun Illustration Area -->
+      <div class="mb-8 relative h-64 flex items-center justify-center">
+        <!-- 404 Text Background -->
         <h1
-          class="text-3xl sm:text-4xl font-light text-stone-800 tracking-tight leading-tight"
+          class="text-[180px] font-black text-white/80 select-none absolute inset-0 flex items-center justify-center pointer-events-none drop-shadow-sm"
+          style="-webkit-text-stroke: 4px #fee2e2"
         >
-          {{ t("studioNotFoundTitle") }}
+          404
         </h1>
 
-        <p
-          class="text-stone-500 text-base font-light leading-relaxed max-w-sm mx-auto"
+        <!-- Animated Camera Character -->
+        <div
+          class="relative transform hover:scale-105 transition-transform duration-500 cursor-pointer group"
+          :style="{
+            transform: `translate(${mouseX}px, ${mouseY}px) rotate(${mouseX}deg)`,
+          }"
         >
-          {{ t("studioNotFoundMessage") }}
-        </p>
-      </div>
-
-      <!-- Check List -->
-      <div
-        class="bg-white/40 backdrop-blur-md rounded-2xl border border-white/50 p-6 mb-10 shadow-sm mx-4 sm:mx-0"
-      >
-        <p
-          class="text-xs font-semibold text-stone-400 uppercase tracking-wider mb-4 text-center"
-        >
-          {{ t("possibleReasons") }}
-        </p>
-        <ul class="space-y-3 text-left max-w-xs mx-auto">
-          <li
-            class="flex items-start gap-3 text-sm text-stone-600 font-light group"
+          <!-- Camera Body -->
+          <div
+            class="w-40 h-32 bg-stone-800 rounded-3xl shadow-2xl relative z-10 flex items-center justify-center border-4 border-stone-900 group-hover:border-rose-400 transition-colors"
           >
-            <span
-              class="mt-2 w-1 h-1 rounded-full bg-stone-300 group-hover:bg-amber-400 transition-colors"
-            ></span>
-            {{ t("studioNotFoundReason1") }}
-          </li>
-          <li
-            class="flex items-start gap-3 text-sm text-stone-600 font-light group"
-          >
-            <span
-              class="mt-2 w-1 h-1 rounded-full bg-stone-300 group-hover:bg-amber-400 transition-colors"
-            ></span>
-            {{ t("studioNotFoundReason2") }}
-          </li>
-          <li
-            class="flex items-start gap-3 text-sm text-stone-600 font-light group"
-          >
-            <span
-              class="mt-2 w-1 h-1 rounded-full bg-stone-300 group-hover:bg-amber-400 transition-colors"
-            ></span>
-            {{ t("studioNotFoundReason3") }}
-          </li>
-        </ul>
-      </div>
+            <!-- Lens -->
+            <div
+              class="w-20 h-20 rounded-full bg-stone-900 border-4 border-stone-700 flex items-center justify-center relative overflow-hidden group-hover:bg-rose-900/20 transition-colors"
+            >
+              <div
+                class="absolute w-12 h-12 bg-black/60 rounded-full border-2 border-white/10"
+              ></div>
+              <!-- Reflection -->
+              <div
+                class="absolute top-3 right-4 w-4 h-4 bg-white/20 rounded-full blur-[1px]"
+              ></div>
 
-      <!-- Actions -->
-      <div
-        class="flex flex-col sm:flex-row gap-3 justify-center items-center px-6"
-      >
-        <button
-          @click="refreshPage"
-          class="w-full sm:w-auto px-6 py-3 rounded-lg border border-stone-200 bg-white/50 text-stone-600 text-sm font-medium hover:bg-white hover:border-stone-300 transition-all active:scale-95 flex items-center justify-center gap-2"
-        >
-          <RefreshCw class="w-4 h-4" />
-          {{ t("tryAgain") || "Try Again" }}
-        </button>
+              <!-- Sad Eyes (Animated) -->
+              <div
+                class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex gap-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+              >
+                <div
+                  class="w-2 h-2 bg-rose-400 rounded-full animate-blink"
+                ></div>
+                <div
+                  class="w-2 h-2 bg-rose-400 rounded-full animate-blink"
+                  style="animation-delay: 0.2s"
+                ></div>
+              </div>
+            </div>
 
-        <button
-          @click="goToMainSite"
-          class="w-full sm:w-auto px-6 py-3 rounded-lg bg-stone-900 text-white text-sm font-medium hover:bg-stone-800 transition-all shadow-lg shadow-stone-900/10 active:scale-95 flex items-center justify-center gap-2 group"
-        >
-          <span>{{ t("visitSesifoto") || "Visit Sesifoto" }}</span>
-          <ArrowRight
-            class="w-4 h-4 group-hover:translate-x-0.5 transition-transform"
+            <!-- Flash / Viewfinder -->
+            <div
+              class="absolute -top-4 left-1/2 -translate-x-1/2 w-16 h-8 bg-stone-700 rounded-t-lg border-t-4 border-x-4 border-stone-900"
+            ></div>
+
+            <!-- Shutter Button -->
+            <div
+              class="absolute -top-3 right-6 w-6 h-4 bg-rose-500 rounded-t-md border-2 border-rose-600 animate-bounce-subtle"
+            ></div>
+          </div>
+
+          <!-- Flying Photos -->
+          <Film
+            class="absolute -top-10 -left-12 text-stone-300 w-12 h-12 rotate-[-20deg] animate-float-medium opacity-60"
           />
-        </button>
+          <Film
+            class="absolute -bottom-4 -right-10 text-stone-300 w-10 h-10 rotate-[15deg] animate-float-slow opacity-60"
+          />
+
+          <!-- Shadow -->
+          <div
+            class="absolute -bottom-8 left-1/2 -translate-x-1/2 w-32 h-4 bg-black/10 rounded-[100%] blur-sm group-hover:w-28 transition-all duration-300"
+          ></div>
+        </div>
       </div>
 
-      <p class="mt-8 text-xs text-stone-400 font-light">
-        {{ t("contactStudioDirectly") }}
-      </p>
+      <!-- Text Content -->
+      <div class="space-y-4 mb-10 px-4">
+        <h2 class="text-4xl font-bold text-stone-800 tracking-tight">
+          {{ t("studioNotFoundTitle") || "Lost in the shot?" }}
+        </h2>
+        <p class="text-lg text-stone-500 max-w-md mx-auto leading-relaxed">
+          {{
+            t("studioNotFoundMessage") ||
+            "We couldn't find the studio you're looking for. It might have moved, closed, or is just playing hide and seek."
+          }}
+        </p>
+      </div>
+
+      <!-- Action Button -->
+      <div class="flex justify-center mb-12">
+        <button
+          @click="retryLoadStudio"
+          :disabled="isRetrying"
+          class="group relative inline-flex items-center justify-center gap-3 px-8 py-4 bg-stone-900 text-stone-50 rounded-full font-medium shadow-xl hover:bg-stone-800 hover:scale-105 active:scale-95 transition-all duration-300 ring-1 ring-white/20 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+        >
+          <RefreshCw
+            :class="[
+              'w-5 h-5 transition-transform duration-700',
+              isRetrying ? 'animate-spin' : 'group-hover:rotate-180',
+            ]"
+          />
+          <span class="text-base tracking-wide">{{
+            isRetrying ? "Retrying..." : t("tryAgain") || "Try Again"
+          }}</span>
+        </button>
+      </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-@keyframes fade-in {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.fade-in {
-  animation: fade-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-@keyframes pulse-slow {
+@keyframes float-slow {
   0%,
   100% {
-    opacity: 0.5;
-    transform: scale(1);
+    transform: translateY(0) rotate(0);
   }
   50% {
-    opacity: 0.3;
-    transform: scale(1.05);
+    transform: translateY(-15px) rotate(2deg);
   }
 }
 
-.animate-pulse-slow {
-  animation: pulse-slow 5s ease-in-out infinite;
+@keyframes float-medium {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0);
+  }
+  50% {
+    transform: translateY(-10px) rotate(-2deg);
+  }
+}
+
+@keyframes float-fast {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-5px) scale(1.02);
+  }
+}
+
+.animate-float-slow {
+  animation: float-slow 6s ease-in-out infinite;
+}
+.animate-float-medium {
+  animation: float-medium 4s ease-in-out infinite;
+}
+.animate-float-fast {
+  animation: float-fast 3s ease-in-out infinite;
+}
+
+@keyframes blink {
+  0%,
+  100%,
+  96% {
+    transform: scaleY(1);
+  }
+  98% {
+    transform: scaleY(0.1);
+  }
+}
+
+.animate-blink {
+  animation: blink 3s infinite;
+}
+
+@keyframes bounce-subtle {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+}
+
+.animate-bounce-subtle {
+  animation: bounce-subtle 2s ease-in-out infinite;
 }
 </style>
