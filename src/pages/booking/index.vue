@@ -1922,11 +1922,28 @@ const nextStep = async () => {
           return;
         }
 
+        // Check for slot unavailable error (Race condition)
+        const errorMessage = error.data?.message || error.message || "";
+        if (
+          errorMessage.includes("Selected time slot is not available") ||
+          errorMessage.includes("Slot not available")
+        ) {
+          await showModal({
+            title: t("slotNoLongerAvailable"),
+            message: t("slotNoLongerAvailableMessage"),
+            type: "warning",
+            confirmText: t("ok"),
+          });
+          // Refresh page/slots?
+          // For now just letting them try again or change selection
+          return;
+        }
+
         // Show error to user
         await showModal({
           title: t("error") || "Error",
           message:
-            error.message ||
+            errorMessage ||
             t("bookingFailed") ||
             "Failed to create booking. Please try again.",
           type: "error",
@@ -2045,11 +2062,28 @@ const nextStep = async () => {
           return;
         }
 
+        // Check for slot unavailable error (Race condition)
+        const errorMessage = error.data?.message || error.message || "";
+        if (
+          errorMessage.includes("Selected time slot is not available") ||
+          errorMessage.includes("Slot not available")
+        ) {
+          await showModal({
+            title: t("slotNoLongerAvailable"),
+            message: t("slotNoLongerAvailableMessage"),
+            type: "warning",
+            confirmText: t("ok"),
+          });
+          // For single mode, we might want to refresh slots if possible,
+          // but usually user will just pick another time on step 2
+          return;
+        }
+
         // Show error to user
         await showModal({
           title: t("error") || "Error",
           message:
-            error.message ||
+            errorMessage ||
             t("bookingFailed") ||
             "Failed to create booking. Please try again.",
           type: "error",
