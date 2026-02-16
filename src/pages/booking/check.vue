@@ -64,6 +64,83 @@ const isLoading = ref(false);
 const error = ref("");
 const foundBooking = ref<any>(null);
 
+// Country codes for phone input
+const countryCodes = [
+  { code: "+60", label: "MY", flag: "🇲🇾" },
+  { code: "+65", label: "SG", flag: "🇸🇬" },
+];
+const selectedCountryCode = ref("+60");
+const localPhone = ref("");
+const isCountryDropdownOpen = ref(false);
+const countryDropdownRef = ref<HTMLElement | null>(null);
+
+function toggleCountryDropdown(event: Event) {
+  event.stopPropagation();
+  isCountryDropdownOpen.value = !isCountryDropdownOpen.value;
+}
+
+function selectCountry(code: string) {
+  selectedCountryCode.value = code;
+  isCountryDropdownOpen.value = false;
+}
+
+// Close dropdown when clicking outside
+onMounted(() => {
+  document.addEventListener("click", () => {
+    isCountryDropdownOpen.value = false;
+  });
+});
+
+// Sync localPhone/countryCode TO phone
+import { watch } from "vue"; // Ensure watch is imported if not already, though it is in line 2
+watch([selectedCountryCode, localPhone], () => {
+  let cleanLocal = localPhone.value.trim().replace(/[\s-]/g, "");
+
+  // Smart Clean for storage too
+  if (cleanLocal.startsWith("0")) cleanLocal = cleanLocal.substring(1);
+  if (selectedCountryCode.value === "+60") {
+    if (cleanLocal.startsWith("60")) cleanLocal = cleanLocal.substring(2);
+    else if (cleanLocal.startsWith("+60")) cleanLocal = cleanLocal.substring(3);
+  } else if (selectedCountryCode.value === "+65") {
+    if (cleanLocal.startsWith("65")) cleanLocal = cleanLocal.substring(2);
+    else if (cleanLocal.startsWith("+65")) cleanLocal = cleanLocal.substring(3);
+  }
+
+  phone.value = `${selectedCountryCode.value}${cleanLocal}`;
+  // Clear error if related to phone
+  if (error.value && error.value.includes(t("phoneNumber"))) {
+    error.value = "";
+  }
+});
+
+// Sync phone FROM existing value
+watch(
+  phone,
+  (newVal) => {
+    if (!newVal) {
+      localPhone.value = "";
+      return;
+    }
+    // Avoid infinite loop
+    let cleanLocal = localPhone.value.trim();
+    if (cleanLocal.startsWith("0")) cleanLocal = cleanLocal.substring(1);
+    // Note: We don't strip country code here as we want to detect it for selection
+
+    if (newVal === `${selectedCountryCode.value}${cleanLocal}`) return;
+
+    if (newVal.startsWith("+60")) {
+      selectedCountryCode.value = "+60";
+      localPhone.value = newVal.slice(3);
+    } else if (newVal.startsWith("+65")) {
+      selectedCountryCode.value = "+65";
+      localPhone.value = newVal.slice(3);
+    } else {
+      localPhone.value = newVal;
+    }
+  },
+  { immediate: true },
+);
+
 const validateForm = () => {
   error.value = "";
 
@@ -72,16 +149,38 @@ const validateForm = () => {
     return false;
   }
 
-  if (!phone.value.trim()) {
+  if (!localPhone.value || localPhone.value.trim() === "") {
     error.value = t("phoneNumber") + " " + t("required").toLowerCase();
     return false;
   }
 
-  // Validate Malaysian phone format (accepts 01XXXXXXXX, +60XXXXXXXXX, or 60XXXXXXXXX)
-  const phoneRegex = /^(\+?6?01)[0-46-9][0-9]{7,8}$/;
-  if (!phoneRegex.test(phone.value.replace(/[\s-]/g, ""))) {
-    error.value = t("pleaseEnterValidPhone");
-    return false;
+  // Smart Cleaning Logic
+  let cleanLocal = localPhone.value.replace(/[\s-]/g, "");
+
+  if (cleanLocal.startsWith("0")) cleanLocal = cleanLocal.substring(1);
+
+  if (selectedCountryCode.value === "+60") {
+    if (cleanLocal.startsWith("60")) cleanLocal = cleanLocal.substring(2);
+    else if (cleanLocal.startsWith("+60")) cleanLocal = cleanLocal.substring(3);
+  } else if (selectedCountryCode.value === "+65") {
+    if (cleanLocal.startsWith("65")) cleanLocal = cleanLocal.substring(2);
+    else if (cleanLocal.startsWith("+65")) cleanLocal = cleanLocal.substring(3);
+  }
+
+  if (selectedCountryCode.value === "+60") {
+    // Malaysian format: 9-10 digits (excluding +60), starts with 1
+    const myRegex = /^1[0-9]-*[0-9]{7,8}$/;
+    if (!myRegex.test(cleanLocal)) {
+      error.value = t("pleaseEnterValidPhone");
+      return false;
+    }
+  } else if (selectedCountryCode.value === "+65") {
+    // Singapore format: 8 digits, starts with 3, 5, 6, 8, 9
+    const sgRegex = /^[35689][0-9]{7}$/;
+    if (!sgRegex.test(cleanLocal)) {
+      error.value = t("pleaseEnterValidPhone");
+      return false;
+    }
   }
 
   return true;
@@ -306,22 +405,79 @@ const brandColor = computed(() => studioStore.studio?.brand_color || "#000000");
               </p>
             </div>
 
-            <!-- Phone Number Input -->
-            <div class="relative group">
-              <input
-                type="tel"
-                v-model="phone"
-                id="phone"
-                required
-                class="peer w-full bg-transparent border-b-2 py-2.5 pt-4 outline-none text-lg transition-colors placeholder-transparent border-gray-200 focus:border-gray-900 font-medium"
-                :placeholder="t('enterPhone')"
-              />
-              <label
-                for="phone"
-                class="absolute left-0 -top-1 text-xs font-bold uppercase tracking-wider transition-all peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:font-normal peer-placeholder-shown:normal-case peer-focus:-top-1 peer-focus:text-xs peer-focus:font-bold peer-focus:uppercase text-gray-500 peer-placeholder-shown:text-gray-400 peer-focus:text-gray-900"
-              >
-                {{ t("phoneNumber") }}
-              </label>
+            <!-- Phone Number Input with Country Code -->
+            <div class="flex gap-3">
+              <div class="relative w-24 group" ref="countryDropdownRef">
+                <button
+                  type="button"
+                  @click="toggleCountryDropdown"
+                  class="peer w-full bg-transparent border-b-2 py-2.5 pt-4 outline-none text-lg transition-colors border-gray-200 focus:border-gray-900 flex items-center justify-between gap-1"
+                >
+                  <span class="flex items-center gap-2">
+                    <span>{{
+                      countryCodes.find((c) => c.code === selectedCountryCode)
+                        ?.flag
+                    }}</span>
+                    <span>{{ selectedCountryCode }}</span>
+                  </span>
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="text-gray-400"
+                  >
+                    <path d="m6 9 6 6 6-6" />
+                  </svg>
+                </button>
+
+                <!-- Custom Dropdown Menu -->
+                <div
+                  v-if="isCountryDropdownOpen"
+                  class="absolute top-full left-0 w-full bg-white border border-gray-100 shadow-xl rounded-b-xl z-50 overflow-hidden mt-1 animate-fade-in-up"
+                >
+                  <button
+                    v-for="country in countryCodes"
+                    :key="country.code"
+                    type="button"
+                    @click="selectCountry(country.code)"
+                    class="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 transition-colors border-b border-gray-50 last:border-0"
+                  >
+                    <span class="text-xl">{{ country.flag }}</span>
+                    <span class="font-medium text-gray-700">{{
+                      country.code
+                    }}</span>
+                  </button>
+                </div>
+
+                <label
+                  class="absolute left-0 -top-1 text-xs font-bold uppercase tracking-wider text-gray-500"
+                >
+                  {{ t("code") || "Code" }}
+                </label>
+              </div>
+
+              <div class="relative group flex-1">
+                <input
+                  type="tel"
+                  v-model="localPhone"
+                  id="phone"
+                  required
+                  class="peer w-full bg-transparent border-b-2 py-2.5 pt-4 outline-none text-lg transition-colors placeholder-transparent border-gray-200 focus:border-gray-900 font-medium"
+                  :placeholder="t('enterPhone')"
+                />
+                <label
+                  for="phone"
+                  class="absolute left-0 -top-1 text-xs font-bold uppercase tracking-wider transition-all peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:font-normal peer-placeholder-shown:normal-case peer-focus:-top-1 peer-focus:text-xs peer-focus:font-bold peer-focus:uppercase text-gray-500 peer-placeholder-shown:text-gray-400 peer-focus:text-gray-900"
+                >
+                  {{ t("phoneNumber") }}
+                </label>
+              </div>
             </div>
 
             <div

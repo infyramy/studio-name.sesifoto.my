@@ -60,6 +60,7 @@ export interface WebsiteSettings {
   defaultLanguage: "BM" | "EN";
   paymentType: "deposit" | "full";
   cartModeEnabled: boolean;
+  allowMultipleSlot: boolean;
   cartHoldDuration: number;
   selectedStyle: "rustic" | "modern" | "luxe";
   bookingWindowStart?: string;
@@ -233,6 +234,29 @@ export interface BookingRequest {
 export interface SelectedAddon {
   addon_id: string;
   quantity: number;
+}
+
+export interface BatchBookingItem {
+  theme_id: string;
+  booking_date: string;
+  start_time: string;
+  end_time: string;
+  pax_count: number;
+  selected_addons: SelectedAddon[];
+  coupon_code?: string;
+  discount_amount?: number;
+  referral_code?: string;
+}
+
+export interface BatchBookingRequest {
+  customer_name: string;
+  customer_phone: string;
+  customer_email?: string;
+  customer_notes?: string;
+  consent_tc: boolean;
+  consent_marketing?: boolean;
+  session_id?: string;
+  items: BatchBookingItem[];
 }
 
 export interface Booking {

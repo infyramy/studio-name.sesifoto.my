@@ -31,7 +31,7 @@ import {
   Sparkles,
   Star,
 } from "lucide-vue-next";
-import type { Theme, Coupon } from "@/types";
+import type { Theme, Coupon, BatchBookingRequest, BatchBookingItem } from "@/types";
 import Modal from "@/components/Modal.vue";
 import ImageCarousel from "@/components/ImageCarousel.vue";
 import { marked } from "marked";
@@ -83,6 +83,11 @@ function clearSession(): void {
 // Cart Mode Detection
 const isCartModeEnabled = computed(() => {
   return studioStore.studio?.settings?.cart_mode_enabled === true;
+});
+
+// Multiple Slot Mode Detection
+const isMultipleSlotEnabled = computed(() => {
+  return studioStore.websiteSettings?.allowMultipleSlot === true;
 });
 
 // Cart State Management (only used when cart mode enabled)
@@ -255,8 +260,18 @@ function clearBookingState() {
   }
 }
 
-function dismissRecoveryDialog() {
+async function dismissRecoveryDialog() {
+  const sessionId = recoveryState.value?.sessionId;
   showRecoveryDialog.value = false;
+
+  if (sessionId) {
+    try {
+      await api.releaseSessionHolds(sessionId);
+    } catch (error) {
+      console.error("Failed to release session holds:", error);
+    }
+  }
+
   recoveryState.value = null;
   clearBookingState();
 }
@@ -284,8 +299,63 @@ async function restoreBookingState(state: any) {
       }, 500);
     }
 
+    // Determine holds for restoration
+    const hasMultipleHolds =
+      state.mode === "single" && state.confirmedSlots?.length > 0;
+    const hasSingleHold =
+      state.mode === "single" && state.confirmedSlot?.hold?.holdId;
+
     // Validate and restore holds
-    if (state.mode === "single" && state.confirmedSlot?.hold?.holdId) {
+    if (hasMultipleHolds) {
+      const activeHolds = await getActiveHolds();
+      const allHoldsStillValid = state.confirmedSlots.every((s: any) =>
+        activeHolds.some((h) => h.holdId === s.hold?.holdId),
+      );
+
+      if (allHoldsStillValid) {
+        // All holds still valid
+        confirmedSlots.value = state.confirmedSlots;
+        confirmedSlot.value = state.confirmedSlots[0];
+        selectedSlots.value = state.selectedSlots || [];
+        selectedSlot.value = state.selectedSlot;
+
+        const latestHold =
+          state.confirmedSlots[state.confirmedSlots.length - 1].hold;
+        if (latestHold?.expiresAt) {
+          holdExpiresAt.value = new Date(latestHold.expiresAt);
+          startHoldCountdown();
+        }
+        currentStep.value = state.currentStep || 3;
+
+        // Load time slots if needed
+        if (selectedTheme.value && studioStore.studio && selectedDate.value) {
+          loadingSlots.value = true;
+          try {
+            const slots = await api.getAvailableTimeSlots(
+              studioStore.studio.id,
+              selectedTheme.value.id,
+              selectedDate.value,
+            );
+            timeSlots.value = processTimeSlots(slots, selectedDate.value);
+          } catch (err) {
+            console.error("Failed to load time slots:", err);
+          } finally {
+            loadingSlots.value = false;
+          }
+        }
+      } else {
+        // Some/all holds expired
+        selectedSlots.value = state.selectedSlots || [];
+        selectedSlot.value = state.selectedSlot;
+        currentStep.value = 2; // Back to time selection
+        showModal({
+          title: t("reservationExpired"),
+          message: t("reservationExpiredMessage"),
+          type: "warning",
+          confirmText: t("ok"),
+        });
+      }
+    } else if (hasSingleHold) {
       const holds = await getActiveHolds();
       const hold = holds.find(
         (h) => h.holdId === state.confirmedSlot.hold.holdId,
@@ -330,7 +400,10 @@ async function restoreBookingState(state: any) {
       // Restore step 2 (time slot selection)
       currentStep.value = 2;
 
-      // Restore selected slot if exists
+      // Restore selected slots if exists
+      if (state.selectedSlots) {
+        selectedSlots.value = state.selectedSlots;
+      }
       if (state.selectedSlot) {
         selectedSlot.value = state.selectedSlot;
       }
@@ -355,7 +428,10 @@ async function restoreBookingState(state: any) {
       // Restore cart mode step 2 (time slot selection for adding to cart)
       currentStep.value = 2;
 
-      // Restore selected slot if exists
+      // Restore selected slots if exists
+      if (state.selectedSlots) {
+        selectedSlots.value = state.selectedSlots;
+      }
       if (state.selectedSlot) {
         selectedSlot.value = state.selectedSlot;
       }
@@ -380,7 +456,10 @@ async function restoreBookingState(state: any) {
       // Restore cart mode step 3 (Pax & Addons - before adding to cart)
       currentStep.value = 3;
 
-      // Restore selected slot (needed for Add to Cart button to work)
+      // Restore selected slots (needed for Add to Cart button to work)
+      if (state.selectedSlots) {
+        selectedSlots.value = state.selectedSlots;
+      }
       if (state.selectedSlot) {
         selectedSlot.value = state.selectedSlot;
       }
@@ -525,6 +604,7 @@ const steps = computed(() => {
 const selectedTheme = ref<Theme | null>(null);
 const selectedDate = ref<string | null>(null);
 const selectedSlot = ref<any | null>(null);
+const selectedSlots = ref<any[]>([]); // Multi-slot mode: array of selected slots
 const paxCount = ref(1);
 const selectedAddons = ref<Record<string, number>>({});
 const expandedAddonDesc = ref<Record<string, boolean>>({});
@@ -539,6 +619,7 @@ const customerInfo = ref({
 // Hold Management State
 // ============================================
 const confirmedSlot = ref<any | null>(null); // Slot with active hold
+const confirmedSlots = ref<any[]>([]); // Multi-slot mode: array of confirmed slots with holds
 const holdExpiresAt = ref<Date | null>(null); // Hold expiry timestamp
 const holdCountdown = ref<string>("10:00"); // Display countdown
 const isCreatingHold = ref(false); // Loading state for hold creation
@@ -652,18 +733,105 @@ const validateName = () => {
   return true;
 };
 
+
+// Country codes for phone input
+const countryCodes = [
+  { code: "+60", label: "MY", flag: "🇲🇾" },
+  { code: "+65", label: "SG", flag: "🇸🇬" },
+];
+const selectedCountryCode = ref("+60");
+const localPhone = ref("");
+
+// Sync localPhone/countryCode TO customerInfo.phone
+watch([selectedCountryCode, localPhone], () => {
+  let cleanLocal = localPhone.value.trim().replace(/[\s-]/g, "");
+
+  // Smart Clean for storage too
+  if (cleanLocal.startsWith("0")) cleanLocal = cleanLocal.substring(1);
+  if (selectedCountryCode.value === "+60") {
+    if (cleanLocal.startsWith("60")) cleanLocal = cleanLocal.substring(2);
+    else if (cleanLocal.startsWith("+60")) cleanLocal = cleanLocal.substring(3);
+  } else if (selectedCountryCode.value === "+65") {
+    if (cleanLocal.startsWith("65")) cleanLocal = cleanLocal.substring(2);
+    else if (cleanLocal.startsWith("+65")) cleanLocal = cleanLocal.substring(3);
+  }
+
+  customerInfo.value.phone = `${selectedCountryCode.value}${cleanLocal}`;
+  formErrors.value.phone = "";
+});
+
+// Custom Dropdown State
+const isCountryDropdownOpen = ref(false);
+const countryDropdownRef = ref<HTMLElement | null>(null);
+
+function toggleCountryDropdown(event: Event) {
+  event.stopPropagation(); // Prevent immediate closing due to document listener
+  isCountryDropdownOpen.value = !isCountryDropdownOpen.value;
+}
+
+function selectCountry(code: string) {
+  selectedCountryCode.value = code;
+  isCountryDropdownOpen.value = false;
+}
+
+// Close dropdown when clicking outside
+onMounted(() => {
+  document.addEventListener("click", () => {
+    isCountryDropdownOpen.value = false;
+  });
+});
+
+// Sync customerInfo.phone FROM existing value (e.g. if pre-filled)
+watch(
+  () => customerInfo.value.phone,
+  (newVal) => {
+    if (!newVal) return;
+    // Avoid infinite loop if values match constructed phone
+    let cleanLocal = localPhone.value.trim();
+    if (cleanLocal.startsWith("0")) cleanLocal = cleanLocal.substring(1);
+    if (newVal === `${selectedCountryCode.value}${cleanLocal}`) return;
+
+    if (newVal.startsWith("+60")) {
+      selectedCountryCode.value = "+60";
+      localPhone.value = newVal.slice(3);
+    } else if (newVal.startsWith("+65")) {
+      selectedCountryCode.value = "+65";
+      localPhone.value = newVal.slice(3);
+    } else {
+      // Default to input value if no matching prefix (fallback) or assume local MY
+      localPhone.value = newVal;
+    }
+  },
+  { immediate: true },
+);
+
 const validatePhone = () => {
-  if (!customerInfo.value.phone || customerInfo.value.phone.trim() === "") {
+  if (!localPhone.value || localPhone.value.trim() === "") {
     formErrors.value.phone = t("fieldRequired");
     return false;
   }
-  // Basic phone validation (Malaysian format)
-  const phoneRegex = /^(\+?6?01)[0-46-9]-*[0-9]{7,8}$/;
-  const cleanPhone = customerInfo.value.phone.replace(/[\s-]/g, "");
-  if (!phoneRegex.test(cleanPhone)) {
-    formErrors.value.phone = t("invalidPhone");
-    return false;
+
+  const cleanLocal = localPhone.value.replace(/[\s-]/g, "");
+  // Remove leading 0 for validation logic if user typed it
+  const effectiveLocal = cleanLocal.startsWith("0") ? cleanLocal.substring(1) : cleanLocal;
+
+  if (selectedCountryCode.value === "+60") {
+    // Malaysian format: 9-10 digits (excluding +60), starts with 1
+    // e.g. 12-3456789 (9 digits) or 11-23456789 (10 digits)
+    const myRegex = /^1[0-46-9]-*[0-9]{7,8}$/;
+    if (!myRegex.test(effectiveLocal)) {
+      formErrors.value.phone = t("invalidPhone");
+      return false;
+    }
+  } else if (selectedCountryCode.value === "+65") {
+    // Singapore format: 8 digits, starts with 8 or 9
+    const sgRegex = /^[89][0-9]{7}$/;
+    if (!sgRegex.test(effectiveLocal)) {
+      formErrors.value.phone = t("invalidPhone"); // Reuse or add specific SG message
+      return false;
+    }
   }
+
   formErrors.value.phone = "";
   return true;
 };
@@ -917,6 +1085,7 @@ const selectTheme = (theme: Theme) => {
   paxCount.value = theme.base_pax; // Reset/Set to base pax
   selectedDate.value = null; // Reset date
   selectedSlot.value = null; // Reset slot
+  selectedSlots.value = []; // Reset multi-slot selection
   // Don't auto-navigate - user must click next button
 };
 
@@ -1022,6 +1191,7 @@ const processTimeSlots = (slots: any[], dateStr: string) => {
 const selectDate = async (dateStr: string) => {
   selectedDate.value = dateStr;
   selectedSlot.value = null; // Reset slot
+  selectedSlots.value = []; // Reset multi-slot selection
 
   // Load time slots for selected date
   if (selectedTheme.value && studioStore.studio) {
@@ -1068,7 +1238,24 @@ const formatTimeForDisplay = (time: string): string => {
 
 const selectSlot = (slot: any) => {
   if (!slot.available) return;
-  selectedSlot.value = slot;
+
+  if (isMultipleSlotEnabled.value) {
+    // Toggle: add if not selected, remove if already selected
+    const index = selectedSlots.value.findIndex((s) => s.id === slot.id);
+    if (index >= 0) {
+      selectedSlots.value.splice(index, 1);
+    } else {
+      selectedSlots.value.push(slot);
+    }
+    // Keep selectedSlot in sync (last selected, or null if empty)
+    selectedSlot.value =
+      selectedSlots.value.length > 0
+        ? selectedSlots.value[selectedSlots.value.length - 1]
+        : null;
+  } else {
+    // Original single-select behavior
+    selectedSlot.value = slot;
+  }
 };
 
 // ============================================
@@ -1113,6 +1300,49 @@ async function createCartHold(slotData: any): Promise<CartHold> {
       expiresAt: response.expiresAt,
       createdAt: response.createdAt,
     };
+  } catch (error: any) {
+    // Handle conflict error from backend
+    if (
+      error?.data?.message === "SLOT_NO_LONGER_AVAILABLE" ||
+      error?.message === "SLOT_NO_LONGER_AVAILABLE" ||
+      error?.statusCode === 400
+    ) {
+      throw new Error("SLOT_NO_LONGER_AVAILABLE");
+    }
+    // Handle past time slot error from backend
+    if (
+      error?.data?.message === "SLOT_TIME_HAS_PASSED" ||
+      error?.message === "SLOT_TIME_HAS_PASSED"
+    ) {
+      throw new Error("SLOT_TIME_HAS_PASSED");
+    }
+    throw error;
+  }
+}
+
+async function createBatchCartHold(slotsData: any[]): Promise<CartHold[]> {
+  try {
+    const responses = await api.createBatchSlotHold(
+      slotsData.map((s) => ({
+        themeId: s.themeId,
+        date: s.date,
+        startTime: s.startTime,
+        endTime: s.endTime,
+      })),
+      getSessionId(),
+    );
+
+    return responses.map((response) => ({
+      holdId: response.holdId,
+      sessionId: response.sessionId,
+      studioId: studioStore.studio?.id || "",
+      themeId: response.themeId,
+      date: response.date,
+      startTime: response.startTime,
+      endTime: response.endTime,
+      expiresAt: response.expiresAt,
+      createdAt: response.createdAt,
+    }));
   } catch (error: any) {
     // Handle conflict error from backend
     if (
@@ -1200,6 +1430,16 @@ function startHoldCountdown() {
 }
 
 async function handleHoldExpiry() {
+  // Release all multi-slot holds if any
+  if (confirmedSlots.value.length > 0) {
+    for (const slot of confirmedSlots.value) {
+      if (slot.hold?.holdId) {
+        releaseCartHold(slot.hold.holdId);
+      }
+    }
+    confirmedSlots.value = [];
+  }
+
   const expiredHoldId = confirmedSlot.value?.hold?.holdId;
 
   confirmedSlot.value = null;
@@ -1310,15 +1550,53 @@ function showHoldConfirmationDialog(): Promise<boolean> {
   });
 }
 
+function showMultiSlotHoldConfirmationDialog(): Promise<boolean> {
+  const duration = studioStore.studio?.settings?.cart_hold_duration || 10;
+  const slotsList = selectedSlots.value
+    .map((s) => `<b>${s.start} - ${s.end}</b>`)
+    .join("<br>");
+  return showModal({
+    title: t("reserveTheseSlots") || "Tempah slot-slot ini?",
+    message: `${slotsList}\n\n${(
+      t("reserveSlotsMessage") || t("reserveSlotMessage")
+    ).replace("{duration}", `<b>${duration}</b>`)}`,
+    type: "info",
+    confirmText: t("yes"),
+    cancelText: t("no"),
+    showCancel: true,
+  });
+}
+
 function showAddToCartConfirmationDialog(): Promise<boolean> {
   const themeName = selectedTheme.value?.name || "";
-  const slotTime = `${selectedSlot.value.start} - ${selectedSlot.value.end}`;
+
+  // Determine which slots are being added
+  const slotsToAdd =
+    isMultipleSlotEnabled.value && selectedSlots.value.length > 0
+      ? selectedSlots.value
+      : selectedSlot.value
+        ? [selectedSlot.value]
+        : [];
+
   const pax = paxCount.value;
   const duration = studioStore.studio?.settings?.cart_hold_duration || 10;
 
+  let slotDetails = "";
+  if (slotsToAdd.length > 1) {
+    // List all selected slots
+    const slotTimes = slotsToAdd
+      .map((s) => `• ${s.start} - ${s.end}`)
+      .join("<br>");
+    slotDetails = `<b>${slotsToAdd.length} ${
+      t("sessions") || "sessions"
+    }</b><br>${slotTimes}`;
+  } else if (slotsToAdd.length === 1) {
+    slotDetails = `<b>${slotsToAdd[0].start} - ${slotsToAdd[0].end}</b>`;
+  }
+
   return showModal({
     title: t("addToCartConfirm"),
-    message: `<b>${themeName}</b>\n<b>${slotTime}</b>\n<b>${pax} ${t(
+    message: `<b>${themeName}</b>\n${slotDetails}\n<b>${pax} ${t(
       "pax",
     )}</b>\n\n${t("addToCartMessage").replace(
       "{duration}",
@@ -1407,73 +1685,92 @@ const removeCoupon = () => {
 
 // Cart Functions (only used when cart mode enabled)
 const addToCart = async () => {
-  if (!selectedTheme.value || !selectedDate.value || !selectedSlot.value)
-    return;
+  if (!selectedTheme.value || !selectedDate.value) return;
+
+  // Determine which slots to add
+  const slotsToAdd =
+    isMultipleSlotEnabled.value && selectedSlots.value.length > 0
+      ? selectedSlots.value
+      : selectedSlot.value
+        ? [selectedSlot.value]
+        : [];
+
+  if (slotsToAdd.length === 0) return;
 
   try {
-    // Create hold for this cart item
-    const hold = await createCartHold({
-      studioId: studioStore.studio!.id,
-      themeId: selectedTheme.value.id,
-      date: selectedDate.value,
-      startTime: parseTime(selectedSlot.value.start),
-      endTime: parseTime(selectedSlot.value.end),
-    });
+    isCreatingHold.value = true;
+    let lastHold: any = null;
 
-    // Calculate item total with date price modifier
-    const extraPax = Math.max(
-      0,
-      paxCount.value - (selectedTheme.value.base_pax || 0),
-    );
-    const extraPaxCost = extraPax * selectedTheme.value.extra_pax_price;
+    // Use batch hold for all slots to add
+    const slotsData = slotsToAdd.map(slot => ({
+      themeId: selectedTheme.value!.id,
+      date: selectedDate.value!,
+      startTime: parseTime(slot.start),
+      endTime: parseTime(slot.end),
+    }));
 
-    let addonsTotal = 0;
-    for (const [id, qty] of Object.entries(selectedAddons.value)) {
-      const addon = studioStore.addons.find((a) => a.id === id);
-      if (addon && qty > 0) {
-        addonsTotal += addon.price * qty;
+    const batchHolds = await createBatchCartHold(slotsData);
+
+    for (let i = 0; i < slotsToAdd.length; i++) {
+      const slot = slotsToAdd[i];
+      const hold = batchHolds[i];
+
+      lastHold = hold;
+
+      // Calculate item total with date price modifier
+      const extraPax = Math.max(
+        0,
+        paxCount.value - (selectedTheme.value.base_pax || 0),
+      );
+      const extraPaxCost = extraPax * selectedTheme.value.extra_pax_price;
+
+      let addonsTotal = 0;
+      for (const [id, qty] of Object.entries(selectedAddons.value)) {
+        const addon = studioStore.addons.find((a) => a.id === id);
+        if (addon && qty > 0) {
+          addonsTotal += addon.price * qty;
+        }
       }
+
+      // Use the slot price (already includes special pricing from backend)
+      let sessionPrice = slot?.price || selectedTheme.value.base_price;
+
+      const itemTotal = sessionPrice + extraPaxCost + addonsTotal;
+
+      const dateInfo = selectedDateInfo.value;
+
+      const cartItem = {
+        id: Date.now().toString() + "-" + slot.id,
+        theme: selectedTheme.value,
+        date: selectedDate.value,
+        slot: slot,
+        pax: paxCount.value,
+        addons: { ...selectedAddons.value },
+        total: itemTotal,
+        dateInfo: dateInfo,
+        hold: hold,
+        specialPricing:
+          specialPricingAmount.value !== 0
+            ? {
+                message: specialPricingMessage.value || "",
+                amount: specialPricingAmount.value,
+              }
+            : undefined,
+      };
+
+      cart.value.push(cartItem);
     }
 
-    // Use the slot price (already includes special pricing from backend)
-    // If the selected slot has a price from the backend, use that
-    // Otherwise fall back to theme base_price
-    let sessionPrice =
-      selectedSlot.value?.price || selectedTheme.value.base_price;
-
-    const itemTotal = sessionPrice + extraPaxCost + addonsTotal;
-
-    const dateInfo = selectedDateInfo.value;
-
-    const cartItem = {
-      id: Date.now().toString(),
-      theme: selectedTheme.value,
-      date: selectedDate.value,
-      slot: selectedSlot.value,
-      pax: paxCount.value,
-      addons: { ...selectedAddons.value },
-      total: itemTotal,
-      dateInfo: dateInfo,
-      hold: hold, // Store hold info
-      specialPricing:
-        specialPricingAmount.value !== 0
-          ? {
-              message: specialPricingMessage.value || "",
-              amount: specialPricingAmount.value,
-            }
-          : undefined,
-    };
-
-    cart.value.push(cartItem);
-
     // UNIFIED CART HOLD: Start/reset the unified timer with the new expiry time
-    // Backend extends all existing holds to this same expiry when creating a new hold
-    startUnifiedCartHoldTimer(new Date(hold.expiresAt));
+    if (lastHold) {
+      startUnifiedCartHoldTimer(new Date(lastHold.expiresAt));
+    }
 
     // Reset selection for next item
     selectedTheme.value = null;
     selectedDate.value = null;
     selectedSlot.value = null;
+    selectedSlots.value = [];
     paxCount.value = 1;
     selectedAddons.value = {};
     timeSlots.value = [];
@@ -1506,6 +1803,8 @@ const addToCart = async () => {
         confirmText: t("ok"),
       });
     }
+  } finally {
+    isCreatingHold.value = false;
   }
 };
 
@@ -1626,6 +1925,107 @@ const nextStep = async () => {
   // Step 2 -> 3: Create hold for single mode
   // ============================================
   if (currentStep.value === 2 && !isCartModeEnabled.value) {
+    // Multi-slot mode: create holds for all selected slots
+    if (isMultipleSlotEnabled.value) {
+      if (selectedSlots.value.length === 0) return;
+
+      const confirmed = await showMultiSlotHoldConfirmationDialog();
+      if (confirmed) {
+        try {
+          isCreatingHold.value = true;
+          
+          // Use batch hold for all selected slots
+          const slotsData = selectedSlots.value.map(slot => ({
+            themeId: selectedTheme.value!.id,
+            date: selectedDate.value!,
+            startTime: parseTime(slot.start),
+            endTime: parseTime(slot.end),
+          }));
+
+          const batchHolds = await createBatchCartHold(slotsData);
+          
+          // Map back to slots with their specific hold data
+          const holds = selectedSlots.value.map((slot, index) => ({
+            ...slot,
+            hold: batchHolds[index]
+          }));
+
+          confirmedSlots.value = holds;
+          // Also set confirmedSlot to first for backward compat
+          confirmedSlot.value = holds[0];
+          holdExpiresAt.value = new Date(
+            holds[holds.length - 1].hold.expiresAt,
+          );
+
+          startHoldCountdown();
+          currentStep.value++;
+        } catch (error: any) {
+          if (error.message === "SLOT_NO_LONGER_AVAILABLE") {
+            await showModal({
+              title: t("slotNoLongerAvailable"),
+              message: t("slotNoLongerAvailableMessage"),
+              type: "error",
+              confirmText: t("ok"),
+            });
+            // Release any holds that were already created
+            // (confirmedSlots may have partial holds)
+            // Refresh time slots
+            if (
+              selectedTheme.value &&
+              studioStore.studio &&
+              selectedDate.value
+            ) {
+              loadingSlots.value = true;
+              try {
+                const slots = await api.getAvailableTimeSlots(
+                  studioStore.studio.id,
+                  selectedTheme.value.id,
+                  selectedDate.value,
+                );
+                timeSlots.value = processTimeSlots(slots, selectedDate.value);
+              } catch (err) {
+                console.error("Failed to load time slots:", err);
+              } finally {
+                loadingSlots.value = false;
+              }
+            }
+          } else if (error.message === "SLOT_TIME_HAS_PASSED") {
+            await showModal({
+              title: t("slotTimeHasPassed") || "Slot Time Has Passed",
+              message:
+                t("slotTimeHasPassedMessage") ||
+                "This time slot has already passed. Please select a different time.",
+              type: "error",
+              confirmText: t("ok"),
+            });
+            if (
+              selectedTheme.value &&
+              studioStore.studio &&
+              selectedDate.value
+            ) {
+              loadingSlots.value = true;
+              try {
+                const slots = await api.getAvailableTimeSlots(
+                  studioStore.studio.id,
+                  selectedTheme.value.id,
+                  selectedDate.value,
+                );
+                timeSlots.value = processTimeSlots(slots, selectedDate.value);
+              } catch (err) {
+                console.error("Failed to load time slots:", err);
+              } finally {
+                loadingSlots.value = false;
+              }
+            }
+          }
+        } finally {
+          isCreatingHold.value = false;
+        }
+      }
+      return;
+    }
+
+    // Single slot mode: existing logic
     if (!selectedSlot.value) return;
 
     const confirmed = await showHoldConfirmationDialog();
@@ -1742,9 +2142,6 @@ const nextStep = async () => {
       isProcessingPayment.value = true;
 
       try {
-        const createdBookings: Array<{ id: string; booking_number: string }> =
-          [];
-
         // Calculate proportional discount for each cart item
         const calculateProportionalDiscount = (itemIndex: number): number => {
           if (!validatedCoupon.value) return 0;
@@ -1779,65 +2176,58 @@ const nextStep = async () => {
           return Math.round(totalDiscount * proportion);
         };
 
-        // Create bookings for each cart item
-        for (let i = 0; i < (cart.value || []).length; i++) {
-          const item = cart.value[i];
+        // Prepare batch booking request
+        const batchRequest: BatchBookingRequest = {
+          customer_name: customerInfo.value.name,
+          customer_phone: customerInfo.value.phone,
+          customer_email: customerInfo.value.email || "",
+          customer_notes: customerInfo.value.notes || "",
+          consent_tc: termsAccepted.value,
+          consent_marketing: false,
+          session_id: getSessionId(),
+          items: cart.value.map((item, i) => {
+            const selectedAddonsArray = Object.entries(item.addons)
+              .filter(([_, qty]) => qty > 0)
+              .map(([addonId, quantity]) => ({
+                addon_id: addonId,
+                quantity: quantity as number,
+              }));
 
-          // Prepare addons array
-          const selectedAddonsArray = Object.entries(item.addons)
-            .filter(([_, qty]) => qty > 0)
-            .map(([addonId, quantity]) => ({
-              addon_id: addonId,
-              quantity: quantity as number,
-            }));
+            // Parse time from slot
+            const slotStart =
+              item.slot?.originalSlot?.start || item.slot?.start || "09:00";
+            const slotEnd =
+              item.slot?.originalSlot?.end || item.slot?.end || "09:30";
+            const startTime =
+              slotStart.includes("AM") || slotStart.includes("PM")
+                ? parseTime(slotStart)
+                : slotStart;
+            const endTime =
+              slotEnd.includes("AM") || slotEnd.includes("PM")
+                ? parseTime(slotEnd)
+                : slotEnd;
 
-          // Parse time from slot
-          const slotStart =
-            item.slot?.originalSlot?.start || item.slot?.start || "09:00";
-          const slotEnd =
-            item.slot?.originalSlot?.end || item.slot?.end || "09:30";
-          const startTime =
-            slotStart.includes("AM") || slotStart.includes("PM")
-              ? parseTime(slotStart)
-              : slotStart;
-          const endTime =
-            slotEnd.includes("AM") || slotEnd.includes("PM")
-              ? parseTime(slotEnd)
-              : slotEnd;
+            // Calculate proportional discount for this item
+            const itemDiscount = calculateProportionalDiscount(i);
 
-          // Calculate proportional discount for this item
-          const itemDiscount = calculateProportionalDiscount(i);
+            return {
+              theme_id: item.theme.id,
+              booking_date: item.date,
+              start_time: startTime,
+              end_time: endTime,
+              pax_count: item.pax,
+              selected_addons: selectedAddonsArray,
+              coupon_code:
+                validatedCoupon.value && itemDiscount > 0
+                  ? validatedCoupon.value.code
+                  : undefined,
+              discount_amount: itemDiscount > 0 ? itemDiscount : undefined,
+            };
+          }),
+        };
 
-          // Create booking request
-          const bookingRequest = {
-            theme_id: item.theme.id,
-            booking_date: item.date,
-            start_time: startTime,
-            end_time: endTime,
-            pax_count: item.pax,
-            customer_name: customerInfo.value.name,
-            customer_phone: customerInfo.value.phone,
-            customer_email: customerInfo.value.email || "",
-            customer_notes: customerInfo.value.notes || "",
-            consent_tc: termsAccepted.value,
-            consent_marketing: false,
-            selected_addons: selectedAddonsArray,
-            // Apply coupon to all items with proportional discount
-            coupon_code:
-              validatedCoupon.value && itemDiscount > 0
-                ? validatedCoupon.value.code
-                : undefined,
-            discount_amount: itemDiscount > 0 ? itemDiscount : undefined,
-            session_id: getSessionId(),
-          };
-
-          // Create booking
-          const createdBooking = await createBooking(bookingRequest);
-          createdBookings.push({
-            id: createdBooking.id,
-            booking_number: createdBooking.booking_number,
-          });
-        }
+        // Create bookings in batch
+        const createdBookings = await api.createBatchBooking(batchRequest);
 
         // Determine payment type from studio settings
         const paymentType =
@@ -1858,12 +2248,14 @@ const nextStep = async () => {
 
           if (paymentType === "deposit") {
             const rawDeposit =
-              item.theme.deposit_amount ||
-              Math.round(
-                itemTotal *
-                  ((studioStore.studio?.settings.deposit_percentage || 50) /
-                    100),
-              );
+              item.theme.deposit_amount !== null &&
+              item.theme.deposit_amount !== undefined
+                ? item.theme.deposit_amount
+                : Math.round(
+                    itemTotal *
+                      ((studioStore.studio?.settings.deposit_percentage || 50) /
+                        100),
+                  );
             const itemBalance = itemTotal - rawDeposit;
             // Apply discount to balance first, then remainder to deposit
             const remainingDiscount = Math.max(0, itemDiscount - itemBalance);
@@ -1953,14 +2345,32 @@ const nextStep = async () => {
         isProcessingPayment.value = false;
       }
     } else {
-      // Single mode: Create single booking
-      if (!selectedTheme.value || !selectedDate.value || !selectedSlot.value) {
+      // Single mode: Create booking(s)
+      if (!selectedTheme.value || !selectedDate.value) {
         return;
       }
+
+      // Determine slots to book (multi-slot or single)
+      const slotsToBook =
+        isMultipleSlotEnabled.value && confirmedSlots.value.length > 0
+          ? confirmedSlots.value
+          : selectedSlot.value
+            ? [confirmedSlot.value || selectedSlot.value]
+            : [];
+
+      if (slotsToBook.length === 0) return;
 
       isProcessingPayment.value = true;
 
       try {
+        // Calculate proportional discount for each booking (if multiple slots)
+        const calculateProportionalDiscount = (index: number): number => {
+          if (!validatedCoupon.value || slotsToBook.length === 0) return 0;
+          const totalDiscount = discountAmount.value;
+          // In single mode, each slot has the same subtotal
+          return Math.floor(totalDiscount / slotsToBook.length);
+        };
+
         // Prepare addons array
         const selectedAddonsArray = Object.entries(selectedAddons.value)
           .filter(([_, qty]) => qty > 0)
@@ -1969,87 +2379,113 @@ const nextStep = async () => {
             quantity: quantity as number,
           }));
 
-        // Parse time from slot
-        const slotStart =
-          selectedSlot.value?.originalSlot?.start ||
-          selectedSlot.value?.start ||
-          "09:00";
-        const slotEnd =
-          selectedSlot.value?.originalSlot?.end ||
-          selectedSlot.value?.end ||
-          "09:30";
-        const startTime =
-          slotStart.includes("AM") || slotStart.includes("PM")
-            ? parseTime(slotStart)
-            : slotStart;
-        const endTime =
-          slotEnd.includes("AM") || slotEnd.includes("PM")
-            ? parseTime(slotEnd)
-            : slotEnd;
-
-        // Create booking request
-        const bookingRequest = {
-          theme_id: selectedTheme.value.id,
-          booking_date: selectedDate.value,
-          start_time: startTime,
-          end_time: endTime,
-          pax_count: paxCount.value,
+        // Prepare batch booking request
+        const batchRequest: BatchBookingRequest = {
           customer_name: customerInfo.value.name,
           customer_phone: customerInfo.value.phone,
           customer_email: customerInfo.value.email || "",
           customer_notes: customerInfo.value.notes || "",
           consent_tc: termsAccepted.value,
           consent_marketing: false,
-          selected_addons: selectedAddonsArray,
-          coupon_code: validatedCoupon.value?.code,
-          discount_amount:
-            discountAmount.value > 0 ? discountAmount.value : undefined,
           session_id: getSessionId(),
+          items: slotsToBook.map((slot, i) => {
+            // Parse time from slot
+            const slotStart =
+              slot?.originalSlot?.start || slot?.start || "09:00";
+            const slotEnd = slot?.originalSlot?.end || slot?.end || "09:30";
+            const startTime =
+              slotStart.includes("AM") || slotStart.includes("PM")
+                ? parseTime(slotStart)
+                : slotStart;
+            const endTime =
+              slotEnd.includes("AM") || slotEnd.includes("PM")
+                ? parseTime(slotEnd)
+                : slotEnd;
+
+            // Calculate proportional discount for this item
+            const itemDiscount = calculateProportionalDiscount(i);
+
+            return {
+              theme_id: selectedTheme.value.id,
+              booking_date: selectedDate.value,
+              start_time: startTime,
+              end_time: endTime,
+              pax_count: paxCount.value,
+              selected_addons: selectedAddonsArray,
+              coupon_code: validatedCoupon.value?.code,
+              discount_amount: itemDiscount > 0 ? itemDiscount : undefined,
+            };
+          }),
         };
 
-        // Create booking
-        const createdBooking = await createBooking(bookingRequest);
+        // Create bookings in batch
+        const createdBookings = await api.createBatchBooking(batchRequest);
 
         // Determine payment type from studio settings
         const paymentType =
           studioStore.websiteSettings?.paymentType || "deposit";
 
-        // Calculate payment amount to check for zero payment
-        let paymentAmount = grandTotal.value;
-        if (paymentType === "deposit") {
-          // Use effective deposit to respect coupon discounts
-          paymentAmount = effectiveDepositAmount.value;
+        if (createdBookings.length === 1) {
+          // Single booking: original payment flow
+          const firstBooking = createdBookings[0]!;
+          const amountToSend = paymentAmount.value <= 0 ? 0 : paymentAmount.value;
+          const paymentResult = await api.initiatePayment(
+            firstBooking.id,
+            paymentType,
+            undefined,
+            amountToSend,
+          );
+
+          clearBookingState();
+
+          if (paymentResult.paymentSkipped) {
+            router.push(`/success/${firstBooking.booking_number}`);
+            return;
+          }
+
+          if (paymentResult.checkoutUrl) {
+            window.location.href = paymentResult.checkoutUrl;
+            return;
+          }
+
+          router.push(`/success/${firstBooking.booking_number}`);
+        } else {
+          // Multiple bookings: batch payment (same as cart mode)
+          const primaryBookingId = createdBookings[0].id;
+          const additionalBookingIds = createdBookings
+            .slice(1)
+            .map((b) => b.id);
+
+          // Use unified payment amount (already multiplied and discounted)
+          const totalAmount = paymentAmount.value;
+
+          const paymentResult = await api.initiatePayment(
+            primaryBookingId,
+            paymentType,
+            additionalBookingIds.length > 0 ? additionalBookingIds : undefined,
+            totalAmount <= 0 ? 0 : totalAmount,
+          );
+
+          clearBookingState();
+
+          if (paymentResult.paymentSkipped) {
+            const allBookingNumbers = createdBookings
+              .map((b) => b.booking_number)
+              .join(",");
+            router.push(`/success/${allBookingNumbers}`);
+            return;
+          }
+
+          if (paymentResult.checkoutUrl) {
+            window.location.href = paymentResult.checkoutUrl;
+            return;
+          }
+
+          const allBookingNumbers = createdBookings
+            .map((b) => b.booking_number)
+            .join(",");
+          router.push(`/success/${allBookingNumbers}`);
         }
-
-        // Initiate payment with CHIP
-        // Always pass the calculated amount (coupon-discounted). Backend uses it when provided;
-        // otherwise it falls back to booking.depositAmount which is pre-coupon.
-        const amountToSend = paymentAmount <= 0 ? 0 : paymentAmount;
-        const paymentResult = await api.initiatePayment(
-          createdBooking.id,
-          paymentType,
-          undefined, // No additional booking IDs for single mode
-          amountToSend,
-        );
-
-        // Clear booking state before redirecting
-        clearBookingState();
-
-        // Handle zero payment (auto-confirmed)
-        if (paymentResult.paymentSkipped) {
-          // Booking was auto-confirmed, redirect to success
-          router.push(`/success/${createdBooking.booking_number}`);
-          return;
-        }
-
-        // Redirect to CHIP checkout
-        if (paymentResult.checkoutUrl) {
-          window.location.href = paymentResult.checkoutUrl;
-          return; // Stop execution after redirect
-        }
-
-        // Fallback: If no checkoutUrl (CHIP not configured), redirect to success
-        router.push(`/success/${createdBooking.booking_number}`);
       } catch (error: any) {
         console.error("Failed to create booking:", error);
 
@@ -2103,7 +2539,7 @@ const prevStep = async () => {
     if (
       currentStep.value === 3 &&
       !isCartModeEnabled.value &&
-      confirmedSlot.value
+      (confirmedSlot.value || confirmedSlots.value.length > 0)
     ) {
       const confirmGoBack = await showModal({
         title: t("goingBackWillRelease"),
@@ -2116,7 +2552,16 @@ const prevStep = async () => {
 
       if (!confirmGoBack) return;
 
-      // Release hold
+      // Release all multi-slot holds
+      if (confirmedSlots.value.length > 0) {
+        for (const slot of confirmedSlots.value) {
+          if (slot.hold?.holdId) {
+            await releaseCartHold(slot.hold.holdId);
+          }
+        }
+        confirmedSlots.value = [];
+      }
+      // Release single slot hold
       if (confirmedSlot.value?.hold?.holdId) {
         await releaseCartHold(confirmedSlot.value.hold.holdId);
       }
@@ -2140,7 +2585,10 @@ const prevStep = async () => {
 };
 
 const handleChangeTheme = async () => {
-  if (!isCartModeEnabled.value && confirmedSlot.value) {
+  if (
+    !isCartModeEnabled.value &&
+    (confirmedSlot.value || confirmedSlots.value.length > 0)
+  ) {
     const confirmChange = await showModal({
       title: t("goingBackWillRelease"),
       message: t("goingBackMessage"),
@@ -2152,7 +2600,16 @@ const handleChangeTheme = async () => {
 
     if (!confirmChange) return;
 
-    // Release hold
+    // Release all multi-slot holds
+    if (confirmedSlots.value.length > 0) {
+      for (const slot of confirmedSlots.value) {
+        if (slot.hold?.holdId) {
+          await releaseCartHold(slot.hold.holdId);
+        }
+      }
+      confirmedSlots.value = [];
+    }
+    // Release single slot hold
     if (confirmedSlot.value?.hold?.holdId) {
       await releaseCartHold(confirmedSlot.value.hold.holdId);
     }
@@ -2238,7 +2695,15 @@ const discountAmount = computed(() => {
     // Use total cart amount for discount calculation
     targetTotal = cart.value.reduce((sum, item) => sum + item.total, 0);
   } else {
-    targetTotal = currentItemTotal.value;
+    // In single mode, calculate discount based on one or more slots
+    const slotCount = isMultipleSlotEnabled.value
+      ? confirmedSlots.value.length > 0
+        ? confirmedSlots.value.length
+        : selectedSlots.value.length > 0
+          ? selectedSlots.value.length
+          : 1
+      : 1;
+    targetTotal = currentItemTotal.value * slotCount;
   }
 
   // Check min spend
@@ -2267,7 +2732,19 @@ const grandTotal = computed(() => {
     // In cart mode: use cartTotal if items exist, otherwise use currentItemTotal (for steps 1-3)
     total = cart.value.length > 0 ? cartTotal.value : currentItemTotal.value;
   } else {
+    // Single mode base subtotal (pax + addons)
     total = currentItemTotal.value;
+
+    // Multi-slot mode: multiply by number of slots
+    if (isMultipleSlotEnabled.value) {
+      const slotCount =
+        confirmedSlots.value.length > 0
+          ? confirmedSlots.value.length
+          : selectedSlots.value.length > 0
+            ? selectedSlots.value.length
+            : 1;
+      total = total * slotCount;
+    }
   }
   return Math.max(0, total - discountAmount.value);
 });
@@ -2293,7 +2770,10 @@ const depositPercentage = computed(() => {
   if (!selectedTheme.value || !grandTotal.value) return 50;
 
   // If theme has a deposit_amount, calculate percentage from that
-  if (selectedTheme.value.deposit_amount) {
+  if (
+    selectedTheme.value.deposit_amount !== null &&
+    selectedTheme.value.deposit_amount !== undefined
+  ) {
     return Math.round(
       (selectedTheme.value.deposit_amount / grandTotal.value) * 100,
     );
@@ -2302,19 +2782,31 @@ const depositPercentage = computed(() => {
   return studioStore.studio?.settings.deposit_percentage || 50;
 });
 
-// Single item deposit amount
+// Single item deposit amount (scales with multi-slot count)
 const singleItemDepositAmount = computed(() => {
   if (!selectedTheme.value) return 0;
 
+  // Determine slot multiplier for multi-slot mode
+  const slotCount = isMultipleSlotEnabled.value
+    ? confirmedSlots.value.length > 0
+      ? confirmedSlots.value.length
+      : selectedSlots.value.length > 0
+        ? selectedSlots.value.length
+        : 1
+    : 1;
+
   // Use theme's deposit_amount if available (fixed deposit in sen)
-  if (selectedTheme.value.deposit_amount) {
-    return selectedTheme.value.deposit_amount;
+  if (
+    selectedTheme.value.deposit_amount !== null &&
+    selectedTheme.value.deposit_amount !== undefined
+  ) {
+    return selectedTheme.value.deposit_amount * slotCount;
   }
 
   // Fallback: calculate based on percentage
   if (!currentItemTotal.value) return 0;
   const percentage = studioStore.studio?.settings.deposit_percentage || 50;
-  return currentItemTotal.value * (percentage / 100);
+  return currentItemTotal.value * slotCount * (percentage / 100);
 });
 
 // Cart total deposit amount (sum of RAW deposits for all cart items - discount from balance first)
@@ -2325,11 +2817,13 @@ const cartDepositTotal = computed(() => {
   for (const item of cart.value) {
     // Raw deposit per item (from original item total, not discounted) for "discount from balance first"
     const itemDeposit =
-      item.theme.deposit_amount ||
-      Math.round(
-        item.total *
-          ((studioStore.studio?.settings.deposit_percentage || 50) / 100),
-      );
+      item.theme.deposit_amount !== null &&
+      item.theme.deposit_amount !== undefined
+        ? item.theme.deposit_amount
+        : Math.round(
+            item.total *
+              ((studioStore.studio?.settings.deposit_percentage || 50) / 100),
+          );
     totalDeposit += itemDeposit;
   }
   return totalDeposit;
@@ -2350,6 +2844,17 @@ const originalBalance = computed(() => {
     total = cartTotal.value;
   } else {
     total = currentItemTotal.value;
+
+    // Multi-slot mode: multiply by slot count
+    if (isMultipleSlotEnabled.value) {
+      const slotCount =
+        confirmedSlots.value.length > 0
+          ? confirmedSlots.value.length
+          : selectedSlots.value.length > 0
+            ? selectedSlots.value.length
+            : 1;
+      total = total * slotCount;
+    }
   }
   return total - depositAmount.value;
 });
@@ -2606,7 +3111,9 @@ watch(
     selectedTheme,
     selectedDate,
     selectedSlot,
+    selectedSlots,
     confirmedSlot,
+    confirmedSlots,
     cart,
     customerInfo,
     currentStep,
@@ -2640,7 +3147,9 @@ watch(
       selectedTheme: selectedTheme.value,
       selectedDate: selectedDate.value,
       selectedSlot: selectedSlot.value,
+      selectedSlots: selectedSlots.value,
       confirmedSlot: confirmedSlot.value,
+      confirmedSlots: confirmedSlots.value,
       paxCount: paxCount.value,
       selectedAddons: selectedAddons.value,
       cartItems: cart.value,
@@ -2757,11 +3266,25 @@ watch(
 
               <!-- Date & Time (if selected) -->
               <p
-                v-if="selectedDate && selectedSlot"
+                v-if="
+                  selectedDate &&
+                  (isMultipleSlotEnabled
+                    ? selectedSlots.length > 0
+                    : selectedSlot)
+                "
                 class="text-xs text-gray-500 mt-1 line-clamp-1"
               >
-                {{ formatDate(selectedDate) }}, {{ selectedSlot.start }} -
-                {{ selectedSlot.end }}
+                {{ formatDate(selectedDate) }},
+                <template
+                  v-if="isMultipleSlotEnabled && selectedSlots.length > 0"
+                >
+                  {{
+                    selectedSlots.map((s) => `${s.start}-${s.end}`).join(", ")
+                  }}
+                </template>
+                <template v-else>
+                  {{ selectedSlot.start }} - {{ selectedSlot.end }}
+                </template>
               </p>
               <!-- Fallback if only theme selected -->
               <p v-else class="text-xs text-gray-400 mt-1">
@@ -3303,7 +3826,13 @@ watch(
                   v-if="selectedDate"
                   class="text-xs text-gray-400 uppercase tracking-wider"
                   >{{
-                    selectedSlot ? t("oneSlotSelected") : t("selectOneSlot")
+                    isMultipleSlotEnabled
+                      ? selectedSlots.length > 0
+                        ? `${selectedSlots.length} ${t("slotsSelected") || "slot dipilih"}`
+                        : t("selectSlots") || t("selectOneSlot")
+                      : selectedSlot
+                        ? t("oneSlotSelected")
+                        : t("selectOneSlot")
                   }}</span
                 >
               </div>
@@ -3330,7 +3859,11 @@ watch(
                     'py-4 px-3 rounded-2xl text-sm  font-medium text-center border transition-all duration-300 relative overflow-hidden flex items-center justify-center',
                     !slot.available
                       ? 'bg-gray-50 text-gray-300 border-transparent cursor-not-allowed'
-                      : selectedSlot?.id === slot.id
+                      : (
+                            isMultipleSlotEnabled
+                              ? selectedSlots.some((s) => s.id === slot.id)
+                              : selectedSlot?.id === slot.id
+                          )
                         ? 'bg-gray-900 text-white border-gray-900 shadow-lg'
                         : 'bg-white text-gray-600 border-gray-200 hover:border-gray-900 hover:text-gray-900',
                   ]"
@@ -3340,7 +3873,11 @@ watch(
                   >
 
                   <div
-                    v-if="selectedSlot?.id === slot.id"
+                    v-if="
+                      isMultipleSlotEnabled
+                        ? selectedSlots.some((s) => s.id === slot.id)
+                        : selectedSlot?.id === slot.id
+                    "
                     class="absolute inset-0 bg-white/10"
                   ></div>
                 </button>
@@ -3368,6 +3905,20 @@ watch(
               </h2>
               <p class="text-gray-500 font-light">
                 {{ t("paxAndAddonsDescription") }}
+              </p>
+            </div>
+
+            <!-- Multi-slot Pax/Addon Note -->
+            <div
+              v-if="
+                isMultipleSlotEnabled &&
+                (confirmedSlots.length > 1 || selectedSlots.length > 1)
+              "
+              class="bg-blue-50 border border-blue-100 rounded-2xl p-4 flex items-start gap-3"
+            >
+              <Info class="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+              <p class="text-sm text-blue-700 leading-relaxed">
+                {{ t("multiSlotPaxAddonNote") }}
               </p>
             </div>
 
@@ -3834,39 +4385,99 @@ watch(
                   </p>
                 </div>
 
-                <div class="relative group">
-                  <input
-                    type="tel"
-                    v-model="customerInfo.phone"
-                    @blur="validatePhone"
-                    @input="formErrors.phone = ''"
-                    id="phone"
-                    required
-                    class="peer w-full bg-transparent border-b-2 py-2.5 pt-4 outline-none text-lg transition-colors placeholder-transparent"
-                    :class="
-                      formErrors.phone
-                        ? 'border-red-300 focus:border-red-500'
-                        : 'border-gray-200 focus:border-gray-900'
-                    "
-                    :placeholder="t('enterPhone')"
-                  />
-                  <label
-                    for="phone"
-                    class="absolute left-0 -top-1 text-xs font-bold uppercase tracking-wider transition-all peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:font-normal peer-placeholder-shown:normal-case peer-focus:-top-1 peer-focus:text-xs peer-focus:font-bold peer-focus:uppercase"
-                    :class="
-                      formErrors.phone
-                        ? 'text-red-600 peer-placeholder-shown:text-red-400'
-                        : 'text-gray-500 peer-placeholder-shown:text-gray-400 peer-focus:text-gray-900'
-                    "
-                  >
-                    {{ t("phoneNumber") }}
-                  </label>
-                  <p v-if="formErrors.phone" class="mt-1 text-xs text-red-500">
-                    {{ formErrors.phone }}
-                  </p>
-                  <p v-else class="mt-1 text-xs text-gray-500">
-                    {{ t("preferWhatsApp") }}
-                  </p>
+                <div class="flex gap-3">
+                  <div class="relative w-24 group" ref="countryDropdownRef">
+                    <button
+                      type="button"
+                      @click="toggleCountryDropdown"
+                      class="peer w-full bg-transparent border-b-2 py-2.5 pt-4 outline-none text-lg transition-colors border-gray-200 focus:border-gray-900 flex items-center justify-between gap-1"
+                    >
+                      <span class="flex items-center gap-2">
+                        <span>{{
+                          countryCodes.find((c) => c.code === selectedCountryCode)
+                            ?.flag
+                        }}</span>
+                        <span>{{ selectedCountryCode }}</span>
+                      </span>
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="text-gray-400"
+                      >
+                        <path d="m6 9 6 6 6-6" />
+                      </svg>
+                    </button>
+
+                    <!-- Custom Dropdown Menu -->
+                    <div
+                      v-if="isCountryDropdownOpen"
+                      class="absolute top-full left-0 w-full bg-white border border-gray-100 shadow-xl rounded-b-xl z-50 overflow-hidden mt-1 animate-fade-in-up"
+                    >
+                      <button
+                        v-for="country in countryCodes"
+                        :key="country.code"
+                        type="button"
+                        @click="selectCountry(country.code)"
+                        class="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 transition-colors border-b border-gray-50 last:border-0"
+                      >
+                        <span class="text-xl">{{ country.flag }}</span>
+                        <span class="font-medium text-gray-700">{{
+                          country.code
+                        }}</span>
+                      </button>
+                    </div>
+
+                    <label
+                      class="absolute left-0 -top-1 text-xs font-bold uppercase tracking-wider text-gray-500"
+                    >
+                      {{ t("code") || "Code" }}
+                    </label>
+                  </div>
+
+                  <div class="relative group flex-1">
+                    <input
+                      type="tel"
+                      v-model="localPhone"
+                      @blur="validatePhone"
+                      @input="formErrors.phone = ''"
+                      id="phone"
+                      required
+                      class="peer w-full bg-transparent border-b-2 py-2.5 pt-4 outline-none text-lg transition-colors placeholder-transparent"
+                      :class="
+                        formErrors.phone
+                          ? 'border-red-300 focus:border-red-500'
+                          : 'border-gray-200 focus:border-gray-900'
+                      "
+                      :placeholder="t('enterPhone')"
+                    />
+                    <label
+                      for="phone"
+                      class="absolute left-0 -top-1 text-xs font-bold uppercase tracking-wider transition-all peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:font-normal peer-placeholder-shown:normal-case peer-focus:-top-1 peer-focus:text-xs peer-focus:font-bold peer-focus:uppercase"
+                      :class="
+                        formErrors.phone
+                          ? 'text-red-600 peer-placeholder-shown:text-red-400'
+                          : 'text-gray-500 peer-placeholder-shown:text-gray-400 peer-focus:text-gray-900'
+                      "
+                    >
+                      {{ t("phoneNumber") }}
+                    </label>
+                    <p
+                      v-if="formErrors.phone"
+                      class="mt-1 text-xs text-red-500"
+                    >
+                      {{ formErrors.phone }}
+                    </p>
+                    <p v-else class="mt-1 text-xs text-gray-500">
+                      {{ t("preferWhatsApp") }}
+                    </p>
+                  </div>
                 </div>
 
                 <div class="relative group">
@@ -3956,39 +4567,99 @@ watch(
                   </p>
                 </div>
 
-                <div class="relative group">
-                  <input
-                    type="tel"
-                    v-model="customerInfo.phone"
-                    @blur="validatePhone"
-                    @input="formErrors.phone = ''"
-                    id="cart-phone"
-                    required
-                    class="peer w-full bg-transparent border-b-2 py-2.5 pt-4 outline-none text-lg transition-colors placeholder-transparent"
-                    :class="
-                      formErrors.phone
-                        ? 'border-red-300 focus:border-red-500'
-                        : 'border-gray-200 focus:border-gray-900'
-                    "
-                    :placeholder="t('enterPhone')"
-                  />
-                  <label
-                    for="cart-phone"
-                    class="absolute left-0 -top-1 text-xs font-bold uppercase tracking-wider transition-all peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:font-normal peer-placeholder-shown:normal-case peer-focus:-top-1 peer-focus:text-xs peer-focus:font-bold peer-focus:uppercase"
-                    :class="
-                      formErrors.phone
-                        ? 'text-red-600 peer-placeholder-shown:text-red-400'
-                        : 'text-gray-500 peer-placeholder-shown:text-gray-400 peer-focus:text-gray-900'
-                    "
-                  >
-                    {{ t("phoneNumber") }}
-                  </label>
-                  <p v-if="formErrors.phone" class="mt-1 text-xs text-red-500">
-                    {{ formErrors.phone }}
-                  </p>
-                  <p v-else class="mt-1 text-xs text-gray-500">
-                    {{ t("preferWhatsApp") }}
-                  </p>
+                <div class="flex gap-3">
+                  <div class="relative w-24 group" ref="countryDropdownRef">
+                    <button
+                      type="button"
+                      @click="toggleCountryDropdown"
+                      class="peer w-full bg-transparent border-b-2 py-2.5 pt-4 outline-none text-lg transition-colors border-gray-200 focus:border-gray-900 flex items-center justify-between gap-1"
+                    >
+                      <span class="flex items-center gap-2">
+                        <span>{{
+                          countryCodes.find((c) => c.code === selectedCountryCode)
+                            ?.flag
+                        }}</span>
+                        <span>{{ selectedCountryCode }}</span>
+                      </span>
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="text-gray-400"
+                      >
+                        <path d="m6 9 6 6 6-6" />
+                      </svg>
+                    </button>
+
+                    <!-- Custom Dropdown Menu -->
+                    <div
+                      v-if="isCountryDropdownOpen"
+                      class="absolute top-full left-0 w-full bg-white border border-gray-100 shadow-xl rounded-b-xl z-50 overflow-hidden mt-1 animate-fade-in-up"
+                    >
+                      <button
+                        v-for="country in countryCodes"
+                        :key="country.code"
+                        type="button"
+                        @click="selectCountry(country.code)"
+                        class="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 transition-colors border-b border-gray-50 last:border-0"
+                      >
+                        <span class="text-xl">{{ country.flag }}</span>
+                        <span class="font-medium text-gray-700">{{
+                          country.code
+                        }}</span>
+                      </button>
+                    </div>
+
+                    <label
+                      class="absolute left-0 -top-1 text-xs font-bold uppercase tracking-wider text-gray-500"
+                    >
+                      {{ t("code") || "Code" }}
+                    </label>
+                  </div>
+
+                  <div class="relative group flex-1">
+                    <input
+                      type="tel"
+                      v-model="localPhone"
+                      @blur="validatePhone"
+                      @input="formErrors.phone = ''"
+                      id="cart-phone"
+                      required
+                      class="peer w-full bg-transparent border-b-2 py-2.5 pt-4 outline-none text-lg transition-colors placeholder-transparent"
+                      :class="
+                        formErrors.phone
+                          ? 'border-red-300 focus:border-red-500'
+                          : 'border-gray-200 focus:border-gray-900'
+                      "
+                      :placeholder="t('enterPhone')"
+                    />
+                    <label
+                      for="cart-phone"
+                      class="absolute left-0 -top-1 text-xs font-bold uppercase tracking-wider transition-all peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:font-normal peer-placeholder-shown:normal-case peer-focus:-top-1 peer-focus:text-xs peer-focus:font-bold peer-focus:uppercase"
+                      :class="
+                        formErrors.phone
+                          ? 'text-red-600 peer-placeholder-shown:text-red-400'
+                          : 'text-gray-500 peer-placeholder-shown:text-gray-400 peer-focus:text-gray-900'
+                      "
+                    >
+                      {{ t("phoneNumber") }}
+                    </label>
+                    <p
+                      v-if="formErrors.phone"
+                      class="mt-1 text-xs text-red-500"
+                    >
+                      {{ formErrors.phone }}
+                    </p>
+                    <p v-else class="mt-1 text-xs text-gray-500">
+                      {{ t("preferWhatsApp") }}
+                    </p>
+                  </div>
                 </div>
 
                 <div class="relative group">
@@ -4632,11 +5303,71 @@ watch(
                         }}</span
                       >
                     </div>
-                    <p class="text-gray-500 text-sm">
-                      {{ formatDate(selectedDate) }},
-                      {{ selectedSlot?.start }} -
-                      {{ selectedSlot?.end }}
-                    </p>
+                    <div class="mt-1 space-y-1.5">
+                      <p class="text-gray-500 text-sm flex items-center gap-2">
+                        <Calendar class="w-4 h-4 text-gray-400" />
+                        {{ formatDate(selectedDate) }}
+                      </p>
+                      <div
+                        v-if="isMultipleSlotEnabled && confirmedSlots.length > 0"
+                        class="space-y-1"
+                      >
+                        <div
+                          v-for="slot in confirmedSlots"
+                          :key="slot.hold?.holdId || slot.id"
+                          class="flex items-center gap-2 text-gray-600 font-medium text-sm pl-0.5"
+                        >
+                          <div class="w-1.5 h-1.5 rounded-full bg-gray-300"></div>
+                          {{ slot.start }} - {{ slot.end }}
+                        </div>
+                      </div>
+                      <p
+                        v-else
+                        class="text-gray-600 text-sm font-medium flex items-center gap-2 pl-0.5"
+                      >
+                        <div class="w-1.5 h-1.5 rounded-full bg-gray-300"></div>
+                        {{ selectedSlot?.start }} - {{ selectedSlot?.end }}
+                      </p>
+                    </div>
+
+                    <!-- Multi-slot multiplier breakdown -->
+                    <div
+                      v-if="
+                        isMultipleSlotEnabled &&
+                        (confirmedSlots.length > 1 || selectedSlots.length > 1)
+                      "
+                      class="mt-3 bg-blue-50 border border-blue-100 rounded-lg p-3 space-y-1.5"
+                    >
+                      <div class="flex justify-between text-sm">
+                        <span class="text-blue-600">
+                          {{ t("perSession") || "Setiap sesi" }}
+                        </span>
+                        <span class="font-medium text-blue-700"
+                          >RM{{ formatPriceWhole(currentItemTotal) }}</span
+                        >
+                      </div>
+                      <div class="flex justify-between text-sm">
+                        <span class="text-blue-600">
+                          ×
+                          {{
+                            confirmedSlots.length > 0
+                              ? confirmedSlots.length
+                              : selectedSlots.length
+                          }}
+                          {{ t("sessions") || "sesi" }}
+                        </span>
+                        <span class="font-bold text-blue-800"
+                          >RM{{
+                            formatPriceWhole(
+                              currentItemTotal *
+                                (confirmedSlots.length > 0
+                                  ? confirmedSlots.length
+                                  : selectedSlots.length),
+                            )
+                          }}</span
+                        >
+                      </div>
+                    </div>
 
                     <!-- Extras (Pax & Addons) -->
                     <div
@@ -4910,10 +5641,17 @@ watch(
               @click="nextStep"
               :disabled="
                 (currentStep === 1 && !selectedTheme) ||
-                (currentStep === 2 && !selectedSlot) ||
+                (currentStep === 2 &&
+                  (isMultipleSlotEnabled
+                    ? selectedSlots.length === 0
+                    : !selectedSlot)) ||
                 (isCartModeEnabled &&
                   currentStep === 3 &&
-                  (!selectedTheme || !selectedDate || !selectedSlot)) ||
+                  (!selectedTheme ||
+                    !selectedDate ||
+                    (isMultipleSlotEnabled
+                      ? selectedSlots.length === 0
+                      : !selectedSlot))) ||
                 (isCartModeEnabled &&
                   currentStep === 4 &&
                   cartItemCount === 0) ||
@@ -4938,14 +5676,22 @@ watch(
                 (!isCartModeEnabled && currentStep === 5 && !termsAccepted) ||
                 (!isCartModeEnabled &&
                   currentStep === 6 &&
-                  (!selectedTheme || !selectedDate || !selectedSlot)) ||
-                isProcessingPayment
+                  (!selectedTheme ||
+                    !selectedDate ||
+                    (isMultipleSlotEnabled
+                      ? selectedSlots.length === 0
+                      : !selectedSlot))) ||
+                isProcessingPayment ||
+                isCreatingHold
               "
               class="bg-gray-900 text-white px-5 sm:px-8 py-3 sm:py-6 rounded-xl sm:rounded-2xl font-bold uppercase tracking-widest text-[10px] sm:text-xs disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 sm:gap-3 transition-all duration-300 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] w-auto"
             >
               <span v-if="isProcessingPayment">{{
                 t("processingPayment")
               }}</span>
+              <span v-else-if="isCreatingHold">
+                {{ t("processing") || "Sila tunggu..." }}
+              </span>
               <span v-else-if="isCartModeEnabled && currentStep === 3">{{
                 t("addToCart") || "Add to Cart"
               }}</span>
@@ -5049,7 +5795,8 @@ watch(
                   {{ item.theme.name }}
                 </div>
                 <div class="text-xs text-gray-500 mt-0.5">
-                  {{ formatDate(item.date) }} • {{ item.slot.start }}
+                  {{ formatDate(item.date) }} • {{ item.slot.start }} -
+                  {{ item.slot.end }}
                 </div>
               </div>
             </template>
@@ -5064,9 +5811,36 @@ watch(
                 <span class="font-bold">{{ t("date") }}:</span>
                 {{ recoveryState.selectedDate }}
               </div>
-              <div v-if="recoveryState.selectedSlot">
+              <div
+                v-if="
+                  recoveryState.selectedSlots &&
+                  recoveryState.selectedSlots.length > 0
+                "
+              >
                 <span class="font-bold">{{ t("time") }}:</span>
-                {{ recoveryState.selectedSlot.start }}
+                {{
+                  recoveryState.selectedSlots
+                    .map((s) => `${s.start} - ${s.end}`)
+                    .join(", ")
+                }}
+              </div>
+              <div
+                v-else-if="
+                  recoveryState.confirmedSlots &&
+                  recoveryState.confirmedSlots.length > 0
+                "
+              >
+                <span class="font-bold">{{ t("time") }}:</span>
+                {{
+                  recoveryState.confirmedSlots
+                    .map((s) => `${s.start} - ${s.end}`)
+                    .join(", ")
+                }}
+              </div>
+              <div v-else-if="recoveryState.selectedSlot">
+                <span class="font-bold">{{ t("time") }}:</span>
+                {{ recoveryState.selectedSlot.start }} -
+                {{ recoveryState.selectedSlot.end }}
               </div>
             </template>
           </div>

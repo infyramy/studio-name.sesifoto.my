@@ -12,6 +12,8 @@ import type {
   Booking,
   Coupon,
   WebsiteSettings,
+  BatchBookingRequest,
+  BatchBookingItem,
 } from "@/types";
 
 // API base URL - uses environment variable or defaults to localhost
@@ -235,6 +237,7 @@ export const api = {
       paymentType: data.paymentType as "deposit" | "full",
       cartModeEnabled: data.cartModeEnabled,
       cartHoldDuration: data.cartHoldDuration,
+      allowMultipleSlot: data.allowMultipleSlot,
       selectedStyle: data.selectedStyle as "rustic" | "modern" | "luxe",
       bookingWindowStart: data.bookingWindowStart,
       bookingWindowEnd: data.bookingWindowEnd,
@@ -481,6 +484,77 @@ export const api = {
       updated_at: new Date().toISOString(),
       addons: [],
     };
+  },
+
+  async createBatchBooking(request: BatchBookingRequest): Promise<Booking[]> {
+    const slug = getStudioSlug();
+
+    const data = await apiFetch(`/public/studio/${slug}/bookings/batch`, {
+      method: "POST",
+      body: {
+        studioSlug: slug,
+        customerName: request.customer_name,
+        customerPhone: request.customer_phone,
+        customerEmail: request.customer_email,
+        customerNotes: request.customer_notes,
+        consentTc: request.consent_tc,
+        consentMarketing: request.consent_marketing,
+        sessionId: request.session_id,
+        items: request.items.map((item) => ({
+          themeId: item.theme_id,
+          bookingDate: item.booking_date,
+          startTime: item.start_time,
+          endTime: item.end_time,
+          paxCount: item.pax_count,
+          couponCode: item.coupon_code,
+          discountAmount: item.discount_amount,
+          referralCode: item.referral_code,
+          addons: item.selected_addons.map((a) => ({
+            addonId: a.addon_id,
+            quantity: a.quantity,
+          })),
+        })),
+      },
+    });
+
+    // Transform and return array of Bookings
+    return data.map((bookingData: any) => ({
+      id: bookingData.id,
+      studio_id: slug,
+      booking_number: bookingData.bookingNumber,
+      theme_id: bookingData.themeId || "", // Backend might not return themeId but themeName
+      theme: {
+        id: bookingData.themeId || "",
+        name: bookingData.themeName,
+        images: bookingData.themeImage ? [bookingData.themeImage] : [],
+        // Other fields can be empty or defaulted
+      } as any,
+      booking_date: bookingData.bookingDate,
+      start_time: bookingData.startTime,
+      end_time: bookingData.endTime,
+      pax_count: bookingData.paxCount,
+      customer_name: bookingData.customerName,
+      customer_phone: bookingData.customerPhone,
+      customer_email: bookingData.customerEmail,
+      customer_notes: bookingData.customerNotes || "",
+      consent_tc: true,
+      consent_marketing: false,
+      base_price: bookingData.basePrice,
+      extra_pax_fee: bookingData.extraPaxFee,
+      addons_total: bookingData.addonsTotal,
+      special_pricing_applied: bookingData.specialPricingApplied,
+      coupon_code: bookingData.couponCode,
+      discount_amount: bookingData.discountAmount,
+      total_amount: bookingData.totalAmount,
+      deposit_amount: bookingData.depositAmount,
+      balance_amount: bookingData.balanceAmount,
+      payment_status: bookingData.paymentStatus as any,
+      booking_status: bookingData.bookingStatus as any,
+      cart_hold_expires_at: bookingData.cartHoldExpiresAt || null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      addons: [],
+    }));
   },
 
   async getBookingByIdAndPhone(
@@ -770,6 +844,42 @@ export const api = {
         method: "DELETE",
       },
     );
+  },
+  async createBatchSlotHold(
+    slots: {
+      themeId: string;
+      date: string;
+      startTime: string;
+      endTime: string;
+    }[],
+    sessionId: string,
+  ): Promise<
+    Array<{
+      holdId: string;
+      themeId: string;
+      date: string;
+      startTime: string;
+      endTime: string;
+      sessionId: string;
+      expiresAt: string;
+      createdAt: string;
+    }>
+  > {
+    const slug = getStudioSlug();
+    return apiFetch(`/public/studio/${slug}/holds/batch`, {
+      method: "POST",
+      body: {
+        sessionId,
+        slots,
+      },
+    });
+  },
+
+  async releaseSessionHolds(sessionId: string): Promise<{ success: boolean }> {
+    const slug = getStudioSlug();
+    return apiFetch(`/public/studio/${slug}/holds/session/${sessionId}`, {
+      method: "DELETE",
+    });
   },
 
   async getSessionHolds(sessionId: string): Promise<

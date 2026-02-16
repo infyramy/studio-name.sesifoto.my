@@ -79,6 +79,11 @@ export const translationsBM: Translations = {
   selectTime: "Pilih Masa",
   oneSlotSelected: "1 Masa Dipilih",
   selectOneSlot: "Pilih 1 Slot",
+  slotsSelected: "slot dipilih",
+  selectSlots: "Pilih Slot",
+  sessions: "sesi",
+  multiSlotPaxAddonNote:
+    "Nota: Pilihan pax dan tambahan anda akan digunakan untuk kesemua sesi yang dipilih.",
   additionalCharge: "Caj Tambahan",
   extraPaxLabel: "Pax Tambahan",
   payDeposit: "Bayar Deposit",
@@ -106,7 +111,8 @@ export const translationsBM: Translations = {
   minutes: "minit",
   mins: "min",
   perPerson: "seorang",
-  perSession: "sesi",
+  perSession: "Setiap sesi",
+  session: "Sesi",
   startingFrom: "Bermula dari",
   popular: "Paling Popular",
   select: "Pilih",
@@ -372,6 +378,9 @@ export const translationsBM: Translations = {
   reserveThisSlot: "Tempah slot masa ini?",
   reserveSlotMessage:
     "Anda akan mempunyai {duration} minit untuk melengkapkan tempahan anda.",
+  reserveTheseSlots: "Tempah slot-slot ini?",
+  reserveSlotsMessage:
+    "Anda akan mempunyai {duration} minit untuk melengkapkan tempahan anda.",
   addToCartConfirm: "Tambah ke troli?",
   addToCartMessage: "Item ini akan ditempah selama {duration} minit.",
   slotReserved: "Slot Ditempah",
@@ -500,6 +509,11 @@ export const translationsEN: Translations = {
   selectTime: "Select Time",
   oneSlotSelected: "1 Time Selected",
   selectOneSlot: "Select 1 Slot",
+  slotsSelected: "slots selected",
+  selectSlots: "Select Slots",
+  sessions: "sessions",
+  multiSlotPaxAddonNote:
+    "Note: Your selected pax and addons will apply to all selected sessions.",
   additionalCharge: "Additional Charge",
   extraPaxLabel: "Extra Pax",
   payDeposit: "Pay Deposit",
@@ -527,7 +541,8 @@ export const translationsEN: Translations = {
   minutes: "minutes",
   mins: "mins",
   perPerson: "per person",
-  perSession: "per session",
+  perSession: "Per session",
+  session: "Session",
   startingFrom: "Starting from",
   popular: "Most Popular",
   select: "Select",
@@ -794,6 +809,9 @@ export const translationsEN: Translations = {
   reserveSlot: "Reserve Slot",
   reserveThisSlot: "Reserve this time slot?",
   reserveSlotMessage:
+    "You'll have {duration} minutes to complete your booking.",
+  reserveTheseSlots: "Reserve these time slots?",
+  reserveSlotsMessage:
     "You'll have {duration} minutes to complete your booking.",
   addToCartConfirm: "Add to cart?",
   addToCartMessage: "This item will be reserved for {duration} minutes.",
