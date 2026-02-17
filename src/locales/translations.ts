@@ -84,6 +84,11 @@ export const translationsBM: Translations = {
   sessions: "sesi",
   multiSlotPaxAddonNote:
     "Nota: Pilihan pax dan tambahan anda akan digunakan untuk kesemua sesi yang dipilih.",
+  addonsApplyToLabel: "Untuk pelbagai slot: tambahan digunakan untuk",
+  addonsApplyToAllSlots: "Semua slot",
+  addonsApplyToFirstSlotOnly: "Slot pertama sahaja",
+  addonsApplyToFirstSlotOnlyHint:
+    "Pilih slot pertama sahaja jika anda tidak mahu tambahan (contoh: props) dikenakan pada setiap sesi—cukup untuk sesi pertama.",
   additionalCharge: "Caj Tambahan",
   extraPaxLabel: "Pax Tambahan",
   payDeposit: "Bayar Deposit",
@@ -203,6 +208,21 @@ export const translationsBM: Translations = {
   amountToPay: "Jumlah Perlu Dibayar",
   balanceAtStudio: "Baki bayar di studio",
   pay: "Bayar",
+  amountSummary: "Ringkasan Jumlah",
+  subtotalBeforeDiscount: "Jumlah sebelum diskaun",
+  discountApplied: "Diskaun",
+  totalAfterDiscount: "Jumlah keseluruhan",
+  depositPayNow: "Deposit (bayar sekarang)",
+  balancePayAtStudio: "Baki (bayar di studio)",
+  amountToPayExplanation:
+    "Baki pembayaran boleh dibayar di studio.",
+  fullPaymentExplanation: "Jumlah penuh akan dibayar sekarang.",
+  sessionsCalculation: "Pengiraan jumlah sesi",
+  perSessionWithAddons: "Setiap sesi (tema + pax + tambahan)",
+  firstSessionWithAddons: "Sesi pertama (dengan tambahan)",
+  additionalSessionsNoAddons: "Sesi tambahan (tanpa tambahan)",
+  sessionsSubtotal: "Jumlah sesi",
+  sessionsInCart: "sesi dalam troli",
 
   // Cart
   cart: "Troli",
@@ -514,6 +534,11 @@ export const translationsEN: Translations = {
   sessions: "sessions",
   multiSlotPaxAddonNote:
     "Note: Your selected pax and addons will apply to all selected sessions.",
+  addonsApplyToLabel: "When booking multiple slots, apply add-ons to:",
+  addonsApplyToAllSlots: "All slots",
+  addonsApplyToFirstSlotOnly: "First slot only",
+  addonsApplyToFirstSlotOnlyHint:
+    "Choose first slot only if you don't want add-ons (e.g. props) charged for every session—once for the first session is enough.",
   additionalCharge: "Additional Charge",
   extraPaxLabel: "Extra Pax",
   payDeposit: "Pay Deposit",
@@ -634,6 +659,21 @@ export const translationsEN: Translations = {
   amountToPay: "Amount to Pay",
   balanceAtStudio: "Balance to pay at studio",
   pay: "Pay",
+  amountSummary: "Amount Summary",
+  subtotalBeforeDiscount: "Subtotal (before discount)",
+  discountApplied: "Discount",
+  totalAfterDiscount: "Total",
+  depositPayNow: "Deposit (pay now)",
+  balancePayAtStudio: "Balance (pay at studio)",
+  amountToPayExplanation:
+    "This amount will be charged to your card or payment method now.",
+  fullPaymentExplanation: "Full amount will be paid now.",
+  sessionsCalculation: "Sessions amount calculation",
+  perSessionWithAddons: "Per session (theme + pax + add-ons)",
+  firstSessionWithAddons: "First session (with add-ons)",
+  additionalSessionsNoAddons: "Additional sessions (no add-ons)",
+  sessionsSubtotal: "Sessions subtotal",
+  sessionsInCart: "sessions in cart",
 
   // Cart
   cart: "Cart",

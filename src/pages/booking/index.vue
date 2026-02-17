@@ -289,6 +289,8 @@ async function restoreBookingState(state: any) {
     if (state.selectedDate) selectedDate.value = state.selectedDate;
     if (state.paxCount) paxCount.value = state.paxCount;
     if (state.selectedAddons) selectedAddons.value = state.selectedAddons;
+    if (state.addonsApplyTo === "all" || state.addonsApplyTo === "firstOnly")
+      addonsApplyTo.value = state.addonsApplyTo;
     if (state.customerInfo) customerInfo.value = state.customerInfo;
     if (state.termsAccepted) termsAccepted.value = state.termsAccepted;
 
@@ -607,6 +609,9 @@ const selectedSlot = ref<any | null>(null);
 const selectedSlots = ref<any[]>([]); // Multi-slot mode: array of selected slots
 const paxCount = ref(1);
 const selectedAddons = ref<Record<string, number>>({});
+
+/** When multiple slots: apply addons to all slots or first slot only. Only used when allowMultipleSlot is true. */
+const addonsApplyTo = ref<"all" | "firstOnly">("all");
 const expandedAddonDesc = ref<Record<string, boolean>>({});
 const customerInfo = ref({
   name: "",
@@ -1711,6 +1716,9 @@ const addToCart = async () => {
 
     const batchHolds = await createBatchCartHold(slotsData);
 
+    const applyAddonsToThisSlot =
+      addonsApplyTo.value === "all" || slotsToAdd.length === 1;
+
     for (let i = 0; i < slotsToAdd.length; i++) {
       const slot = slotsToAdd[i];
       const hold = batchHolds[i];
@@ -1724,11 +1732,18 @@ const addToCart = async () => {
       );
       const extraPaxCost = extraPax * selectedTheme.value.extra_pax_price;
 
+      const useAddonsForThisItem =
+        applyAddonsToThisSlot || (addonsApplyTo.value === "firstOnly" && i === 0);
       let addonsTotal = 0;
-      for (const [id, qty] of Object.entries(selectedAddons.value)) {
-        const addon = studioStore.addons.find((a) => a.id === id);
-        if (addon && qty > 0) {
-          addonsTotal += addon.price * qty;
+      const addonsForItem: Record<string, number> = useAddonsForThisItem
+        ? { ...selectedAddons.value }
+        : {};
+      if (useAddonsForThisItem) {
+        for (const [id, qty] of Object.entries(selectedAddons.value)) {
+          const addon = studioStore.addons.find((a) => a.id === id);
+          if (addon && qty > 0) {
+            addonsTotal += addon.price * qty;
+          }
         }
       }
 
@@ -1745,7 +1760,7 @@ const addToCart = async () => {
         date: selectedDate.value,
         slot: slot,
         pax: paxCount.value,
-        addons: { ...selectedAddons.value },
+        addons: addonsForItem,
         total: itemTotal,
         dateInfo: dateInfo,
         hold: hold,
@@ -2371,8 +2386,8 @@ const nextStep = async () => {
           return Math.floor(totalDiscount / slotsToBook.length);
         };
 
-        // Prepare addons array
-        const selectedAddonsArray = Object.entries(selectedAddons.value)
+        // Full addons array (used when apply to all or for first slot)
+        const fullAddonsArray = Object.entries(selectedAddons.value)
           .filter(([_, qty]) => qty > 0)
           .map(([addonId, quantity]) => ({
             addon_id: addonId,
@@ -2389,6 +2404,13 @@ const nextStep = async () => {
           consent_marketing: false,
           session_id: getSessionId(),
           items: slotsToBook.map((slot, i) => {
+            const useAddonsForThisSlot =
+              addonsApplyTo.value === "all" ||
+              (addonsApplyTo.value === "firstOnly" && i === 0);
+            const selectedAddonsForItem = useAddonsForThisSlot
+              ? fullAddonsArray
+              : [];
+
             // Parse time from slot
             const slotStart =
               slot?.originalSlot?.start || slot?.start || "09:00";
@@ -2411,7 +2433,7 @@ const nextStep = async () => {
               start_time: startTime,
               end_time: endTime,
               pax_count: paxCount.value,
-              selected_addons: selectedAddonsArray,
+              selected_addons: selectedAddonsForItem,
               coupon_code: validatedCoupon.value?.code,
               discount_amount: itemDiscount > 0 ? itemDiscount : undefined,
             };
@@ -2671,6 +2693,26 @@ const currentItemTotal = computed(() => {
   return sessionPrice + extraPaxCost.value + addonsTotal.value;
 });
 
+/** Single mode: total for one or more slots, respecting addonsApplyTo (first slot only vs all). */
+const effectiveSingleModeTotal = computed(() => {
+  if (isCartModeEnabled.value) return 0;
+  const slotCount = isMultipleSlotEnabled.value
+    ? confirmedSlots.value.length > 0
+      ? confirmedSlots.value.length
+      : selectedSlots.value.length > 0
+        ? selectedSlots.value.length
+        : 1
+    : 1;
+  if (slotCount <= 1) return currentItemTotal.value;
+  if (addonsApplyTo.value === "firstOnly") {
+    return (
+      (currentItemTotal.value - addonsTotal.value) * slotCount +
+      addonsTotal.value
+    );
+  }
+  return currentItemTotal.value * slotCount;
+});
+
 // Cart totals (for cart mode)
 const cartTotal = computed(() => {
   if (!cart.value || !Array.isArray(cart.value)) return 0;
@@ -2695,15 +2737,8 @@ const discountAmount = computed(() => {
     // Use total cart amount for discount calculation
     targetTotal = cart.value.reduce((sum, item) => sum + item.total, 0);
   } else {
-    // In single mode, calculate discount based on one or more slots
-    const slotCount = isMultipleSlotEnabled.value
-      ? confirmedSlots.value.length > 0
-        ? confirmedSlots.value.length
-        : selectedSlots.value.length > 0
-          ? selectedSlots.value.length
-          : 1
-      : 1;
-    targetTotal = currentItemTotal.value * slotCount;
+    // In single mode, use effective total (respects addonsApplyTo for multi-slot)
+    targetTotal = effectiveSingleModeTotal.value;
   }
 
   // Check min spend
@@ -2732,22 +2767,37 @@ const grandTotal = computed(() => {
     // In cart mode: use cartTotal if items exist, otherwise use currentItemTotal (for steps 1-3)
     total = cart.value.length > 0 ? cartTotal.value : currentItemTotal.value;
   } else {
-    // Single mode base subtotal (pax + addons)
-    total = currentItemTotal.value;
-
-    // Multi-slot mode: multiply by number of slots
-    if (isMultipleSlotEnabled.value) {
-      const slotCount =
-        confirmedSlots.value.length > 0
-          ? confirmedSlots.value.length
-          : selectedSlots.value.length > 0
-            ? selectedSlots.value.length
-            : 1;
-      total = total * slotCount;
-    }
+    // Single mode: one slot or multi-slot (respects addonsApplyTo for addons)
+    total = effectiveSingleModeTotal.value;
   }
   return Math.max(0, total - discountAmount.value);
 });
+
+/** Subtotal before any discount (for transparent summary breakdown). */
+const subtotalBeforeDiscount = computed(() => {
+  if (isCartModeEnabled.value && cart.value.length > 0) {
+    return cartTotal.value;
+  }
+  return effectiveSingleModeTotal.value;
+});
+
+/** Single mode: number of sessions when multi-slot (0 if not multi-slot). */
+const singleModeSlotCount = computed(() => {
+  if (isCartModeEnabled.value || !isMultipleSlotEnabled.value) return 0;
+  return confirmedSlots.value.length > 0
+    ? confirmedSlots.value.length
+    : selectedSlots.value.length > 0
+      ? selectedSlots.value.length
+      : 0;
+});
+
+/** Single mode multi-slot: amount per session when addons apply to all. */
+const singleModePerSessionAmount = computed(() => currentItemTotal.value);
+
+/** Single mode multi-slot, addons first-only: amount for one session without addons. */
+const singleModeSessionWithoutAddons = computed(
+  () => currentItemTotal.value - addonsTotal.value,
+);
 
 const isSummaryStep = computed(() => {
   if (isCartModeEnabled.value) {
@@ -2782,11 +2832,10 @@ const depositPercentage = computed(() => {
   return studioStore.studio?.settings.deposit_percentage || 50;
 });
 
-// Single item deposit amount (scales with multi-slot count)
+// Single item deposit amount (scales with multi-slot count; respects addonsApplyTo)
 const singleItemDepositAmount = computed(() => {
   if (!selectedTheme.value) return 0;
 
-  // Determine slot multiplier for multi-slot mode
   const slotCount = isMultipleSlotEnabled.value
     ? confirmedSlots.value.length > 0
       ? confirmedSlots.value.length
@@ -2803,10 +2852,10 @@ const singleItemDepositAmount = computed(() => {
     return selectedTheme.value.deposit_amount * slotCount;
   }
 
-  // Fallback: calculate based on percentage
-  if (!currentItemTotal.value) return 0;
+  // Fallback: percentage of effective total (so addons first-only is correct)
+  if (!effectiveSingleModeTotal.value) return 0;
   const percentage = studioStore.studio?.settings.deposit_percentage || 50;
-  return currentItemTotal.value * slotCount * (percentage / 100);
+  return effectiveSingleModeTotal.value * (percentage / 100);
 });
 
 // Cart total deposit amount (sum of RAW deposits for all cart items - discount from balance first)
@@ -2843,18 +2892,7 @@ const originalBalance = computed(() => {
   if (isCartModeEnabled.value && cart.value.length > 0) {
     total = cartTotal.value;
   } else {
-    total = currentItemTotal.value;
-
-    // Multi-slot mode: multiply by slot count
-    if (isMultipleSlotEnabled.value) {
-      const slotCount =
-        confirmedSlots.value.length > 0
-          ? confirmedSlots.value.length
-          : selectedSlots.value.length > 0
-            ? selectedSlots.value.length
-            : 1;
-      total = total * slotCount;
-    }
+    total = effectiveSingleModeTotal.value;
   }
   return total - depositAmount.value;
 });
@@ -3119,6 +3157,7 @@ watch(
     currentStep,
     paxCount,
     selectedAddons,
+    addonsApplyTo,
     termsAccepted,
   ],
   () => {
@@ -3152,6 +3191,7 @@ watch(
       confirmedSlots: confirmedSlots.value,
       paxCount: paxCount.value,
       selectedAddons: selectedAddons.value,
+      addonsApplyTo: addonsApplyTo.value,
       cartItems: cart.value,
       customerInfo: customerInfo.value,
       currentStep: currentStep.value,
@@ -3996,6 +4036,104 @@ watch(
               <h3 class="font-bold text-xl text-gray-900">
                 Tambahan (Add-ons)
               </h3>
+
+              <!-- Multi-slot: Addons apply to all or first slot only -->
+              <div
+                v-if="
+                  isMultipleSlotEnabled &&
+                  (confirmedSlots.length > 1 || selectedSlots.length > 1) &&
+                  studioStore.addons &&
+                  studioStore.addons.length > 0
+                "
+                class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden"
+              >
+                <div class="p-4 sm:p-5">
+                  <p class="text-sm text-gray-500 font-medium mb-3">
+                    {{ t("addonsApplyToLabel") }}
+                  </p>
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <label
+                      class="flex items-center gap-3 p-4 rounded-2xl border transition-all cursor-pointer select-none hover:shadow-sm"
+                      :class="
+                        addonsApplyTo === 'all'
+                          ? 'border-gray-900 bg-gray-50/50'
+                          : 'border-gray-100 hover:border-gray-200'
+                      "
+                    >
+                      <input
+                        v-model="addonsApplyTo"
+                        type="radio"
+                        value="all"
+                        class="sr-only"
+                      />
+                      <span
+                        class="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors"
+                        :class="
+                          addonsApplyTo === 'all'
+                            ? 'border-gray-900 bg-gray-900'
+                            : 'border-gray-300'
+                        "
+                      >
+                        <Check
+                          v-if="addonsApplyTo === 'all'"
+                          class="w-3 h-3 text-white"
+                        />
+                      </span>
+                      <span
+                        class="font-medium text-gray-900"
+                        :class="addonsApplyTo === 'all' ? '' : 'text-gray-600'"
+                      >
+                        {{ t("addonsApplyToAllSlots") }}
+                      </span>
+                    </label>
+                    <label
+                      class="flex items-center gap-3 p-4 rounded-2xl border transition-all cursor-pointer select-none hover:shadow-sm"
+                      :class="
+                        addonsApplyTo === 'firstOnly'
+                          ? 'border-gray-900 bg-gray-50/50'
+                          : 'border-gray-100 hover:border-gray-200'
+                      "
+                    >
+                      <input
+                        v-model="addonsApplyTo"
+                        type="radio"
+                        value="firstOnly"
+                        class="sr-only"
+                      />
+                      <span
+                        class="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors"
+                        :class="
+                          addonsApplyTo === 'firstOnly'
+                            ? 'border-gray-900 bg-gray-900'
+                            : 'border-gray-300'
+                        "
+                      >
+                        <Check
+                          v-if="addonsApplyTo === 'firstOnly'"
+                          class="w-3 h-3 text-white"
+                        />
+                      </span>
+                      <span
+                        class="font-medium"
+                        :class="
+                          addonsApplyTo === 'firstOnly'
+                            ? 'text-gray-900'
+                            : 'text-gray-600'
+                        "
+                      >
+                        {{ t("addonsApplyToFirstSlotOnly") }}
+                      </span>
+                    </label>
+                  </div>
+                </div>
+                <div
+                  class="bg-gray-50/50 border-t border-gray-100 px-4 sm:px-5 py-3"
+                >
+                  <p class="text-xs text-gray-500 leading-relaxed">
+                    {{ t("addonsApplyToFirstSlotOnlyHint") }}
+                  </p>
+                </div>
+              </div>
 
               <!-- Addons List -->
               <div class="space-y-4">
@@ -5146,88 +5284,144 @@ watch(
                 <!-- Separator -->
                 <div class="border-t border-gray-100 my-6"></div>
 
-                <!-- Payment Summary -->
-                <div class="space-y-3">
-                  <!-- Jumlah Harga -->
-                  <div class="flex justify-between text-sm">
+                <!-- Amount Summary (transparent breakdown) -->
+                <div class="space-y-4">
+                  <h4 class="text-xs font-bold uppercase tracking-wider text-gray-400">
+                    {{ t("amountSummary") }}
+                  </h4>
+
+                  <!-- Multi-slot: sessions breakdown (cart mode) -->
+                  <div
+                    v-if="cart.length > 1"
+                    class="bg-gray-50/80 border border-gray-100 rounded-xl p-3 space-y-2"
+                  >
+                    <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      {{ t("sessionsCalculation") }}
+                    </p>
+                    <div class="flex justify-between text-sm">
+                      <span class="text-gray-600">
+                        {{ cart.length }} {{ t("sessionsInCart") }}
+                      </span>
+                      <span class="font-medium text-gray-700">
+                        RM{{ formatPriceWhole(subtotalBeforeDiscount) }}
+                      </span>
+                    </div>
+                    <p class="text-xs text-gray-500">
+                      {{ t("sessionsSubtotal") }} ({{ cart.length }} × {{ t("session") }})
+                    </p>
+                  </div>
+
+                  <!-- 1. Subtotal before discount (only when coupon applied) -->
+                  <div
+                    v-if="validatedCoupon"
+                    class="flex justify-between text-sm"
+                  >
                     <span class="text-gray-600">{{
-                      t("totalPrice") || "Jumlah Harga"
+                      t("subtotalBeforeDiscount")
                     }}</span>
                     <span class="font-medium text-gray-900"
+                      >RM{{ formatPriceWhole(subtotalBeforeDiscount) }}</span
+                    >
+                  </div>
+
+                  <!-- 2. Discount (if coupon applied) -->
+                  <div
+                    v-if="validatedCoupon && discountAmount > 0"
+                    class="flex justify-between text-sm"
+                  >
+                    <span class="text-gray-600">
+                      {{ t("discountApplied") }}
+                      ({{ validatedCoupon.code }})
+                    </span>
+                    <span class="font-medium text-green-600"
+                      >-RM{{ formatPriceWhole(discountAmount) }}</span
+                    >
+                  </div>
+
+                  <!-- 3. Total after discount -->
+                  <div class="flex justify-between text-sm font-medium">
+                    <span class="text-gray-700">{{
+                      t("totalAfterDiscount")
+                    }}</span>
+                    <span class="text-gray-900"
                       >RM{{ formatPriceWhole(grandTotal) }}</span
                     >
                   </div>
 
-                  <!-- Caj Transaksi (when on_top mode and amount > 0) -->
+                  <!-- 4. Deposit mode: deposit (pay now) + balance (at studio) -->
+                  <template v-if="paymentType === 'deposit'">
+                    <div class="flex justify-between text-sm">
+                      <span class="text-gray-600">{{
+                        t("depositPayNow")
+                      }}</span>
+                      <span class="font-medium text-gray-900"
+                        >RM{{ formatPriceWhole(effectiveDepositAmount) }}</span
+                      >
+                    </div>
+                    <div class="flex justify-between text-sm">
+                      <span class="text-gray-600">{{
+                        t("balancePayAtStudio")
+                      }}</span>
+                      <span class="font-medium text-gray-700"
+                        >RM{{ formatPriceWhole(effectiveBalance) }}</span
+                      >
+                    </div>
+                  </template>
+
+                  <!-- 5. Transaction fee (on_top) -->
                   <div
                     v-if="
                       studioStore.websiteSettings?.chipFeeMode === 'on_top' &&
-                      grandTotal > 0
+                      (paymentType === 'full'
+                        ? grandTotal > 0
+                        : effectiveDepositAmount + effectiveBalance > 0)
                     "
                     class="flex justify-between text-sm"
                   >
-                    <span class="text-gray-600">{{
-                      t("chipFee") || "Caj Transaksi"
-                    }}</span>
+                    <span class="text-gray-600">{{ t("chipFee") }}</span>
                     <span class="font-medium text-gray-900">RM1.00</span>
                   </div>
 
-                  <!-- Deposit row (only for deposit mode) -->
-                  <div
-                    v-if="paymentType === 'deposit'"
-                    class="flex justify-between text-sm"
-                  >
-                    <span class="text-gray-600">{{
-                      t("depositAmount") || "Deposit"
-                    }}</span>
-                    <span class="font-medium text-gray-900"
-                      >RM{{ formatPriceWhole(effectiveDepositAmount) }}</span
-                    >
-                  </div>
-
-                  <!-- Separator -->
-                  <div class="border-t border-gray-200 my-2"></div>
-
-                  <!-- Jumlah Perlu Dibayar - Highlighted -->
-                  <div class="bg-gray-900 rounded-xl p-4 -mx-2">
-                    <div class="flex justify-between items-center">
-                      <span
-                        class="text-sm font-medium text-white uppercase tracking-wide"
+                  <div class="border-t border-gray-200 pt-3 mt-1">
+                    <!-- Amount to pay now - highlighted -->
+                    <div class="bg-gray-900 rounded-xl p-4 -mx-2">
+                      <div class="flex justify-between items-center">
+                        <span
+                          class="text-sm font-medium text-white uppercase tracking-wide"
+                        >
+                          {{ t("amountToPay") }}
+                        </span>
+                        <span class="text-2xl font-bold text-white">
+                          RM{{
+                            formatPriceWhole(
+                              paymentType === "deposit"
+                                ? effectiveDepositAmount +
+                                    (studioStore.websiteSettings?.chipFeeMode ===
+                                      "on_top" &&
+                                    effectiveDepositAmount + effectiveBalance > 0
+                                      ? 100
+                                      : 0)
+                                : effectiveDepositAmount +
+                                    effectiveBalance +
+                                    (studioStore.websiteSettings?.chipFeeMode ===
+                                      "on_top" &&
+                                    effectiveDepositAmount + effectiveBalance > 0
+                                      ? 100
+                                      : 0),
+                            )
+                          }}
+                        </span>
+                      </div>
+                      <p
+                        class="text-xs text-gray-300 mt-2 leading-relaxed"
                       >
-                        {{ t("amountToPay") || "Jumlah Perlu Dibayar" }}
-                      </span>
-                      <span class="text-2xl font-bold text-white">
-                        RM{{
-                          formatPriceWhole(
-                            paymentType === "deposit"
-                              ? effectiveDepositAmount +
-                                  (studioStore.websiteSettings?.chipFeeMode ===
-                                    "on_top" &&
-                                  effectiveDepositAmount + effectiveBalance > 0
-                                    ? 100
-                                    : 0)
-                              : effectiveDepositAmount +
-                                  effectiveBalance +
-                                  (studioStore.websiteSettings?.chipFeeMode ===
-                                    "on_top" &&
-                                  effectiveDepositAmount + effectiveBalance > 0
-                                    ? 100
-                                    : 0),
-                          )
+                        {{
+                          paymentType === "deposit"
+                            ? t("amountToPayExplanation")
+                            : t("fullPaymentExplanation")
                         }}
-                      </span>
+                      </p>
                     </div>
-                  </div>
-
-                  <!-- Balance to pay at studio (for deposit mode) -->
-                  <div
-                    v-if="paymentType === 'deposit'"
-                    class="text-center text-xs text-gray-500"
-                  >
-                    {{ t("balanceAtStudio") || "Baki bayar di studio" }}:
-                    <span class="font-bold text-gray-700"
-                      >RM{{ formatPriceWhole(effectiveBalance) }}</span
-                    >
                   </div>
                 </div>
               </div>
@@ -5330,47 +5524,9 @@ watch(
                       </p>
                     </div>
 
-                    <!-- Multi-slot multiplier breakdown -->
-                    <div
-                      v-if="
-                        isMultipleSlotEnabled &&
-                        (confirmedSlots.length > 1 || selectedSlots.length > 1)
-                      "
-                      class="mt-3 bg-blue-50 border border-blue-100 rounded-lg p-3 space-y-1.5"
-                    >
-                      <div class="flex justify-between text-sm">
-                        <span class="text-blue-600">
-                          {{ t("perSession") || "Setiap sesi" }}
-                        </span>
-                        <span class="font-medium text-blue-700"
-                          >RM{{ formatPriceWhole(currentItemTotal) }}</span
-                        >
-                      </div>
-                      <div class="flex justify-between text-sm">
-                        <span class="text-blue-600">
-                          ×
-                          {{
-                            confirmedSlots.length > 0
-                              ? confirmedSlots.length
-                              : selectedSlots.length
-                          }}
-                          {{ t("sessions") || "sesi" }}
-                        </span>
-                        <span class="font-bold text-blue-800"
-                          >RM{{
-                            formatPriceWhole(
-                              currentItemTotal *
-                                (confirmedSlots.length > 0
-                                  ? confirmedSlots.length
-                                  : selectedSlots.length),
-                            )
-                          }}</span
-                        >
-                      </div>
-                    </div>
 
-                    <!-- Extras (Pax & Addons) -->
-                    <div
+                      <!-- Extras (Pax & Addons) -->
+                      <div
                       v-if="
                         extraPaxCost > 0 ||
                         Object.values(selectedAddons).some((v) => v > 0) ||
@@ -5442,6 +5598,7 @@ watch(
                         </div>
                       </template>
                     </div>
+
                   </div>
 
                   <!-- Separator -->
@@ -5499,90 +5656,191 @@ watch(
                   <!-- Separator -->
                   <div class="border-t border-gray-100"></div>
 
-                  <!-- Payment Summary -->
-                  <div class="space-y-3">
-                    <!-- Jumlah Harga -->
-                    <div class="flex justify-between text-sm">
+                  <!-- Amount Summary (transparent breakdown) -->
+                  <div class="space-y-4">
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-gray-400">
+                      {{ t("amountSummary") }}
+                    </h4>
+
+                    <!-- Single mode multi-slot: sessions calculation breakdown -->
+                    <div
+                      v-if="singleModeSlotCount > 1"
+                      class="bg-gray-50/80 border border-gray-100 rounded-xl p-3 space-y-2"
+                    >
+                      <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        {{ t("sessionsCalculation") }}
+                      </p>
+                      <template v-if="addonsApplyTo === 'all'">
+                        <div class="flex justify-between text-sm">
+                          <span class="text-gray-600">{{
+                            t("perSessionWithAddons")
+                          }}</span>
+                          <span class="font-medium text-gray-700"
+                            >RM{{ formatPriceWhole(singleModePerSessionAmount) }}</span
+                          >
+                        </div>
+                        <div class="flex justify-between text-sm">
+                          <span class="text-gray-600">
+                            × {{ singleModeSlotCount }} {{ t("sessions") }}
+                          </span>
+                          <span class="font-bold text-gray-900"
+                            >RM{{
+                              formatPriceWhole(
+                                singleModePerSessionAmount * singleModeSlotCount,
+                              )
+                            }}</span
+                          >
+                        </div>
+                      </template>
+                      <template v-else>
+                        <div class="flex justify-between text-sm">
+                          <span class="text-gray-600">{{
+                            t("firstSessionWithAddons")
+                          }}</span>
+                          <span class="font-medium text-gray-700"
+                            >RM{{ formatPriceWhole(currentItemTotal) }}</span
+                          >
+                        </div>
+                        <div
+                          v-if="singleModeSlotCount > 1"
+                          class="flex justify-between text-sm"
+                        >
+                          <span class="text-gray-600">
+                            {{ t("additionalSessionsNoAddons") }} 
+                            <br>
+                            ({{ singleModeSlotCount - 1 }}
+                            × RM{{ formatPriceWhole(singleModeSessionWithoutAddons) }})
+                          </span>
+                          <span class="font-medium text-gray-700"
+                            >RM{{
+                              formatPriceWhole(
+                                singleModeSessionWithoutAddons * (singleModeSlotCount - 1),
+                              )
+                            }}</span
+                          >
+                        </div>
+                        <div class="flex justify-between text-sm pt-1 border-t border-gray-100">
+                          <span class="text-gray-600 font-medium">{{
+                            t("sessionsSubtotal")
+                          }}</span>
+                          <span class="font-bold text-gray-900"
+                            >RM{{ formatPriceWhole(subtotalBeforeDiscount) }}</span
+                          >
+                        </div>
+                      </template>
+                    </div>
+
+                    <!-- 1. Subtotal before discount (only when coupon applied) -->
+                    <div
+                      v-if="validatedCoupon"
+                      class="flex justify-between text-sm"
+                    >
                       <span class="text-gray-600">{{
-                        t("totalPrice") || "Jumlah Harga"
+                        t("subtotalBeforeDiscount")
                       }}</span>
                       <span class="font-medium text-gray-900"
+                        >RM{{ formatPriceWhole(subtotalBeforeDiscount) }}</span
+                      >
+                    </div>
+
+                    <!-- 2. Discount (if coupon applied) -->
+                    <div
+                      v-if="validatedCoupon && discountAmount > 0"
+                      class="flex justify-between text-sm"
+                    >
+                      <span class="text-gray-600">
+                        {{ t("discountApplied") }}
+                        ({{ validatedCoupon.code }})
+                      </span>
+                      <span class="font-medium text-green-600"
+                        >-RM{{ formatPriceWhole(discountAmount) }}</span
+                      >
+                    </div>
+
+                    <!-- 3. Total after discount -->
+                    <div class="flex justify-between text-sm font-medium">
+                      <span class="text-gray-700">{{
+                        t("totalAfterDiscount")
+                      }}</span>
+                      <span class="text-gray-900"
                         >RM{{ formatPriceWhole(grandTotal) }}</span
                       >
                     </div>
 
-                    <!-- Caj Transaksi (when on_top mode and amount > 0) -->
+                    <!-- 4. Deposit mode: deposit (pay now) + balance (at studio) -->
+                    <template v-if="paymentType === 'deposit'">
+                      <div class="flex justify-between text-sm">
+                        <span class="text-gray-600">{{
+                          t("depositPayNow")
+                        }}</span>
+                        <span class="font-medium text-gray-900"
+                          >RM{{ formatPriceWhole(effectiveDepositAmount) }}</span
+                        >
+                      </div>
+                      <div class="flex justify-between text-sm">
+                        <span class="text-gray-600">{{
+                          t("balancePayAtStudio")
+                        }}</span>
+                        <span class="font-medium text-gray-700"
+                          >RM{{ formatPriceWhole(effectiveBalance) }}</span
+                        >
+                      </div>
+                    </template>
+
+                    <!-- 5. Transaction fee (on_top) -->
                     <div
                       v-if="
                         studioStore.websiteSettings?.chipFeeMode === 'on_top' &&
-                        grandTotal > 0
+                        (paymentType === 'full'
+                          ? grandTotal > 0
+                          : effectiveDepositAmount + effectiveBalance > 0)
                       "
                       class="flex justify-between text-sm"
                     >
-                      <span class="text-gray-600">{{
-                        t("chipFee") || "Caj Transaksi"
-                      }}</span>
+                      <span class="text-gray-600">{{ t("chipFee") }}</span>
                       <span class="font-medium text-gray-900">RM1.00</span>
                     </div>
 
-                    <!-- Deposit row (only for deposit mode) -->
-                    <div
-                      v-if="paymentType === 'deposit'"
-                      class="flex justify-between text-sm"
-                    >
-                      <span class="text-gray-600">{{
-                        t("depositAmount") || "Deposit"
-                      }}</span>
-                      <span class="font-medium text-gray-900"
-                        >RM{{ formatPriceWhole(effectiveDepositAmount) }}</span
-                      >
-                    </div>
-
-                    <!-- Separator -->
-                    <div class="border-t border-gray-200 my-2"></div>
-
-                    <!-- Jumlah Perlu Dibayar - Highlighted -->
-                    <div class="bg-gray-900 rounded-xl p-4 -mx-2">
-                      <div class="flex justify-between items-center">
-                        <span
-                          class="text-sm font-medium text-white uppercase tracking-wide"
+                    <div class="border-t border-gray-200 pt-3 mt-1">
+                      <!-- Amount to pay now - highlighted -->
+                      <div class="bg-gray-900 rounded-xl p-4 -mx-2">
+                        <div class="flex justify-between items-center">
+                          <span
+                            class="text-sm font-medium text-white uppercase tracking-wide"
+                          >
+                            {{ t("amountToPay") }}
+                          </span>
+                          <span class="text-2xl font-bold text-white">
+                            RM{{
+                              formatPriceWhole(
+                                paymentType === "deposit"
+                                  ? effectiveDepositAmount +
+                                      (studioStore.websiteSettings?.chipFeeMode ===
+                                        "on_top" &&
+                                      effectiveDepositAmount + effectiveBalance > 0
+                                        ? 100
+                                        : 0)
+                                  : effectiveDepositAmount +
+                                      effectiveBalance +
+                                      (studioStore.websiteSettings?.chipFeeMode ===
+                                        "on_top" &&
+                                      effectiveDepositAmount + effectiveBalance > 0
+                                        ? 100
+                                        : 0),
+                              )
+                            }}
+                          </span>
+                        </div>
+                        <p
+                          class="text-xs text-gray-300 mt-2 leading-relaxed"
                         >
-                          {{ t("amountToPay") || "Jumlah Perlu Dibayar" }}
-                        </span>
-                        <span class="text-2xl font-bold text-white">
-                          RM{{
-                            formatPriceWhole(
-                              paymentType === "deposit"
-                                ? effectiveDepositAmount +
-                                    (studioStore.websiteSettings
-                                      ?.chipFeeMode === "on_top" &&
-                                    effectiveDepositAmount + effectiveBalance >
-                                      0
-                                      ? 100
-                                      : 0)
-                                : effectiveDepositAmount +
-                                    effectiveBalance +
-                                    (studioStore.websiteSettings
-                                      ?.chipFeeMode === "on_top" &&
-                                    effectiveDepositAmount + effectiveBalance >
-                                      0
-                                      ? 100
-                                      : 0),
-                            )
+                          {{
+                            paymentType === "deposit"
+                              ? t("amountToPayExplanation")
+                              : t("fullPaymentExplanation")
                           }}
-                        </span>
+                        </p>
                       </div>
-                    </div>
-
-                    <!-- Balance to pay at studio (for deposit mode) -->
-                    <div
-                      v-if="paymentType === 'deposit'"
-                      class="text-center text-xs text-gray-500"
-                    >
-                      {{ t("balanceAtStudio") || "Baki bayar di studio" }}:
-                      <span class="font-bold text-gray-700"
-                        >RM{{ formatPriceWhole(effectiveBalance) }}</span
-                      >
                     </div>
                   </div>
                 </div>
