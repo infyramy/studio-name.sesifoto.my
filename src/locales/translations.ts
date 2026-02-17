@@ -666,7 +666,7 @@ export const translationsEN: Translations = {
   depositPayNow: "Deposit (pay now)",
   balancePayAtStudio: "Balance (pay at studio)",
   amountToPayExplanation:
-    "This amount will be charged to your card or payment method now.",
+    "Balance amount can be paid at studio.",
   fullPaymentExplanation: "Full amount will be paid now.",
   sessionsCalculation: "Sessions amount calculation",
   perSessionWithAddons: "Per session (theme + pax + add-ons)",
