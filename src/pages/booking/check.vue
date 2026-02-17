@@ -632,7 +632,7 @@ const brandColor = computed(() => studioStore.studio?.brand_color || "#000000");
                     foundBooking.customer_email
                   }}</span>
                 </div>
-                <div
+                <!-- <div
                   v-if="foundBooking.customer_notes"
                   class="pt-1.5 border-t border-gray-50"
                 >
@@ -642,7 +642,7 @@ const brandColor = computed(() => studioStore.studio?.brand_color || "#000000");
                   <span class="text-gray-700 italic"
                     >"{{ foundBooking.customer_notes }}"</span
                   >
-                </div>
+                </div> -->
               </div>
               <div
                 v-if="formattedCreatedDate"
