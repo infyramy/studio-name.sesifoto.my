@@ -158,6 +158,12 @@ export interface Coupon {
   min_spend: number | null;
   status: "active" | "inactive";
   created_at: string;
+  /** Total discount in sen (from validate; used for partial apply) */
+  discount_amount?: number;
+  /** Subtotal of eligible items in sen (partial apply) */
+  eligible_subtotal?: number;
+  /** Indices of cart items eligible for discount (partial apply) */
+  eligible_indices?: number[];
 }
 
 // Break Times
@@ -246,6 +252,8 @@ export interface BatchBookingItem {
   coupon_code?: string;
   discount_amount?: number;
   referral_code?: string;
+  /** Item subtotal in sen (for coupon partial-apply on backend) */
+  subtotal?: number;
 }
 
 export interface BatchBookingRequest {

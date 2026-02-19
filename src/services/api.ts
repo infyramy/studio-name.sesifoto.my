@@ -389,11 +389,22 @@ export const api = {
   },
 
   // ===== Coupon APIs =====
-  async validateCoupon(code: string, subtotal: number = 0): Promise<Coupon> {
+  async validateCoupon(
+    code: string,
+    subtotal: number = 0,
+    bookingDates?: string[],
+    items?: { bookingDate: string; subtotal: number }[],
+  ): Promise<Coupon> {
     const slug = getStudioSlug();
+    const body: Record<string, unknown> = { studioSlug: slug, code, subtotal };
+    if (items && items.length > 0) {
+      body.items = items;
+    } else if (bookingDates && bookingDates.length > 0) {
+      body.bookingDates = bookingDates;
+    }
     const data = await apiFetch("/public/coupons/validate", {
       method: "POST",
-      body: { studioSlug: slug, code, subtotal },
+      body,
     });
 
     return {
@@ -408,6 +419,9 @@ export const api = {
       min_spend: data.minSpend || null,
       status: "active",
       created_at: new Date().toISOString(),
+      discount_amount: data.discountAmount,
+      eligible_subtotal: data.eligibleSubtotal,
+      eligible_indices: data.eligibleIndices,
     };
   },
 
@@ -509,6 +523,7 @@ export const api = {
           couponCode: item.coupon_code,
           discountAmount: item.discount_amount,
           referralCode: item.referral_code,
+          subtotal: item.subtotal,
           addons: item.selected_addons.map((a) => ({
             addonId: a.addon_id,
             quantity: a.quantity,

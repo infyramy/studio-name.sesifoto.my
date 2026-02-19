@@ -217,6 +217,14 @@ export const translationsBM: Translations = {
   amountToPayExplanation:
     "Baki pembayaran boleh dibayar di studio.",
   fullPaymentExplanation: "Jumlah penuh akan dibayar sekarang.",
+  depositPercentOfTotal: "{percentage}% daripada jumlah",
+  depositFixedPerSession: "RM{amount} setiap sesi × {count} sesi",
+  depositDiscountNote:
+    "Diskaun digunakan pada baki dahulu, kemudian deposit.",
+  depositBeforeDiscount: "Sebelum diskaun",
+  depositSumPerSession: "Jumlah deposit setiap sesi",
+  depositPerSessionBreakdown: "Deposit setiap sesi",
+  sessionNumber: "Sesi {n}",
   sessionsCalculation: "Pengiraan jumlah sesi",
   perSessionWithAddons: "Setiap sesi (tema + pax + tambahan)",
   firstSessionWithAddons: "Sesi pertama (dengan tambahan)",
@@ -381,6 +389,13 @@ export const translationsBM: Translations = {
   minSpendRequired: "Perbelanjaan minimum RM{amount} diperlukan",
   applied: "Digunakan",
   selectedSession: "sesi terpilih",
+  notEligible: "Tidak layak",
+  appliedToSessions: "Digunakan pada",
+  of: "daripada",
+  appliedToAllSessions: "Digunakan pada semua",
+  couponAppliedToAllSessions: "Kupon digunakan pada semua sesi",
+  discountPerSession: "Diskaun setiap sesi",
+  totalDiscount: "Jumlah diskaun",
 
   // Consent
   agreeToTerms: "Saya bersetuju dengan Terma & Syarat",
@@ -668,6 +683,14 @@ export const translationsEN: Translations = {
   amountToPayExplanation:
     "Balance amount can be paid at studio.",
   fullPaymentExplanation: "Full amount will be paid now.",
+  depositPercentOfTotal: "{percentage}% of total",
+  depositFixedPerSession: "RM{amount} per session × {count} sessions",
+  depositDiscountNote:
+    "Discount applied to balance first, then to deposit.",
+  depositBeforeDiscount: "Before discount",
+  depositSumPerSession: "Sum of deposit per session",
+  depositPerSessionBreakdown: "Deposit per session",
+  sessionNumber: "Session {n}",
   sessionsCalculation: "Sessions amount calculation",
   perSessionWithAddons: "Per session (theme + pax + add-ons)",
   firstSessionWithAddons: "First session (with add-ons)",
@@ -833,6 +856,13 @@ export const translationsEN: Translations = {
   minSpendRequired: "Minimum spend of RM{amount} required",
   applied: "Applied",
   selectedSession: "selected session",
+  notEligible: "Not eligible",
+  appliedToSessions: "Applied to",
+  of: "of",
+  appliedToAllSessions: "Applied to all",
+  couponAppliedToAllSessions: "Coupon applied to all sessions",
+  discountPerSession: "Discount per session",
+  totalDiscount: "Total discount",
 
   // Consent
   agreeToTerms: "I agree to the Terms & Conditions",

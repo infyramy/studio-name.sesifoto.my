@@ -4,6 +4,7 @@ import { useRouter } from "vue-router";
 import { useStudioStore } from "@/stores/studio";
 import { useTranslation } from "@/composables/useTranslation";
 import { useCurrency } from "@/composables/useCurrency";
+import { useDateFormat } from "@/composables/useDateFormat";
 import { useSanitize } from "@/composables/useSanitize";
 import { createBooking, api } from "@/services/api";
 import {
@@ -42,6 +43,7 @@ const router = useRouter();
 const studioStore = useStudioStore();
 const { t } = useTranslation();
 const { formatPriceWhole } = useCurrency();
+const { formatDate } = useDateFormat();
 
 // ============================================
 // Session Management
@@ -1601,7 +1603,7 @@ function showAddToCartConfirmationDialog(): Promise<boolean> {
       .map((s) => `• ${s.start} - ${s.end}`)
       .join("<br>");
     slotDetails = `<b>${slotsToAdd.length} ${
-      t("sessions") || "sessions"
+      t("sessions")
     }</b><br>${slotTimes}`;
   } else if (slotsToAdd.length === 1) {
     slotDetails = `<b>${slotsToAdd[0].start} - ${slotsToAdd[0].end}</b>`;
@@ -1634,15 +1636,25 @@ const handleApplyCoupon = async () => {
   try {
     // Calculate the subtotal to send to backend for min spend validation
     let subtotal = 0;
+    let bookingDates: string[] = [];
+    let items: { bookingDate: string; subtotal: number }[] | undefined;
     if (isCartModeEnabled.value && cart.value.length > 0) {
-      // In cart mode, use the total of all cart items (or first item if only 1)
       subtotal = cart.value.reduce((sum, item) => sum + item.total, 0);
+      bookingDates = cart.value.map((item) => item.date);
+      // For partial apply (coupon with shoot date range), send per-item breakdown
+      items = cart.value.map((item) => ({ bookingDate: item.date, subtotal: item.total }));
     } else {
-      // In single mode, use current item total
-      subtotal = currentItemTotal.value;
+      // Single mode: use full total (one slot or multiple slots) for validation
+      subtotal = effectiveSingleModeTotal.value;
+      if (selectedDate.value) bookingDates = [selectedDate.value];
     }
 
-    const coupon = await api.validateCoupon(couponCode.value, subtotal);
+    const coupon = await api.validateCoupon(
+      couponCode.value,
+      subtotal,
+      bookingDates.length > 0 ? bookingDates : undefined,
+      items,
+    );
     validatedCoupon.value = coupon;
 
     // Auto-select item if only 1 item in cart (Cart Mode) or in Single Mode
@@ -1672,9 +1684,11 @@ const handleApplyCoupon = async () => {
       } else if (lowerMsg.includes("limit reached")) {
         couponError.value = t("couponLimitReached");
       } else if (lowerMsg.includes("minimum spend")) {
-        // Try to extract amount if possible, otherwise just use the message or a generic one
-        // ideally we parse it, but for now let's just use the backend message if it contains specific currency info
-        // or failover to a generic min spend message without amount if parsing fails
+        couponError.value = backendMessage;
+      } else if (
+        lowerMsg.includes("session date") ||
+        lowerMsg.includes("select a slot first")
+      ) {
         couponError.value = backendMessage;
       } else {
         couponError.value = backendMessage;
@@ -1897,16 +1911,6 @@ const scrollToSelectedDate = () => {
         behavior: "smooth",
       });
     }
-  });
-};
-// Date formatter
-const formatDate = (dateStr: string) => {
-  if (!dateStr) return "";
-  const date = new Date(dateStr);
-  return date.toLocaleDateString("en-MY", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
   });
 };
 
@@ -2165,7 +2169,7 @@ const nextStep = async () => {
       isProcessingPayment.value = true;
 
       try {
-        // Calculate proportional discount for each cart item
+        // Calculate proportional discount for each cart item (supports partial apply by shoot date)
         const calculateProportionalDiscount = (itemIndex: number): number => {
           if (!validatedCoupon.value) return 0;
 
@@ -2173,11 +2177,6 @@ const nextStep = async () => {
             (sum, item) => sum + item.total,
             0,
           );
-          const itemTotal = cart.value[itemIndex].total;
-          const proportion = itemTotal / cartTotalAmount;
-
-          // Calculate total discount based on cart total
-          let totalDiscount = 0;
           if (
             validatedCoupon.value.min_spend &&
             cartTotalAmount < validatedCoupon.value.min_spend
@@ -2185,18 +2184,45 @@ const nextStep = async () => {
             return 0; // Min spend not met
           }
 
-          if (validatedCoupon.value.type === "percentage") {
-            totalDiscount =
-              cartTotalAmount * (validatedCoupon.value.value / 100);
-          } else {
-            totalDiscount = validatedCoupon.value.value;
+          // Partial apply: discount only on eligible items (by shoot date range)
+          const eligibleIndices = validatedCoupon.value.eligible_indices;
+          const eligibleSubtotal = validatedCoupon.value.eligible_subtotal;
+          const totalDiscount = validatedCoupon.value.discount_amount ?? 0;
+
+          if (
+            eligibleIndices != null &&
+            eligibleIndices.length > 0 &&
+            eligibleSubtotal != null &&
+            eligibleSubtotal > 0 &&
+            totalDiscount > 0
+          ) {
+            if (!eligibleIndices.includes(itemIndex)) return 0;
+            const pos = eligibleIndices.indexOf(itemIndex);
+            const itemTotal = cart.value[itemIndex].total;
+            // Last eligible item gets remainder so sum matches totalDiscount exactly
+            if (pos === eligibleIndices.length - 1) {
+              let assigned = 0;
+              for (let i = 0; i < eligibleIndices.length - 1; i++) {
+                const sub = cart.value[eligibleIndices[i]].total;
+                assigned += Math.round((totalDiscount * sub) / eligibleSubtotal);
+              }
+              return Math.max(0, totalDiscount - assigned);
+            }
+            const proportion = itemTotal / eligibleSubtotal;
+            return Math.round(totalDiscount * proportion);
           }
 
-          // Cap at cart total
-          totalDiscount = Math.min(totalDiscount, cartTotalAmount);
-
-          // Return proportional share for this item
-          return Math.round(totalDiscount * proportion);
+          // No partial apply: distribute discount across full cart
+          const itemTotal = cart.value[itemIndex].total;
+          const proportion = itemTotal / cartTotalAmount;
+          let discount = 0;
+          if (validatedCoupon.value.type === "percentage") {
+            discount = cartTotalAmount * (validatedCoupon.value.value / 100);
+          } else {
+            discount = validatedCoupon.value.value;
+          }
+          discount = Math.min(discount, cartTotalAmount);
+          return Math.round(discount * proportion);
         };
 
         // Prepare batch booking request
@@ -2245,6 +2271,7 @@ const nextStep = async () => {
                   ? validatedCoupon.value.code
                   : undefined,
               discount_amount: itemDiscount > 0 ? itemDiscount : undefined,
+              subtotal: item.total,
               referral_code: getReferralCode(),
             };
           }),
@@ -2420,6 +2447,12 @@ const nextStep = async () => {
               ? fullAddonsArray
               : [];
 
+            // Per-slot subtotal for backend coupon validation / distribution
+            const slotSubtotal =
+              useAddonsForThisSlot
+                ? currentItemTotal.value
+                : currentItemTotal.value - addonsTotal.value;
+
             // Parse time from slot
             const slotStart =
               slot?.originalSlot?.start || slot?.start || "09:00";
@@ -2445,6 +2478,7 @@ const nextStep = async () => {
               selected_addons: selectedAddonsForItem,
               coupon_code: validatedCoupon.value?.code,
               discount_amount: itemDiscount > 0 ? itemDiscount : undefined,
+              subtotal: slotSubtotal,
               referral_code: getReferralCode(),
             };
           }),
@@ -2740,33 +2774,36 @@ const discountAmount = computed(() => {
   let targetTotal = 0;
 
   if (isCartModeEnabled.value) {
-    // In cart mode, calculate discount based on entire cart total
-    if (cart.value.length === 0) {
-      return 0;
-    }
-    // Use total cart amount for discount calculation
+    if (cart.value.length === 0) return 0;
     targetTotal = cart.value.reduce((sum, item) => sum + item.total, 0);
   } else {
-    // In single mode, use effective total (respects addonsApplyTo for multi-slot)
     targetTotal = effectiveSingleModeTotal.value;
   }
 
-  // Check min spend
+  // Min spend check (on full cart or single total)
   if (
     validatedCoupon.value.min_spend &&
     targetTotal < validatedCoupon.value.min_spend
   ) {
-    return 0; // Min spend not met
+    return 0;
   }
 
+  // Partial apply: use backend-computed total discount for eligible items only
+  if (
+    validatedCoupon.value.eligible_indices != null &&
+    validatedCoupon.value.eligible_indices.length > 0 &&
+    validatedCoupon.value.discount_amount != null
+  ) {
+    return validatedCoupon.value.discount_amount;
+  }
+
+  // Full apply: compute discount on target total
   let discount = 0;
   if (validatedCoupon.value.type === "percentage") {
     discount = targetTotal * (validatedCoupon.value.value / 100);
   } else {
     discount = validatedCoupon.value.value;
   }
-
-  // Cap discount at target total
   return Math.min(discount, targetTotal);
 });
 
@@ -2868,24 +2905,48 @@ const singleItemDepositAmount = computed(() => {
   return effectiveSingleModeTotal.value * (percentage / 100);
 });
 
+// Per-item deposit (raw) for cart - so we can show breakdown
+const cartDepositPerItem = computed(() => {
+  if (!isCartModeEnabled.value || cart.value.length === 0) return [];
+  const pct = (studioStore.studio?.settings.deposit_percentage ?? 50) / 100;
+  return cart.value.map((item) => {
+    if (
+      item.theme.deposit_amount != null &&
+      item.theme.deposit_amount !== undefined
+    ) {
+      return item.theme.deposit_amount;
+    }
+    return Math.round(item.total * pct);
+  });
+});
+
 // Cart total deposit amount (sum of RAW deposits for all cart items - discount from balance first)
 const cartDepositTotal = computed(() => {
   if (!isCartModeEnabled.value || cart.value.length === 0) return 0;
+  return cartDepositPerItem.value.reduce((sum, d) => sum + d, 0);
+});
 
-  let totalDeposit = 0;
-  for (const item of cart.value) {
-    // Raw deposit per item (from original item total, not discounted) for "discount from balance first"
-    const itemDeposit =
-      item.theme.deposit_amount !== null &&
-      item.theme.deposit_amount !== undefined
-        ? item.theme.deposit_amount
-        : Math.round(
-            item.total *
-              ((studioStore.studio?.settings.deposit_percentage || 50) / 100),
-          );
-    totalDeposit += itemDeposit;
+// Per-slot deposit (raw) for single mode multi-slot - so we can show breakdown
+const singleModeDepositPerSlot = computed(() => {
+  if (!selectedTheme.value) return [];
+  const theme = selectedTheme.value;
+  const slotCount = isMultipleSlotEnabled.value
+    ? confirmedSlots.value.length > 0
+      ? confirmedSlots.value.length
+      : selectedSlots.value.length > 0
+        ? selectedSlots.value.length
+        : 1
+    : 1;
+  if (slotCount <= 0) return [];
+  if (theme.deposit_amount != null && theme.deposit_amount !== undefined) {
+    return Array.from({ length: slotCount }, () => theme.deposit_amount!);
   }
-  return totalDeposit;
+  const totalDeposit = singleItemDepositAmount.value;
+  const perSlot = Math.round(totalDeposit / slotCount);
+  const remainder = totalDeposit - perSlot * slotCount;
+  return Array.from({ length: slotCount }, (_, i) =>
+    i < remainder ? perSlot + 1 : perSlot,
+  );
 });
 
 // Combined deposit amount (works for both single and cart modes) - before discount
@@ -2895,6 +2956,79 @@ const depositAmount = computed(() => {
   }
   return singleItemDepositAmount.value;
 });
+
+// Check if a cart item index is eligible for coupon discount (partial apply)
+const isCartItemEligibleForCoupon = (index: number): boolean => {
+  if (!validatedCoupon.value) return false;
+  const eligibleIndices = validatedCoupon.value.eligible_indices;
+  if (eligibleIndices == null || eligibleIndices.length === 0) {
+    // No partial apply: all items eligible
+    return true;
+  }
+  return eligibleIndices.includes(index);
+};
+
+// Check if a slot index (single mode multi-slot) is eligible for coupon discount
+const isSlotEligibleForCoupon = (index: number): boolean => {
+  if (!validatedCoupon.value) return false;
+  const eligibleIndices = validatedCoupon.value.eligible_indices;
+  if (eligibleIndices == null || eligibleIndices.length === 0) {
+    // No partial apply: all slots eligible
+    return true;
+  }
+  return eligibleIndices.includes(index);
+};
+
+// Calculate discount for a cart item (for display)
+const getCartItemDiscount = (index: number): number => {
+  if (!validatedCoupon.value || !isCartItemEligibleForCoupon(index)) return 0;
+  
+  const cartTotalAmount = cart.value.reduce((sum, item) => sum + item.total, 0);
+  if (
+    validatedCoupon.value.min_spend &&
+    cartTotalAmount < validatedCoupon.value.min_spend
+  ) {
+    return 0; // Min spend not met
+  }
+
+  const eligibleIndices = validatedCoupon.value.eligible_indices;
+  const eligibleSubtotal = validatedCoupon.value.eligible_subtotal;
+  const totalDiscount = validatedCoupon.value.discount_amount ?? 0;
+  
+  if (
+    eligibleIndices != null &&
+    eligibleIndices.length > 0 &&
+    eligibleSubtotal != null &&
+    eligibleSubtotal > 0 &&
+    totalDiscount > 0
+  ) {
+    const itemTotal = cart.value[index]?.total ?? 0;
+    const pos = eligibleIndices.indexOf(index);
+    if (pos === eligibleIndices.length - 1) {
+      // Last eligible item gets remainder
+      let assigned = 0;
+      for (let i = 0; i < eligibleIndices.length - 1; i++) {
+        const sub = cart.value[eligibleIndices[i]]?.total ?? 0;
+        assigned += Math.round((totalDiscount * sub) / eligibleSubtotal);
+      }
+      return Math.max(0, totalDiscount - assigned);
+    }
+    const proportion = itemTotal / eligibleSubtotal;
+    return Math.round(totalDiscount * proportion);
+  }
+  
+  // Fallback: distribute proportionally across full cart
+  const itemTotal = cart.value[index]?.total ?? 0;
+  const proportion = itemTotal / cartTotalAmount;
+  let discount = 0;
+  if (validatedCoupon.value.type === "percentage") {
+    discount = cartTotalAmount * (validatedCoupon.value.value / 100);
+  } else {
+    discount = validatedCoupon.value.value;
+  }
+  discount = Math.min(discount, cartTotalAmount);
+  return Math.round(discount * proportion);
+};
 
 // Calculate the original balance (total - deposit) before any discount
 const originalBalance = computed(() => {
@@ -2942,6 +3076,42 @@ const paymentAmount = computed(() => {
   }
   // For deposit payment, only pay the effective deposit (after discount applied)
   return effectiveDepositAmount.value;
+});
+
+// Explains how deposit was calculated (for display under "Deposit (pay now)")
+const depositExplanation = computed(() => {
+  const pct = studioStore.studio?.settings.deposit_percentage ?? 50;
+  if (isCartModeEnabled.value && cart.value.length > 0) {
+    const hasFixed = cart.value.some(
+      (item) =>
+        item.theme.deposit_amount != null &&
+        item.theme.deposit_amount !== undefined,
+    );
+    if (hasFixed) {
+      return { key: "depositSumPerSession" as const, params: {} };
+    }
+    return { key: "depositPercentOfTotal" as const, params: { percentage: pct } };
+  }
+  // Single mode
+  if (!selectedTheme.value) return { key: "depositPercentOfTotal" as const, params: { percentage: pct } };
+  const theme = selectedTheme.value;
+  const slotCount = isMultipleSlotEnabled.value
+    ? confirmedSlots.value.length > 0
+      ? confirmedSlots.value.length
+      : selectedSlots.value.length > 0
+        ? selectedSlots.value.length
+        : 1
+    : 1;
+  if (theme.deposit_amount != null && theme.deposit_amount !== undefined) {
+    return {
+      key: "depositFixedPerSession" as const,
+      params: {
+        amount: formatPriceWhole(theme.deposit_amount),
+        count: slotCount,
+      },
+    };
+  }
+  return { key: "depositPercentOfTotal" as const, params: { percentage: depositPercentage.value } };
 });
 
 const selectedDateInfo = computed(() => {
@@ -4346,7 +4516,7 @@ watch(
                     <div class="flex items-center gap-2">
                       <Calendar class="w-3.5 h-3.5" />
                       <span class="font-medium text-gray-700">{{
-                        item.date
+                        formatDate(item.date)
                       }}</span>
                     </div>
                     <div class="flex items-center gap-2">
@@ -5114,9 +5284,27 @@ watch(
                   >
                     <!-- Item Header -->
                     <div class="flex justify-between items-start mb-1">
-                      <h4 class="font-bold text-lg text-gray-900">
-                        {{ item.theme.name }}
-                      </h4>
+                      <div class="flex items-center gap-2">
+                        <h4 class="font-bold text-lg text-gray-900">
+                          {{ item.theme.name }}
+                        </h4>
+                        <!-- Coupon Applied Badge -->
+                        <span
+                          v-if="validatedCoupon && isCartItemEligibleForCoupon(index)"
+                          class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs font-medium"
+                        >
+                          <Ticket class="w-3 h-3" />
+                          {{ validatedCoupon.code }}
+                        </span>
+                        <!-- Not Eligible Badge (partial apply) -->
+                        <span
+                          v-if="validatedCoupon && !isCartItemEligibleForCoupon(index)"
+                          class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-xs font-medium"
+                        >
+                          <X class="w-3 h-3" />
+                          {{ t("notEligible") }}
+                        </span>
+                      </div>
                       <span class="font-bold text-lg text-gray-900">
                         RM{{ formatPriceWhole(item.theme.base_price) }}
                       </span>
@@ -5124,7 +5312,7 @@ watch(
 
                     <!-- Date & Time -->
                     <div class="text-gray-500 text-sm flex items-center gap-2">
-                      <span>{{ item.date }}</span>
+                      <span>{{ formatDate(item.date) }}</span>
                       <span class="w-1 h-1 rounded-full bg-gray-300"></span>
                       <span>{{ item.slot.start }} - {{ item.slot.end }}</span>
                     </div>
@@ -5219,6 +5407,20 @@ watch(
                       </template>
                     </div>
 
+                    <!-- Discount Applied to This Item (if eligible) -->
+                    <div
+                      v-if="validatedCoupon && isCartItemEligibleForCoupon(index) && getCartItemDiscount(index) > 0"
+                      class="mt-3 pt-3 border-t border-dashed border-green-100 flex justify-between items-center bg-green-50/50 -mx-2 px-2 py-2 rounded-lg"
+                    >
+                      <span class="text-xs font-medium text-green-700 flex items-center gap-1">
+                        <Ticket class="w-3 h-3" />
+                        {{ t("discountApplied") }} ({{ validatedCoupon.code }})
+                      </span>
+                      <span class="font-bold text-green-600 text-sm"
+                        >-RM{{ formatPriceWhole(getCartItemDiscount(index)) }}</span
+                      >
+                    </div>
+
                     <!-- Item Total Row -->
                     <div
                       class="mt-4 pt-4 border-t border-dashed border-gray-100 flex justify-between items-center"
@@ -5228,7 +5430,7 @@ watch(
                         >{{ t("total") || "Total" }}</span
                       >
                       <span class="font-bold text-gray-900"
-                        >RM{{ formatPriceWhole(item.total) }}</span
+                        >RM{{ formatPriceWhole(item.total - getCartItemDiscount(index)) }}</span
                       >
                     </div>
 
@@ -5287,6 +5489,19 @@ watch(
                       >
                         <X class="w-4 h-4" />
                       </button>
+                    </div>
+                    <!-- Show which items are eligible (partial apply) -->
+                    <div
+                      v-if="validatedCoupon.eligible_indices && validatedCoupon.eligible_indices.length > 0 && validatedCoupon.eligible_indices.length < cart.length"
+                      class="text-xs text-green-700 bg-green-100/50 rounded-lg p-2"
+                    >
+                      <span class="font-medium">
+                        {{ t("appliedToSessions") }}:
+                      </span>
+                      <span class="ml-1">
+                        {{ validatedCoupon.eligible_indices.length }} {{ t("of") }} {{ cart.length }} {{ t("sessions") }}
+                        ({{ validatedCoupon.eligible_indices.map(i => i + 1).join(", ") }})
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -5360,14 +5575,58 @@ watch(
 
                   <!-- 4. Deposit mode: deposit (pay now) + balance (at studio) -->
                   <template v-if="paymentType === 'deposit'">
-                    <div class="flex justify-between text-sm">
-                      <span class="text-gray-600">{{
-                        t("depositPayNow")
-                      }}</span>
-                      <span class="font-medium text-gray-900"
-                        >RM{{ formatPriceWhole(effectiveDepositAmount) }}</span
+                    <!-- Per-session deposit breakdown (cart) -->
+                    <div
+                      v-if="cartDepositPerItem.length > 0"
+                      class="bg-gray-50/80 border border-gray-100 rounded-xl p-3 space-y-1.5"
+                    >
+                      <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        {{ t("depositPerSessionBreakdown") }}
+                      </p>
+                      <div
+                        v-for="(dep, idx) in cartDepositPerItem"
+                        :key="idx"
+                        class="flex justify-between text-sm"
                       >
+                        <span class="text-gray-600">
+                          {{ t("sessionNumber", { n: idx + 1 }) }}
+                          <span class="text-gray-400 text-xs">
+                            ({{ cart[idx].theme.name }}, {{ formatDate(cart[idx].date) }})
+                          </span>
+                        </span>
+                        <span class="font-medium text-gray-700">
+                          RM{{ formatPriceWhole(dep) }}
+                        </span>
+                      </div>
+                      <div class="flex justify-between text-sm pt-1.5 border-t border-gray-200 mt-1.5">
+                        <span class="text-gray-600 font-medium">{{
+                          t("depositPayNow")
+                        }}</span>
+                        <span class="font-bold text-gray-900">
+                          RM{{ formatPriceWhole(effectiveDepositAmount) }}
+                        </span>
+                      </div>
                     </div>
+                    <template v-else>
+                      <div class="flex justify-between text-sm">
+                        <span class="text-gray-600">{{
+                          t("depositPayNow")
+                        }}</span>
+                        <span class="font-medium text-gray-900"
+                          >RM{{ formatPriceWhole(effectiveDepositAmount) }}</span
+                        >
+                      </div>
+                    </template>
+                    <p
+                      class="text-xs text-gray-500 -mt-0.5 pl-0 pr-2 text-right"
+                    >
+                      {{ t(depositExplanation.key, depositExplanation.params) }}
+                      <template
+                        v-if="depositAmount > 0 && effectiveDepositAmount < depositAmount"
+                      >
+                        · {{ t("depositDiscountNote") }}
+                      </template>
+                    </p>
                     <div class="flex justify-between text-sm">
                       <span class="text-gray-600">{{
                         t("balancePayAtStudio")
@@ -5529,7 +5788,7 @@ watch(
                         v-else
                         class="text-gray-600 text-sm font-medium flex items-center gap-2 pl-0.5"
                       >
-                        <div class="w-1.5 h-1.5 rounded-full bg-gray-300"></div>
+                        <span class="w-1.5 h-1.5 rounded-full bg-gray-300 inline-block"></span>
                         {{ selectedSlot?.start }} - {{ selectedSlot?.end }}
                       </p>
                     </div>
@@ -5643,23 +5902,34 @@ watch(
                     <!-- Applied Coupon -->
                     <div
                       v-if="validatedCoupon"
-                      class="bg-green-50 p-3 rounded-xl border border-green-100 flex items-center justify-between"
+                      class="bg-green-50 p-3 rounded-xl border border-green-100 space-y-2"
                     >
-                      <div class="flex items-center gap-2">
-                        <Ticket class="w-4 h-4 text-green-700" />
-                        <span class="font-bold text-green-700">{{
-                          validatedCoupon.code
-                        }}</span>
-                        <span class="text-green-600 text-sm"
-                          >(-RM{{ formatPriceWhole(discountAmount) }})</span
+                      <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                          <Ticket class="w-4 h-4 text-green-700" />
+                          <span class="font-bold text-green-700">{{
+                            validatedCoupon.code
+                          }}</span>
+                          <span class="text-green-600 text-sm"
+                            >(-RM{{ formatPriceWhole(discountAmount) }})</span
+                          >
+                        </div>
+                        <button
+                          @click="removeCoupon"
+                          class="p-1 hover:bg-green-100 rounded-full text-green-700 transition-colors"
                         >
+                          <X class="w-4 h-4" />
+                        </button>
                       </div>
-                      <button
-                        @click="removeCoupon"
-                        class="p-1 hover:bg-green-100 rounded-full text-green-700 transition-colors"
+                      <!-- Show which slots are eligible (single mode multi-slot - all slots share same date, so all or none) -->
+                      <div
+                        v-if="!isCartModeEnabled && singleModeSlotCount > 1 && validatedCoupon && discountAmount > 0"
+                        class="text-xs text-green-700 bg-green-100/50 rounded-lg p-2"
                       >
-                        <X class="w-4 h-4" />
-                      </button>
+                        <span class="font-medium">
+                          {{ t("appliedToAllSessions") }} {{ singleModeSlotCount }} {{ t("sessions") }}
+                        </span>
+                      </div>
                     </div>
                   </div>
 
@@ -5680,6 +5950,40 @@ watch(
                       <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">
                         {{ t("sessionsCalculation") }}
                       </p>
+                      <!-- Show slots with coupon badges -->
+                      <div
+                        v-if="validatedCoupon && singleModeSlotCount > 1"
+                        class="mb-2 pb-2 border-b border-gray-200"
+                      >
+                        <p class="text-xs text-gray-600 mb-1.5">
+                          {{ t("sessions") }}:
+                        </p>
+                        <div class="flex flex-wrap gap-1.5">
+                          <span
+                            v-for="(slot, idx) in (confirmedSlots.length > 0 ? confirmedSlots : selectedSlots)"
+                            :key="idx"
+                            class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs"
+                            :class="
+                              validatedCoupon && discountAmount > 0
+                                ? 'bg-green-100 text-green-700 font-medium'
+                                : 'bg-gray-100 text-gray-600'
+                            "
+                          >
+                            <span>{{ slot.start }} - {{ slot.end }}</span>
+                            <Ticket
+                              v-if="validatedCoupon && discountAmount > 0"
+                              class="w-3 h-3"
+                            />
+                          </span>
+                        </div>
+                        <p
+                          v-if="validatedCoupon && discountAmount > 0"
+                          class="text-xs text-green-700 mt-1.5 flex items-center gap-1"
+                        >
+                          <Ticket class="w-3 h-3" />
+                          {{ t("couponAppliedToAllSessions") }}
+                        </p>
+                      </div>
                       <template v-if="addonsApplyTo === 'all'">
                         <div class="flex justify-between text-sm">
                           <span class="text-gray-600">{{
@@ -5738,6 +6042,25 @@ watch(
                           >
                         </div>
                       </template>
+                      <!-- Discount per slot breakdown (if coupon applied) -->
+                      <div
+                        v-if="validatedCoupon && discountAmount > 0 && singleModeSlotCount > 1"
+                        class="pt-2 mt-2 border-t border-gray-200"
+                      >
+                        <div class="flex justify-between text-sm text-green-700">
+                          <span class="flex items-center gap-1">
+                            <Ticket class="w-3 h-3" />
+                            {{ t("discountPerSession") }}
+                          </span>
+                          <span class="font-medium">
+                            -RM{{ formatPriceWhole(Math.floor(discountAmount / singleModeSlotCount)) }}
+                          </span>
+                        </div>
+                        <div class="flex justify-between text-sm text-green-700 font-medium mt-1">
+                          <span>{{ t("totalDiscount") }}</span>
+                          <span>-RM{{ formatPriceWhole(discountAmount) }}</span>
+                        </div>
+                      </div>
                     </div>
 
                     <!-- 1. Subtotal before discount (only when coupon applied) -->
@@ -5779,14 +6102,62 @@ watch(
 
                     <!-- 4. Deposit mode: deposit (pay now) + balance (at studio) -->
                     <template v-if="paymentType === 'deposit'">
-                      <div class="flex justify-between text-sm">
-                        <span class="text-gray-600">{{
-                          t("depositPayNow")
-                        }}</span>
-                        <span class="font-medium text-gray-900"
-                          >RM{{ formatPriceWhole(effectiveDepositAmount) }}</span
+                      <!-- Per-slot deposit breakdown (single mode multi-slot) -->
+                      <div
+                        v-if="singleModeDepositPerSlot.length > 1"
+                        class="bg-gray-50/80 border border-gray-100 rounded-xl p-3 space-y-1.5"
+                      >
+                        <p class="text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          {{ t("depositPerSessionBreakdown") }}
+                        </p>
+                        <div
+                          v-for="(dep, idx) in singleModeDepositPerSlot"
+                          :key="idx"
+                          class="flex justify-between text-sm"
                         >
+                          <span class="text-gray-600">
+                            {{ t("sessionNumber", { n: idx + 1 }) }}
+                            <span class="text-gray-400 text-xs">
+                              ({{
+                                (confirmedSlots.length > 0 ? confirmedSlots : selectedSlots)[idx]?.start
+                              }}-{{
+                                (confirmedSlots.length > 0 ? confirmedSlots : selectedSlots)[idx]?.end
+                              }})
+                            </span>
+                          </span>
+                          <span class="font-medium text-gray-700">
+                            RM{{ formatPriceWhole(dep) }}
+                          </span>
+                        </div>
+                        <div class="flex justify-between text-sm pt-1.5 border-t border-gray-200 mt-1.5">
+                          <span class="text-gray-600 font-medium">{{
+                            t("depositPayNow")
+                          }}</span>
+                          <span class="font-bold text-gray-900">
+                            RM{{ formatPriceWhole(effectiveDepositAmount) }}
+                          </span>
+                        </div>
                       </div>
+                      <template v-else>
+                        <div class="flex justify-between text-sm">
+                          <span class="text-gray-600">{{
+                            t("depositPayNow")
+                          }}</span>
+                          <span class="font-medium text-gray-900"
+                            >RM{{ formatPriceWhole(effectiveDepositAmount) }}</span
+                          >
+                        </div>
+                      </template>
+                      <p
+                        class="text-xs text-gray-500 -mt-0.5 pl-0 pr-2 text-right"
+                      >
+                        {{ t(depositExplanation.key, depositExplanation.params) }}
+                        <template
+                          v-if="depositAmount > 0 && effectiveDepositAmount < depositAmount"
+                        >
+                          · {{ t("depositDiscountNote") }}
+                        </template>
+                      </p>
                       <div class="flex justify-between text-sm">
                         <span class="text-gray-600">{{
                           t("balancePayAtStudio")
@@ -6077,7 +6448,7 @@ watch(
               </div>
               <div v-if="recoveryState.selectedDate">
                 <span class="font-bold">{{ t("date") }}:</span>
-                {{ recoveryState.selectedDate }}
+                {{ formatDate(recoveryState.selectedDate) }}
               </div>
               <div
                 v-if="

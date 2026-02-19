@@ -3,6 +3,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from "vue";
 import { useRouter } from "vue-router";
 import { useStudioStore } from "@/stores/studio";
 import { useCurrency } from "@/composables/useCurrency";
+import { useDateFormat } from "@/composables/useDateFormat";
 import {
   ChevronLeft,
   Calendar,
@@ -23,6 +24,7 @@ import type { Theme, Addon } from "@/types";
 const router = useRouter();
 const studioStore = useStudioStore();
 const { formatPriceWhole } = useCurrency();
+const { formatDate } = useDateFormat();
 
 // Steps
 const currentStep = ref<number>(1);
@@ -679,7 +681,7 @@ const depositAmount = computed(() => {
                 </h3>
                 <div class="text-sm text-gray-500 mt-1 space-y-1">
                   <div class="flex items-center gap-2">
-                    <Calendar class="w-3 h-3" /> {{ item.date }}
+                    <Calendar class="w-3 h-3" /> {{ formatDate(item.date) }}
                     <Clock class="w-3 h-3 ml-2" /> {{ item.slot.start }} -
                     {{ item.slot.end }}
                   </div>
