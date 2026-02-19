@@ -57,6 +57,14 @@ function getSessionId(): string {
   return sessionId;
 }
 
+function getReferralCode(): string | undefined {
+  try {
+    return sessionStorage.getItem("referral_code") || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function initializeSession(): void {
   const sessionTimestamp = localStorage.getItem("booking_session_timestamp");
   const now = Date.now();
@@ -2237,6 +2245,7 @@ const nextStep = async () => {
                   ? validatedCoupon.value.code
                   : undefined,
               discount_amount: itemDiscount > 0 ? itemDiscount : undefined,
+              referral_code: getReferralCode(),
             };
           }),
         };
@@ -2436,6 +2445,7 @@ const nextStep = async () => {
               selected_addons: selectedAddonsForItem,
               coupon_code: validatedCoupon.value?.code,
               discount_amount: itemDiscount > 0 ? itemDiscount : undefined,
+              referral_code: getReferralCode(),
             };
           }),
         };
