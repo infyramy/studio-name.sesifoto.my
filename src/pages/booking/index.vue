@@ -2730,8 +2730,26 @@ const currentItemTotal = computed(() => {
   // Use the slot price (already includes special pricing from backend)
   // If the selected slot has a price from the backend, use that
   // Otherwise fall back to theme base_price
-  const sessionPrice =
-    selectedSlot.value?.price || selectedTheme.value.base_price;
+  let sessionPrice =
+    selectedSlot.value?.price ?? selectedTheme.value.base_price;
+
+  // Safeguard: when chip fee is absorbed, if slot price is exactly theme base + 100
+  // (single slot, no addons, no extra pax), treat as theme base so we don't show
+  // a spurious RM1 that isn't being charged (avoids RM49 theme showing RM50).
+  const base = selectedTheme.value.base_price;
+  const chipAbsorbed =
+    studioStore.websiteSettings?.chipFeeMode != null &&
+    String(studioStore.websiteSettings.chipFeeMode).toLowerCase() === "absorbed";
+  if (
+    chipAbsorbed &&
+    !isCartModeEnabled.value &&
+    extraPaxCost.value === 0 &&
+    addonsTotal.value === 0 &&
+    selectedSlot.value?.price != null &&
+    selectedSlot.value.price === base + 100
+  ) {
+    sessionPrice = base;
+  }
 
   // Add extras and addons on top of the (possibly modified) session price
   return sessionPrice + extraPaxCost.value + addonsTotal.value;
@@ -3071,12 +3089,27 @@ const effectiveDepositAmount = computed(() => {
 
 const paymentAmount = computed(() => {
   if (paymentType.value === "full") {
-    // For full payment, pay the entire discounted amount
-    return effectiveDepositAmount.value + effectiveBalance.value;
+    // For full payment, amount to pay is always the discounted grand total.
+    // Do not use deposit/balance split (theme deposit_amount is only for deposit mode).
+    return grandTotal.value;
   }
   // For deposit payment, only pay the effective deposit (after discount applied)
   return effectiveDepositAmount.value;
 });
+
+/** Only add RM1 CHIP fee when backend explicitly returns chipFeeMode 'on_top'. When 'absorbed' or undefined, no fee. */
+const chipFeeToAdd = computed(() => {
+  const mode = studioStore.websiteSettings?.chipFeeMode;
+  if (mode == null || String(mode).toLowerCase() !== "on_top") return 0;
+  const amount =
+    paymentType.value === "deposit"
+      ? effectiveDepositAmount.value
+      : effectiveDepositAmount.value + effectiveBalance.value;
+  return amount > 0 ? 100 : 0;
+});
+
+/** Amount to pay now (payment amount + CHIP fee when on_top). Single source of truth for summary and pay button. */
+const amountToPayNow = computed(() => paymentAmount.value + chipFeeToAdd.value);
 
 // Explains how deposit was calculated (for display under "Deposit (pay now)")
 const depositExplanation = computed(() => {
@@ -5639,12 +5672,7 @@ watch(
 
                   <!-- 5. Transaction fee (on_top) -->
                   <div
-                    v-if="
-                      studioStore.websiteSettings?.chipFeeMode === 'on_top' &&
-                      (paymentType === 'full'
-                        ? grandTotal > 0
-                        : effectiveDepositAmount + effectiveBalance > 0)
-                    "
+                    v-if="chipFeeToAdd > 0"
                     class="flex justify-between text-sm"
                   >
                     <span class="text-gray-600">{{ t("chipFee") }}</span>
@@ -5661,24 +5689,7 @@ watch(
                           {{ t("amountToPay") }}
                         </span>
                         <span class="text-2xl font-bold text-white">
-                          RM{{
-                            formatPriceWhole(
-                              paymentType === "deposit"
-                                ? effectiveDepositAmount +
-                                    (studioStore.websiteSettings?.chipFeeMode ===
-                                      "on_top" &&
-                                    effectiveDepositAmount + effectiveBalance > 0
-                                      ? 100
-                                      : 0)
-                                : effectiveDepositAmount +
-                                    effectiveBalance +
-                                    (studioStore.websiteSettings?.chipFeeMode ===
-                                      "on_top" &&
-                                    effectiveDepositAmount + effectiveBalance > 0
-                                      ? 100
-                                      : 0),
-                            )
-                          }}
+                          RM{{ formatPriceWhole(amountToPayNow) }}
                         </span>
                       </div>
                       <p
@@ -6170,12 +6181,7 @@ watch(
 
                     <!-- 5. Transaction fee (on_top) -->
                     <div
-                      v-if="
-                        studioStore.websiteSettings?.chipFeeMode === 'on_top' &&
-                        (paymentType === 'full'
-                          ? grandTotal > 0
-                          : effectiveDepositAmount + effectiveBalance > 0)
-                      "
+                      v-if="chipFeeToAdd > 0"
                       class="flex justify-between text-sm"
                     >
                       <span class="text-gray-600">{{ t("chipFee") }}</span>
@@ -6192,24 +6198,7 @@ watch(
                             {{ t("amountToPay") }}
                           </span>
                           <span class="text-2xl font-bold text-white">
-                            RM{{
-                              formatPriceWhole(
-                                paymentType === "deposit"
-                                  ? effectiveDepositAmount +
-                                      (studioStore.websiteSettings?.chipFeeMode ===
-                                        "on_top" &&
-                                      effectiveDepositAmount + effectiveBalance > 0
-                                        ? 100
-                                        : 0)
-                                  : effectiveDepositAmount +
-                                      effectiveBalance +
-                                      (studioStore.websiteSettings?.chipFeeMode ===
-                                        "on_top" &&
-                                      effectiveDepositAmount + effectiveBalance > 0
-                                        ? 100
-                                        : 0),
-                              )
-                            }}
+                            RM{{ formatPriceWhole(amountToPayNow) }}
                           </span>
                         </div>
                         <p
@@ -6251,12 +6240,7 @@ watch(
             <span class="font-bold text-xl sm:text-2xl">
               RM{{
                 formatPriceWhole(
-                  (grandTotal || 0) +
-                    (studioStore.websiteSettings?.chipFeeMode === "on_top" &&
-                    (grandTotal || 0) > 0 &&
-                    isSummaryStep
-                      ? 100
-                      : 0),
+                  isSummaryStep ? amountToPayNow : (grandTotal || 0),
                 )
               }}
             </span>
@@ -6335,44 +6319,10 @@ watch(
                 t("addToCart") || "Add to Cart"
               }}</span>
               <span v-else-if="isCartModeEnabled && currentStep === 7">
-                {{ t("pay") || "Bayar" }} RM{{
-                  formatPriceWhole(
-                    paymentType === "deposit"
-                      ? effectiveDepositAmount +
-                          (studioStore.websiteSettings?.chipFeeMode ===
-                            "on_top" &&
-                          effectiveDepositAmount + effectiveBalance > 0
-                            ? 100
-                            : 0)
-                      : effectiveDepositAmount +
-                          effectiveBalance +
-                          (studioStore.websiteSettings?.chipFeeMode ===
-                            "on_top" &&
-                          effectiveDepositAmount + effectiveBalance > 0
-                            ? 100
-                            : 0),
-                  )
-                }}
+                {{ t("pay") || "Bayar" }} RM{{ formatPriceWhole(amountToPayNow) }}
               </span>
               <span v-else-if="!isCartModeEnabled && currentStep === 6">
-                {{ t("pay") || "Bayar" }} RM{{
-                  formatPriceWhole(
-                    paymentType === "deposit"
-                      ? effectiveDepositAmount +
-                          (studioStore.websiteSettings?.chipFeeMode ===
-                            "on_top" &&
-                          effectiveDepositAmount + effectiveBalance > 0
-                            ? 100
-                            : 0)
-                      : effectiveDepositAmount +
-                          effectiveBalance +
-                          (studioStore.websiteSettings?.chipFeeMode ===
-                            "on_top" &&
-                          effectiveDepositAmount + effectiveBalance > 0
-                            ? 100
-                            : 0),
-                  )
-                }}
+                {{ t("pay") || "Bayar" }} RM{{ formatPriceWhole(amountToPayNow) }}
               </span>
               <span v-else>{{ t("next") }}</span>
               <Plus
