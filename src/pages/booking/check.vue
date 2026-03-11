@@ -337,10 +337,7 @@ const brandColor = computed(() => studioStore.studio?.brand_color || "#000000");
 </script>
 
 <template>
-  <div
-    class="min-h-screen relative text-gray-900 pb-20"
-    style="font-family: &quot;Bricolage Grotesque&quot;, sans-serif"
-  >
+  <div class="min-h-screen relative text-gray-900 pb-20">
     <!-- Content Wrapper -->
     <div class="relative z-20 max-w-2xl mx-auto">
       <!-- Header -->

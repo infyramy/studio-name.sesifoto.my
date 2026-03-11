@@ -3425,7 +3425,6 @@ watch(
 <template>
   <div
     class="min-h-screen relative text-gray-900 pb-20"
-    style="font-family: &quot;Bricolage Grotesque&quot;, sans-serif"
   >
     <!-- Rustic Background Images with Crossfade -->
     <!-- <div class="fixed inset-0 z-0 bg-black">

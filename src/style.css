@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+@import url('https://fonts.cdnfonts.com/css/neue-haas-grotesk-display-pro');
 
 @tailwind base;
 @tailwind components;
@@ -6,7 +6,7 @@
 
 /* Base styles */
 body {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: 'Neue Haas Grotesk Display Pro', sans-serif;                                        
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

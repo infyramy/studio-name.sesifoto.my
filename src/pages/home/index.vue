@@ -333,7 +333,6 @@ const adjustOpacity = (color: string | undefined, opacity: number) => {
   <div
     v-if="currentStyle === 'rustic' && !isLoading && isBookingOpen"
     class="min-h-screen w-full relative overflow-hidden flex flex-col font-sans rustic-container"
-    style="font-family: &quot;Bricolage Grotesque&quot;, sans-serif"
   >
     <!-- Rustic Background Images with Crossfade -->
     <div class="fixed inset-0 z-0 bg-black">
