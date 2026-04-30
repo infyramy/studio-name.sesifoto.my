@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted } from "vue";
+import { ref, watch, onMounted, onUnmounted, nextTick } from "vue";
 import {
   X,
   ChevronLeft,
@@ -11,6 +11,7 @@ const props = defineProps<{
   show: boolean;
   images: string[];
   initialIndex?: number;
+  title?: string;
   description?: string;
 }>();
 
@@ -21,12 +22,58 @@ const emit = defineEmits<{
 const currentIndex = ref(0);
 const isLoading = ref(true);
 
+function markLoaded() {
+  isLoading.value = false;
+}
+
+function markLoading() {
+  isLoading.value = true;
+}
+
+function preloadAndMaybeMarkLoaded(src: string | undefined) {
+  if (!src) return;
+
+  const img = new Image();
+  img.src = src;
+
+  // If the browser already has it (cache), complete is often true immediately.
+  // Still hop a tick so we don't fight with transition/mount timing.
+  if (img.complete) {
+    void nextTick(() => {
+      // Only clear loading if we're still on the same image
+      if (props.images[currentIndex.value] === src) markLoaded();
+    });
+    return;
+  }
+
+  img.onload = () => {
+    if (props.images[currentIndex.value] === src) markLoaded();
+  };
+  img.onerror = () => {
+    if (props.images[currentIndex.value] === src) markLoaded();
+  };
+
+  // Some browsers resolve decode() earlier than load events.
+  // Don't block on it; just use it as an extra signal.
+  if (typeof img.decode === "function") {
+    img.decode()
+      .then(() => {
+        if (props.images[currentIndex.value] === src) markLoaded();
+      })
+      .catch(() => {
+        // ignore decode failures; load/error will handle
+      });
+  }
+}
+
 watch(
   () => props.show,
   (newVal) => {
     if (newVal) {
       currentIndex.value = props.initialIndex || 0;
       document.body.style.overflow = "hidden";
+      markLoading();
+      preloadAndMaybeMarkLoaded(props.images[currentIndex.value]);
     } else {
       document.body.style.overflow = "";
     }
@@ -36,7 +83,18 @@ watch(
 watch(
   () => currentIndex.value,
   () => {
-    isLoading.value = true;
+    markLoading();
+    preloadAndMaybeMarkLoaded(props.images[currentIndex.value]);
+  },
+);
+
+watch(
+  () => props.images,
+  () => {
+    // If images list changes while open, re-evaluate loading state.
+    if (!props.show) return;
+    markLoading();
+    preloadAndMaybeMarkLoaded(props.images[currentIndex.value]);
   },
 );
 
@@ -156,18 +214,24 @@ const handleSwipe = () => {
                 :src="images[currentIndex]"
                 class="max-w-full max-h-full object-contain rounded-lg shadow-2xl user-select-none"
                 alt="Theme preview"
-                @load="isLoading = false"
+                @load="markLoaded"
+                @error="markLoaded"
               />
 
-              <!-- Description Overlay -->
+              <!-- Title/Description Overlay -->
               <div
-                v-if="description"
+                v-if="title || description"
                 class="absolute bottom-4 left-0 right-0 mx-auto max-w-2xl px-6 text-left z-20 pointer-events-none"
               >
                 <div
-                  class="bg-black/60 backdrop-blur-sm text-white/90 p-4 rounded-xl shadow-lg border border-white/10 inline-block text-sm sm:text-base leading-relaxed max-h-[20vh] overflow-y-auto pointer-events-auto"
+                  class="bg-black/60 backdrop-blur-sm text-white/90 p-4 rounded-xl shadow-lg border border-white/10 inline-block text-sm sm:text-base leading-relaxed max-h-[24vh] overflow-y-auto pointer-events-auto"
                 >
-                  {{ description }}
+                  <div v-if="title" class="font-bold text-white mb-1">
+                    {{ title }}
+                  </div>
+                  <div v-if="description" class="whitespace-pre-line">
+                    {{ description }}
+                  </div>
                 </div>
               </div>
             </div>

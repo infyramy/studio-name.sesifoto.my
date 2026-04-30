@@ -674,6 +674,7 @@ const galleryState = ref({
   show: false,
   images: [] as string[],
   initialIndex: 0,
+  title: "" as string,
   description: "" as string,
 });
 
@@ -683,6 +684,7 @@ const openGallery = (theme: Theme) => {
       show: true,
       images: theme.images,
       initialIndex: 0,
+      title: theme.name,
       description: theme.description_long || theme.description_short,
     };
   }
@@ -690,6 +692,17 @@ const openGallery = (theme: Theme) => {
 
 const closeGallery = () => {
   galleryState.value.show = false;
+};
+
+const openAddonImage = (addon: any) => {
+  if (!addon?.image) return;
+  galleryState.value = {
+    show: true,
+    images: [addon.image],
+    initialIndex: 0,
+    title: addon.name || "",
+    description: addon.description || "",
+  };
 };
 
 // Transition Direction
@@ -4374,7 +4387,9 @@ watch(
                   <div class="flex gap-4">
                     <!-- Image -->
                     <div
-                      class="w-20 h-20 rounded-xl bg-gray-100 flex-shrink-0 overflow-hidden"
+                      class="group/image relative w-20 h-20 rounded-xl bg-gray-100 flex-shrink-0 overflow-hidden"
+                      :class="addon.image ? 'cursor-zoom-in' : ''"
+                      @click.stop="openAddonImage(addon)"
                     >
                       <img
                         v-if="addon.image"
@@ -4387,6 +4402,34 @@ watch(
                         class="w-full h-full flex items-center justify-center text-gray-300"
                       >
                         <ImageIcon class="w-6 h-6" />
+                      </div>
+
+                      <!-- Hover Overlay -->
+                      <div
+                        v-if="addon.image"
+                        class="absolute inset-0 bg-black/10 opacity-0 group-hover/image:opacity-100 flex items-center justify-center transition-all duration-300"
+                      >
+                        <div
+                          class="bg-white/90 p-1.5 rounded-full shadow-sm backdrop-blur-sm transform scale-75 group-hover/image:scale-100 transition-all duration-300"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="16"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="w-3.5 h-3.5 text-gray-900"
+                          >
+                            <polyline points="15 3 21 3 21 9" />
+                            <polyline points="9 21 3 21 3 15" />
+                            <line x1="21" x2="14" y1="3" y2="10" />
+                            <line x1="3" x2="10" y1="21" y2="14" />
+                          </svg>
+                        </div>
                       </div>
                     </div>
 
@@ -6573,6 +6616,7 @@ watch(
       :show="galleryState.show"
       :images="galleryState.images"
       :initialIndex="galleryState.initialIndex"
+      :title="galleryState.title"
       :description="galleryState.description"
       @close="closeGallery"
     />

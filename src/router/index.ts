@@ -6,11 +6,19 @@ const routes: RouteRecordRaw[] = [
   {
     path: "/",
     name: "home",
-    component: () => import("@/pages/home/index.vue"),
+    component: () => import("@/pages/home/index-new.vue"),
     meta: {
-      title: "Tempah Sesi Raya Anda",
+      title: "Home",
     },
   },
+  // {
+  //   path: "/home-new",
+  //   name: "home-new",
+  //   component: () => import("@/pages/home/index-new.vue"),
+  //   meta: {
+  //     title: "Home",
+  //   },
+  // },
   {
     path: "/theme/:themeId",
     name: "theme-details",
@@ -27,6 +35,7 @@ const routes: RouteRecordRaw[] = [
       title: "Tempahan",
     },
   },
+
   {
     path: "/booking-cart",
     name: "booking-cart",

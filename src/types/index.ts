@@ -67,6 +67,7 @@ export interface WebsiteSettings {
   bookingWindowEnd?: string;
   chipFeeMode?: "on_top" | "absorbed";
   heroConfig?: HeroStyleConfig;
+  landingPageConfig?: Record<string, unknown>;
 }
 
 // Theme Types

@@ -242,6 +242,7 @@ export const api = {
       bookingWindowStart: data.bookingWindowStart,
       bookingWindowEnd: data.bookingWindowEnd,
       chipFeeMode: data.chipFeeMode as "on_top" | "absorbed" | undefined,
+      landingPageConfig: data.landingPageConfig || undefined,
       heroConfig: data.heroConfig
         ? {
             styleKey: data.heroConfig.styleKey as "rustic" | "modern" | "luxe",
