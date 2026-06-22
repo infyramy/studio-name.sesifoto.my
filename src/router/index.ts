@@ -6,19 +6,11 @@ const routes: RouteRecordRaw[] = [
   {
     path: "/",
     name: "home",
-    component: () => import("@/pages/home/index-new.vue"),
+    component: () => import("@/pages/landing/index.vue"),
     meta: {
       title: "Home",
     },
   },
-  // {
-  //   path: "/home-new",
-  //   name: "home-new",
-  //   component: () => import("@/pages/home/index-new.vue"),
-  //   meta: {
-  //     title: "Home",
-  //   },
-  // },
   {
     path: "/theme/:themeId",
     name: "theme-details",
@@ -69,14 +61,6 @@ const routes: RouteRecordRaw[] = [
     },
   },
   {
-    path: "/lookup",
-    name: "lookup",
-    component: () => import("@/pages/home/lookup.vue"),
-    meta: {
-      title: "Semak Tempahan",
-    },
-  },
-  {
     path: "/studio-not-found",
     name: "studio-not-found",
     component: () => import("@/pages/studio-not-found.vue"),
@@ -105,11 +89,9 @@ const router = createRouter({
   },
 });
 
-// Global navigation guard to load studio data
 router.beforeEach(async (to, _from, next) => {
   const studioStore = useStudioStore();
 
-  // Check for referral code in query parameter (e.g., ?r=REFCODE123)
   if (to.query.r) {
     try {
       const referralCode = (to.query.r as string).toUpperCase();
@@ -122,32 +104,27 @@ router.beforeEach(async (to, _from, next) => {
     }
   }
 
-  // Skip studio check for studio-not-found and not-found pages
   if (to.name === "studio-not-found" || to.name === "not-found") {
     document.title = (to.meta.title as string) || "SESIFOTO";
     next();
     return;
   }
 
-  // Load studio data if not already loaded
   if (!studioStore.isLoaded && !studioStore.loading) {
     try {
       await studioStore.loadStudio();
     } catch (error) {
       console.error("Failed to load studio:", error);
-      // Redirect to studio not found page if studio loading fails
       next({ name: "studio-not-found" });
       return;
     }
   }
 
-  // If studio failed to load (store has error state), redirect
   if (!studioStore.studio && studioStore.isLoaded) {
     next({ name: "studio-not-found" });
     return;
   }
 
-  // Store studio slug in sessionStorage to preserve context across navigation
   if (studioStore.studio?.slug) {
     try {
       sessionStorage.setItem("current_studio_slug", studioStore.studio.slug);
@@ -156,7 +133,6 @@ router.beforeEach(async (to, _from, next) => {
     }
   }
 
-  // Set page title
   const defaultTitle = studioStore.studio?.name || "SESIFOTO";
   document.title = to.meta.title
     ? `${to.meta.title} | ${defaultTitle}`

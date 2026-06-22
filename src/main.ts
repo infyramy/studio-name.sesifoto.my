@@ -79,8 +79,14 @@ watch(
   () => studioStore.studio,
   (studio) => {
     if (studio) {
-      // Update document title
-      document.title = studio.name;
+      const onLandingRoute =
+        router.currentRoute.value.name === "home" ||
+        router.currentRoute.value.path === "/";
+
+      // Landing page meta composable owns title/OG on home route
+      if (!onLandingRoute) {
+        document.title = studio.name;
+      }
 
       // Update favicon
       const favicon = document.querySelector(

@@ -3,6 +3,7 @@ export default {
   content: [
     "./index.html",
     "./src/**/*.{vue,js,ts,jsx,tsx}",
+    "../packages/landing-page-ui/src/**/*.{vue,ts}",
   ],
   theme: {
     extend: {

@@ -36,24 +36,6 @@ export interface StudioSettings {
   chip_fee_mode: "on_top" | "absorbed"; // How the CHIP fee is handled
 }
 
-// Hero Style Configuration (from backend)
-export interface HeroStyleConfig {
-  styleKey: "rustic" | "modern" | "luxe";
-  heading: string;
-  headingColor: string;
-  highlightText?: string;
-  highlightColor?: string;
-  testimonial?: string;
-  supportingColor?: string;
-  buttonBgColor: string;
-  buttonTextColor: string;
-  cardOpacity?: number;
-  backgroundColor?: string;
-  primaryTextColor?: string;
-  invertTheme?: boolean;
-  backgroundImages: string[];
-}
-
 // Website Settings (from backend)
 export interface WebsiteSettings {
   bookingOpen: boolean;
@@ -62,12 +44,9 @@ export interface WebsiteSettings {
   cartModeEnabled: boolean;
   allowMultipleSlot: boolean;
   cartHoldDuration: number;
-  selectedStyle: "rustic" | "modern" | "luxe";
   bookingWindowStart?: string;
   bookingWindowEnd?: string;
   chipFeeMode?: "on_top" | "absorbed";
-  heroConfig?: HeroStyleConfig;
-  landingPageConfig?: Record<string, unknown>;
 }
 
 // Theme Types

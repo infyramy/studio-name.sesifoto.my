@@ -25,12 +25,6 @@ export const useStudioStore = defineStore("studio", () => {
     addons.value.filter((a) => a.status === "active")
   );
 
-  // Hero config from website settings
-  const heroConfig = computed(() => websiteSettings.value?.heroConfig || null);
-  const selectedStyle = computed(
-    () => websiteSettings.value?.selectedStyle || "rustic"
-  );
-
   // Actions
   async function loadStudio(slug?: string) {
     loading.value = true;
@@ -129,8 +123,6 @@ export const useStudioStore = defineStore("studio", () => {
     brandColor,
     activeThemes,
     activeAddons,
-    heroConfig,
-    selectedStyle,
 
     // Actions
     loadStudio,

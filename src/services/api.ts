@@ -228,7 +228,7 @@ export const api = {
     return true;
   },
 
-  // Get website settings with hero style config
+  // Get website settings
   async getWebsiteSettings(slug: string): Promise<WebsiteSettings> {
     const data = await apiFetch(`/public/studio/${slug}/website-settings`);
     return {
@@ -238,30 +238,26 @@ export const api = {
       cartModeEnabled: data.cartModeEnabled,
       cartHoldDuration: data.cartHoldDuration,
       allowMultipleSlot: data.allowMultipleSlot,
-      selectedStyle: data.selectedStyle as "rustic" | "modern" | "luxe",
       bookingWindowStart: data.bookingWindowStart,
       bookingWindowEnd: data.bookingWindowEnd,
       chipFeeMode: data.chipFeeMode as "on_top" | "absorbed" | undefined,
-      landingPageConfig: data.landingPageConfig || undefined,
-      heroConfig: data.heroConfig
-        ? {
-            styleKey: data.heroConfig.styleKey as "rustic" | "modern" | "luxe",
-            heading: data.heroConfig.heading,
-            headingColor: data.heroConfig.headingColor,
-            highlightText: data.heroConfig.highlightText,
-            highlightColor: data.heroConfig.highlightColor,
-            testimonial: data.heroConfig.testimonial,
-            supportingColor: data.heroConfig.supportingColor,
-            buttonBgColor: data.heroConfig.buttonBgColor,
-            buttonTextColor: data.heroConfig.buttonTextColor,
-            cardOpacity: data.heroConfig.cardOpacity,
-            backgroundColor: data.heroConfig.backgroundColor,
-            primaryTextColor: data.heroConfig.primaryTextColor,
-            invertTheme: data.heroConfig.invertTheme,
-            backgroundImages: data.heroConfig.backgroundImages || [],
-          }
-        : undefined,
     };
+  },
+
+  async getLandingPage(
+    slug: string,
+    pageSlug?: string,
+  ): Promise<{
+    id: string;
+    slug: string;
+    title: string;
+    type: "studio_booking" | "crm_inquiry" | "general";
+    config: Record<string, unknown>;
+    isDefault: boolean;
+    products: { studio: boolean; crm: boolean };
+  }> {
+    const query = pageSlug ? `?pageSlug=${encodeURIComponent(pageSlug)}` : "";
+    return apiFetch(`/public/studio/${slug}/landing-page${query}`);
   },
 
   // ===== Theme APIs =====
@@ -571,68 +567,6 @@ export const api = {
       updated_at: new Date().toISOString(),
       addons: [],
     }));
-  },
-
-  async getBookingByIdAndPhone(
-    bookingNumber: string,
-    phone: string,
-  ): Promise<Booking | null> {
-    try {
-      const data = await apiFetch("/public/bookings/lookup", {
-        query: { bookingNumber, phone },
-      });
-
-      return {
-        id: data.id,
-        studio_id: "",
-        booking_number: data.bookingNumber,
-        theme_id: "",
-        theme: {
-          id: "",
-          studio_id: "",
-          name: data.themeName,
-          description_short: "",
-          description_long: "",
-          images: [],
-          base_price: 0,
-          base_pax: 0,
-          extra_pax_price: 0,
-          duration_minutes: 0,
-          buffer_minutes: null,
-          strict_max_people: false,
-          max_total_people: 0,
-          status: "active",
-          sort_order: 0,
-          created_at: "",
-          updated_at: "",
-        },
-        booking_date: data.bookingDate,
-        start_time: data.startTime,
-        end_time: data.endTime,
-        pax_count: 0,
-        customer_name: data.customerName,
-        customer_phone: data.customerPhone,
-        customer_email: "",
-        customer_notes: "",
-        consent_tc: true,
-        consent_marketing: false,
-        base_price: 0,
-        extra_pax_fee: 0,
-        addons_total: 0,
-        special_pricing_applied: 0,
-        total_amount: data.totalAmount,
-        deposit_amount: data.depositAmount,
-        balance_amount: data.balanceAmount,
-        payment_status: data.paymentStatus as any,
-        booking_status: data.bookingStatus as any,
-        cart_hold_expires_at: data.cartHoldExpiresAt || null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        addons: [],
-      };
-    } catch {
-      return null;
-    }
   },
 
   // Get booking by booking number (for success page)
