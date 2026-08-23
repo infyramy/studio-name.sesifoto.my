@@ -1,4 +1,26 @@
-import type { LandingPageTheme, ThemeMode } from "./types";
+import type { FaqItem, LandingPageTheme, SiteNavLink, ThemeMode } from "./types";
+import { createDefaultHomeMarketingContent } from "./home-marketing/presets";
+
+export const DEFAULT_HOME_FAQS: FaqItem[] = [
+  {
+    id: "faq-1",
+    question: "How far in advance should we book?",
+    answer:
+      "We recommend booking 6–12 months before your wedding date, especially for peak season weekends.",
+  },
+  {
+    id: "faq-2",
+    question: "Do you travel outside Kuala Lumpur?",
+    answer:
+      "Yes. We cover weddings across Malaysia. Travel fees may apply depending on location.",
+  },
+  {
+    id: "faq-3",
+    question: "When will we receive our photos and video?",
+    answer:
+      "Preview galleries are typically ready within 4–6 weeks. Full delivery timelines depend on your package.",
+  },
+];
 
 export const COLOR_PRESETS = [
   {
@@ -134,17 +156,44 @@ export const GOOGLE_FONTS = [
 
 export const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 
-export function createDefaultTheme(): LandingPageTheme {
+export function createDefaultSiteNav(): {
+  siteNavLeft: SiteNavLink[];
+  siteNavRight: SiteNavLink[];
+  footerNav: SiteNavLink[];
+} {
   return {
-    presetName: "Dark Minimal",
-    primaryColor: "#ffffff",
-    primaryTextColor: "#000000",
-    secondaryColor: "#050505",
-    secondaryTextColor: "#ffffff",
-    mode: "dark",
+    siteNavLeft: [
+      { id: "nav-about", label: "Tentang Kami", url: "/about-us" },
+      { id: "nav-portfolio", label: "Portfolio", url: "/portfolio" },
+      { id: "nav-packages", label: "Pakej", url: "/services" },
+    ],
+    siteNavRight: [
+      { id: "nav-contact", label: "Hubungi Kami", url: "/lead-form" },
+      { id: "nav-faq", label: "Soalan Lazim", url: "/#faq" },
+    ],
+    footerNav: [
+      { id: "footer-about", label: "Tentang Kami", url: "/about-us" },
+      { id: "footer-portfolio", label: "Portfolio", url: "/portfolio" },
+      { id: "footer-packages", label: "Pakej", url: "/services" },
+      { id: "footer-contact", label: "Hubungi Kami", url: "/lead-form" },
+      { id: "footer-faq", label: "Soalan Lazim", url: "/#faq" },
+    ],
+  };
+}
+
+export function createDefaultTheme(): LandingPageTheme {
+  const siteNav = createDefaultSiteNav();
+  const marketing = createDefaultHomeMarketingContent();
+  return {
+    presetName: "Sand Light",
+    primaryColor: "#1a1a1a",
+    primaryTextColor: "#ffffff",
+    secondaryColor: "#f5f2eb",
+    secondaryTextColor: "#1a1a1a",
+    mode: "light",
     titleFont: "Cormorant Garamond",
     bodyFont: "Inter",
-    radius: "rounded-2xl",
+    radius: "rounded-none",
     showSocials: true,
     showButtons: true,
     showBookNowButton: true,
@@ -153,6 +202,8 @@ export function createDefaultTheme(): LandingPageTheme {
     socialInstagram: "https://instagram.com",
     socialTiktok: "https://tiktok.com",
     socialFacebook: "https://facebook.com",
+    socialPinterest: "",
+    socialThreads: "",
     socialWebsite: "https://sesifoto.my",
     showGallery: true,
     showMaps: true,
@@ -163,21 +214,22 @@ export function createDefaultTheme(): LandingPageTheme {
       "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ4LrfZrIU_TSCVQRbm7mx1JHv8KfGe6-d3aQ&s",
     logoStyle: "square",
     studioName: "Sesifoto Studio",
-    mainTitle: "Book your Raya photo session in under a minute",
+    mainTitle: marketing.heroTagline,
     ssmNumber: "1402334A",
-    description:
-      "Capture meaningful Raya moments with a professional photography experience.",
+    description: marketing.heroSubtitle,
     emergencyPhoneType: "custom",
     emergencyCustomPhone: "+60123456789",
     emergencyMethods: "whatsapp",
     emergencyText: "Need help? Contact us",
     heroUrl:
-      "https://images.unsplash.com/photo-1500964757637-c85e8a162699?q=80&w=3003&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1519741497674-611481863552?q=80&w=1200&auto=format&fit=crop",
     mapAddress:
       "8B, 1, Jalan Nirwana 1/1, Taman Nirwana, 68000 Ampang Jaya, Selangor",
+    mapsLink: "",
+    contactEmail: "",
     galleryImages: [],
     sectionOrder: ["gallery", "testimonials", "maps", "faq", "emergency", "footer"],
-    faqs: [],
+    faqs: DEFAULT_HOME_FAQS.map((f) => ({ ...f })),
     seoTitle: "",
     seoDescription: "",
     ogImageUrl: "",
@@ -185,16 +237,25 @@ export function createDefaultTheme(): LandingPageTheme {
     testimonials: [],
     showCustomLinks: false,
     customLinks: [],
+    ...siteNav,
+    footerCopyright: "© Sesifoto Studio. All rights reserved.",
+    showLanguageSwitcher: true,
+    ...marketing,
   };
 }
 
 export type StudioDefaults = {
   name?: string;
   logoUrl?: string;
+  email?: string;
   instagram?: string;
   facebook?: string;
   tiktok?: string;
+  pinterest?: string;
+  threads?: string;
   address?: string;
+  mapsLink?: string;
   ssm?: string;
   whatsapp?: string;
+  description?: string;
 };

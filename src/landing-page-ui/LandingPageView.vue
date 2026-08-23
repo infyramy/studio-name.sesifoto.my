@@ -8,6 +8,7 @@ import {
   Globe,
   HelpCircle,
   Instagram,
+  Mail,
   MapPin,
   MessageCircle,
   Navigation,
@@ -149,6 +150,29 @@ const whatsappHref = computed(() => {
   const digits = phone.replace(/[^\d]/g, "");
   if (!digits) return undefined;
   return `https://wa.me/${digits}`;
+});
+
+const mapQuery = computed(() => {
+  const address = props.config.mapAddress?.trim();
+  if (address) return address;
+  const mapsLink = safeHttpUrl(props.config.mapsLink);
+  if (!mapsLink) return "";
+  try {
+    const url = new URL(mapsLink);
+    const q = url.searchParams.get("q");
+    if (q?.trim()) return q.trim();
+  } catch {
+    // fall through
+  }
+  return mapsLink;
+});
+
+const googleMapsHref = computed(() => {
+  const link = safeHttpUrl(props.config.mapsLink);
+  if (link) return link;
+  const query = mapQuery.value;
+  if (!query) return undefined;
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
 });
 
 const callHref = computed(() => {
@@ -798,7 +822,7 @@ function textEditClass() {
                   frameborder="0"
                   style="border: 0"
                   :src="`https://maps.google.com/maps?q=${encodeURIComponent(
-                    config.mapAddress || '',
+                    mapQuery,
                   )}&t=&z=15&ie=UTF8&iwloc=&output=embed`"
                   title="Google Maps Location"
                 />
@@ -806,7 +830,7 @@ function textEditClass() {
               <div class="flex gap-2 pt-1 pb-1">
                 <a
                   :href="`https://waze.com/ul?q=${encodeURIComponent(
-                    config.mapAddress || '',
+                    mapQuery,
                   )}`"
                   target="_blank"
                   rel="noopener noreferrer"
@@ -821,9 +845,7 @@ function textEditClass() {
                   {{ t("waze") }}
                 </a>
                 <a
-                  :href="`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                    config.mapAddress || '',
-                  )}`"
+                  :href="googleMapsHref"
                   target="_blank"
                   rel="noopener noreferrer"
                   class="flex-1 border py-3 rounded-xl flex items-center justify-center gap-2 text-sm font-medium transition-colors"
@@ -989,7 +1011,45 @@ function textEditClass() {
                       class="text-[10px] font-normal opacity-70"
                     >{{ config.ssmNumber }}</span>
                   </p>
-                  <p v-if="config.mapAddress">{{ config.mapAddress }}</p>
+                  <p
+                    v-if="config.mapAddress"
+                    class="mt-1 flex items-start gap-1.5"
+                  >
+                    <MapPin class="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    <span>{{ config.mapAddress }}</span>
+                  </p>
+                  <div
+                    class="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1"
+                  >
+                    <a
+                      v-if="whatsappHref"
+                      :href="whatsappHref"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="inline-flex items-center gap-1 hover:underline"
+                    >
+                      <MessageCircle class="h-3.5 w-3.5 shrink-0" />
+                      <span>{{ emergencyPhone }}</span>
+                    </a>
+                    <a
+                      v-if="config.contactEmail"
+                      :href="`mailto:${config.contactEmail}`"
+                      class="inline-flex items-center gap-1 hover:underline"
+                    >
+                      <Mail class="h-3.5 w-3.5 shrink-0" />
+                      <span>{{ config.contactEmail }}</span>
+                    </a>
+                    <a
+                      v-if="googleMapsHref"
+                      :href="googleMapsHref"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="inline-flex items-center gap-1 hover:underline"
+                    >
+                      <MapPin class="h-3.5 w-3.5 shrink-0" />
+                      <span>Google Maps</span>
+                    </a>
+                  </div>
                 </div>
               </div>
 

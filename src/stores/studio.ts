@@ -2,7 +2,7 @@ import { defineStore } from "pinia";
 import { ref, computed } from "vue";
 import type { Studio, Theme, Addon, Language, WebsiteSettings } from "@/types";
 import { api } from "@/services/api";
-import { getStudioSlugFromSubdomain } from "@/utils/slug";
+import { getStudioSlugFromHost } from "@/utils/slug";
 
 export const useStudioStore = defineStore("studio", () => {
   // State
@@ -32,7 +32,7 @@ export const useStudioStore = defineStore("studio", () => {
 
     try {
       // Use provided slug or detect from subdomain
-      const studioSlug = slug || getStudioSlugFromSubdomain();
+      const studioSlug = slug || (await getStudioSlugFromHost());
 
       if (!studioSlug) {
         throw new Error("Studio tidak dijumpai. Sila semak URL anda.");

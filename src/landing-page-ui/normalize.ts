@@ -1,13 +1,17 @@
 import { createDefaultTheme, type StudioDefaults } from "./presets";
+import { normalizeHomeMarketingContent } from "./home-marketing/normalize";
+import { applyStudioProfileOverrides } from "./studio-profile-merge";
 import { safeHttpUrl, safeHttpsUrl } from "./useLandingPageStyles";
 import {
   SECTION_KEYS,
   type CustomLinkItem,
+  type FaqItem,
   type LandingPageConfig,
   type LandingPageTheme,
   type LandingPageType,
   type ProductEntitlements,
   type SectionKey,
+  type SiteNavLink,
   type TestimonialItem,
 } from "./types";
 
@@ -21,6 +25,27 @@ export function normalizeSectionOrder(input: unknown): SectionKey[] {
     if (!filtered.includes(k)) filtered.push(k);
   }
   return filtered;
+}
+
+function normalizeFaqs(input: unknown): FaqItem[] {
+  if (!Array.isArray(input)) return [];
+  return input
+    .map((row): FaqItem | null => {
+      if (!row || typeof row !== "object") return null;
+      const item = row as Record<string, unknown>;
+      const question =
+        typeof item.question === "string" ? item.question.trim().slice(0, 300) : "";
+      const answer =
+        typeof item.answer === "string" ? item.answer.trim().slice(0, 2000) : "";
+      if (!question && !answer) return null;
+      const id =
+        typeof item.id === "string" && item.id.trim()
+          ? item.id.trim()
+          : `faq-${Math.random().toString(36).slice(2, 9)}`;
+      return { id, question, answer };
+    })
+    .filter((item): item is FaqItem => item !== null)
+    .slice(0, 5);
 }
 
 function applyLegacyButtonToggles(
@@ -86,20 +111,28 @@ export function normalizeLandingPageConfig(
 ): LandingPageTheme {
   const raw = saved && typeof saved === "object" ? saved : {};
   const studio = studioDefaults ?? {};
+  const factory = createDefaultTheme();
 
-  const defaults = createDefaultTheme();
+  const defaults = { ...factory };
   defaults.studioName = studio.name || defaults.studioName;
   defaults.logoUrl = studio.logoUrl || defaults.logoUrl;
   defaults.socialInstagram = studio.instagram || defaults.socialInstagram;
   defaults.socialFacebook = studio.facebook || defaults.socialFacebook;
   defaults.socialTiktok = studio.tiktok || defaults.socialTiktok;
+  defaults.socialPinterest = studio.pinterest || defaults.socialPinterest;
+  defaults.socialThreads = studio.threads || defaults.socialThreads;
   defaults.mapAddress = studio.address || defaults.mapAddress;
+  defaults.mapsLink = studio.mapsLink || defaults.mapsLink;
+  defaults.contactEmail = studio.email || defaults.contactEmail;
   defaults.ssmNumber = studio.ssm || defaults.ssmNumber;
-  if (studio.whatsapp && defaults.emergencyPhoneType === "system") {
+  defaults.description = studio.description || defaults.description;
+  if (studio.whatsapp) {
     defaults.emergencyCustomPhone = studio.whatsapp;
   }
 
   const theme: LandingPageTheme = { ...defaults, ...raw };
+
+  applyStudioProfileOverrides(theme, raw, studio, factory);
 
   if (typeof theme.showButtons !== "boolean") {
     theme.showButtons = true;
@@ -128,6 +161,9 @@ export function normalizeLandingPageConfig(
   }
 
   if (!Array.isArray(theme.faqs)) theme.faqs = [];
+  const faqs = normalizeFaqs(theme.faqs);
+  theme.faqs =
+    faqs.length > 0 ? faqs : defaults.faqs.map((item) => ({ ...item }));
   if (!Array.isArray(theme.galleryImages)) {
     const legacyUrl = (raw as { pilihanSetUrl?: string }).pilihanSetUrl;
     theme.galleryImages =
@@ -157,6 +193,21 @@ export function normalizeLandingPageConfig(
 
   theme.testimonials = normalizeTestimonials(theme.testimonials);
   theme.customLinks = normalizeCustomLinks(theme.customLinks);
+  theme.siteNavLeft = normalizeSiteNavLinks(theme.siteNavLeft, defaults.siteNavLeft);
+  theme.siteNavRight = normalizeSiteNavLinks(theme.siteNavRight, defaults.siteNavRight);
+  theme.footerNav = normalizeSiteNavLinks(theme.footerNav, defaults.footerNav);
+  theme.footerCopyright =
+    typeof theme.footerCopyright === "string"
+      ? theme.footerCopyright.trim().slice(0, 200)
+      : defaults.footerCopyright;
+  theme.showLanguageSwitcher = coerceBoolean(
+    theme.showLanguageSwitcher,
+    defaults.showLanguageSwitcher,
+  );
+
+  Object.assign(theme, normalizeHomeMarketingContent(raw));
+
+  theme.showFaq = theme.showHomeFaq;
 
   return theme;
 }
@@ -180,6 +231,38 @@ function normalizeTestimonials(input: unknown): TestimonialItem[] {
     })
     .filter((item): item is TestimonialItem => item !== null)
     .slice(0, 3);
+}
+
+function safeNavUrl(value: unknown): string {
+  if (typeof value !== "string") return "";
+  const trimmed = value.trim().slice(0, 500);
+  if (!trimmed) return "";
+  if (trimmed.startsWith("/") || trimmed.startsWith("#")) return trimmed;
+  return safeHttpsUrl(trimmed) ?? "";
+}
+
+function normalizeSiteNavLinks(
+  input: unknown,
+  fallback: SiteNavLink[],
+): SiteNavLink[] {
+  if (!Array.isArray(input) || input.length === 0) {
+    return fallback.map((l) => ({ ...l }));
+  }
+  return input
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const row = item as Record<string, unknown>;
+      const label = typeof row.label === "string" ? row.label.trim().slice(0, 60) : "";
+      const url = safeNavUrl(row.url);
+      if (!label || !url) return null;
+      const id =
+        typeof row.id === "string" && row.id.trim()
+          ? row.id
+          : `nav-${Math.random().toString(36).slice(2, 9)}`;
+      return { id, label, url };
+    })
+    .filter((item): item is SiteNavLink => item !== null)
+    .slice(0, 8);
 }
 
 function normalizeCustomLinks(input: unknown): CustomLinkItem[] {
@@ -242,7 +325,7 @@ export function getOrderedSections(
   const enabled: Record<SectionKey, boolean> = {
     gallery: theme.showGallery && galleryImages.length > 0,
     testimonials: theme.showTestimonials && hasTestimonials,
-    maps: theme.showMaps && !!theme.mapAddress,
+    maps: theme.showMaps && (!!theme.mapAddress?.trim() || !!theme.mapsLink?.trim()),
     faq: theme.showFaq && hasFaq,
     emergency: theme.showEmergency && hasEmergency,
     footer: theme.showFooter,

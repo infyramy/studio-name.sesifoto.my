@@ -1,9 +1,35 @@
-// Keep in sync with frontend/src/landing-page-ui
+// Keep in sync with public/src/landing-page-ui
 export * from "./types";
 export * from "./presets";
 export * from "./i18n";
+export * from "./studio-profile-merge";
 export * from "./normalize";
 export * from "./useLandingPageStyles";
 export * from "./meta";
 export * from "./reserved-slugs";
+export * from "./portfolio/types";
+export * from "./portfolio/presets";
+export * from "./portfolio/normalize";
+export * from "./services/types";
+export * from "./services/presets";
+export * from "./services/normalize";
+export * from "./lead-form/types";
+export * from "./lead-form/presets";
+export * from "./lead-form/normalize";
+export * from "./lead-form/i18n";
+export * from "./site-nav";
+export * from "./home-marketing/types";
+export * from "./home-marketing/presets";
+export * from "./home-marketing/normalize";
+export * from "./home-marketing/cta-presets";
+export * from "./home-marketing/section-order";
+export * from "./about/types";
+export * from "./about/presets";
+export * from "./about/normalize";
 export { default as LandingPageView } from "./LandingPageView.vue";
+export { default as MarketingHomePageView } from "./home-marketing/MarketingHomePageView.vue";
+export { default as PortfolioPageView } from "./portfolio/PortfolioPageView.vue";
+export { default as ServicesPageView } from "./services/ServicesPageView.vue";
+export { default as LeadFormPageView } from "./lead-form/LeadFormPageView.vue";
+export { default as AboutPageView } from "./about/AboutPageView.vue";
+export { default as SiteChrome } from "./portfolio/SiteChrome.vue";

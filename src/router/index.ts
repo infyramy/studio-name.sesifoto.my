@@ -12,6 +12,42 @@ const routes: RouteRecordRaw[] = [
     },
   },
   {
+    path: "/portfolio",
+    name: "portfolio",
+    component: () => import("@/pages/landing/PageView.vue"),
+    meta: {
+      title: "Portfolio",
+      pageSlug: "portfolio",
+    },
+  },
+  {
+    path: "/services",
+    name: "services",
+    component: () => import("@/pages/landing/PageView.vue"),
+    meta: {
+      title: "Services",
+      pageSlug: "services",
+    },
+  },
+  {
+    path: "/lead-form",
+    name: "lead-form",
+    component: () => import("@/pages/landing/PageView.vue"),
+    meta: {
+      title: "Lead form",
+      pageSlug: "lead-form",
+    },
+  },
+  {
+    path: "/about-us",
+    name: "about-us",
+    component: () => import("@/pages/landing/PageView.vue"),
+    meta: {
+      title: "About us",
+      pageSlug: "about-us",
+    },
+  },
+  {
     path: "/theme/:themeId",
     name: "theme-details",
     component: () => import("@/pages/theme/details.vue"),
@@ -67,6 +103,30 @@ const routes: RouteRecordRaw[] = [
     meta: {
       title: "Studio Not Found",
     },
+  },
+  {
+    path: "/portal-launch",
+    name: "portal-launch",
+    component: () => import("@/pages/portal-launch.vue"),
+    meta: { title: "SESIFOTO" },
+  },
+  {
+    path: "/client-portal/:jobId/start",
+    name: "client-portal-start",
+    component: () => import("@/pages/client-portal/[id].vue"),
+    meta: { title: "Client Portal" },
+  },
+  {
+    path: "/client-portal/:jobId/gallery/:galleryId",
+    name: "client-portal-gallery",
+    component: () => import("@/pages/client-portal/gallery/[galleryId].vue"),
+    meta: { title: "Gallery" },
+  },
+  {
+    path: "/client-portal/:jobId",
+    name: "client-portal",
+    component: () => import("@/pages/client-portal/[id].vue"),
+    meta: { title: "Client Portal" },
   },
   {
     path: "/:pathMatch(.*)*",

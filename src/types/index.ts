@@ -5,13 +5,16 @@ export interface Studio {
   name: string;
   owner_name: string;
   whatsapp: string;
+  email?: string;
   ssm?: string;
   instagram?: string;
   facebook?: string;
   tiktok?: string;
   pinterest?: string;
+  threads?: string;
   address: string;
   maps_link: string;
+  description?: string;
   logo_url: string;
   brand_color: string;
   default_language: "BM" | "EN";

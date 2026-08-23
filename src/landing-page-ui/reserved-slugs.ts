@@ -8,6 +8,12 @@ export const RESERVED_PAGE_SLUGS = [
   "payment",
   "lookup",
   "studio-not-found",
+  "portfolio",
+  "services",
+  "lead-form",
+  "about-us",
+  "client-portal",
+  "portal-launch",
 ] as const;
 
 export type ReservedPageSlug = (typeof RESERVED_PAGE_SLUGS)[number];

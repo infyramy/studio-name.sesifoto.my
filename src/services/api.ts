@@ -15,6 +15,7 @@ import type {
   BatchBookingRequest,
   BatchBookingItem,
 } from "@/types";
+import { getStudioSlugFromSubdomain } from "@/utils/slug";
 
 // API base URL - uses environment variable or defaults to localhost
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
@@ -29,31 +30,13 @@ const apiFetch = ofetch.create({
   retryDelay: 500,
 });
 
-// Helper to get studio slug
+// Helper to get studio slug (sync; custom domain slug cached in sessionStorage)
 const getStudioSlug = (): string => {
-  // Try to get from subdomain first
-  const hostname = window.location.hostname;
-  const parts = hostname.split(".");
-
-  // For production: studio-name.sesifoto.my
-  if (parts.length >= 3 && parts[1] === "sesifoto") {
-    return parts[0];
+  const slug = getStudioSlugFromSubdomain();
+  if (slug) {
+    return slug;
   }
 
-  // For development with query param: localhost:5173?studio=demo-studio
-  const urlParams = new URLSearchParams(window.location.search);
-  const studioParam = urlParams.get("studio");
-  if (studioParam) {
-    return studioParam;
-  }
-
-  // Try sessionStorage
-  const stored = sessionStorage.getItem("current_studio_slug");
-  if (stored) {
-    return stored;
-  }
-
-  // Default fallback for development
   return "demo-studio";
 };
 
@@ -64,14 +47,17 @@ const transformStudio = (data: any): Studio => ({
   name: data.name,
   owner_name: data.name, // Not provided by public API
   whatsapp: data.whatsapp || "",
+  email: data.email || "",
   ssm: data.ssm,
   instagram: data.instagram,
   facebook: data.facebook,
   tiktok: data.tiktok,
   pinterest: data.pinterest,
+  threads: data.threads,
   address: data.address || "",
   maps_link: data.mapsLink || "",
   logo_url: data.logoUrl || "",
+  description: data.description || "",
   brand_color: data.brandColor,
   default_language: data.defaultLanguage as "BM" | "EN",
   timezone: data.timezone,
@@ -255,9 +241,28 @@ export const api = {
     config: Record<string, unknown>;
     isDefault: boolean;
     products: { studio: boolean; crm: boolean };
+    siteStyle?: Record<string, unknown>;
   }> {
     const query = pageSlug ? `?pageSlug=${encodeURIComponent(pageSlug)}` : "";
-    return apiFetch(`/public/studio/${slug}/landing-page${query}`);
+    return apiFetch(`/public/studio/${slug}/page${query}`);
+  },
+
+  async submitLead(
+    slug: string,
+    payload: {
+      contactName: string;
+      contactPhone: string;
+      eventDate?: string;
+      eventType?: string;
+      serviceInterest: "photo" | "video" | "photo_video";
+      venue?: string;
+      notes?: string;
+    },
+  ): Promise<{ id: string }> {
+    return apiFetch(`/public/studio/${slug}/leads`, {
+      method: "POST",
+      body: payload,
+    });
   },
 
   // ===== Theme APIs =====

@@ -2,100 +2,183 @@
  * Extract studio slug from subdomain
  * Example: "najiahstudio.sesifoto.my" => "najiahstudio"
  */
-export function getStudioSlugFromSubdomain(): string | null {
-  const hostname = window.location.hostname;
 
-  // For local development
-  if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    // Check for URL parameter override for testing
-    const urlParams = new URLSearchParams(window.location.search);
-    const studioParam = urlParams.get('studio');
-    if (studioParam) {
-      // Store in sessionStorage to preserve across navigation
-      try {
-        sessionStorage.setItem('current_studio_slug', studioParam);
-      } catch (error) {
-        console.error('Failed to store studio slug in sessionStorage:', error);
-      }
-      return studioParam;
-    }
+const BOOKING_DOMAIN = import.meta.env.VITE_BOOKING_DOMAIN || "sesifoto.my";
+const DOMAIN_SLUG_CACHE_KEY = "current_studio_slug";
+const DOMAIN_RESOLUTION_CACHE_KEY = "custom_domain_resolution";
 
-    // Check sessionStorage for current studio context (from navigation)
+export interface CustomDomainResolution {
+  slug: string;
+  customDomain: string;
+}
+
+function isLocalHost(hostname: string): boolean {
+  return hostname === "localhost" || hostname === "127.0.0.1";
+}
+
+function isSesifotoSubdomain(hostname: string): boolean {
+  return (
+    hostname === BOOKING_DOMAIN || hostname.endsWith(`.${BOOKING_DOMAIN}`)
+  );
+}
+
+function getLocalStudioSlug(): string | null {
+  const urlParams = new URLSearchParams(window.location.search);
+  const studioParam = urlParams.get("studio");
+  if (studioParam) {
     try {
-      const currentStudioSlug = sessionStorage.getItem('current_studio_slug');
-      if (currentStudioSlug) {
-        // Update URL to include studio parameter for consistency
-        const currentUrl = new URL(window.location.href);
-        if (!currentUrl.searchParams.has('studio')) {
-          currentUrl.searchParams.set('studio', currentStudioSlug);
-          window.history.replaceState({}, '', currentUrl.toString());
-        }
-        return currentStudioSlug;
-      }
+      sessionStorage.setItem(DOMAIN_SLUG_CACHE_KEY, studioParam);
     } catch (error) {
-      console.error('Failed to read studio slug from sessionStorage:', error);
+      console.error("Failed to store studio slug in sessionStorage:", error);
     }
-
-    // Check localStorage for saved booking state to preserve studio context
-    try {
-      const savedState = localStorage.getItem('booking_state');
-      if (savedState) {
-        const state = JSON.parse(savedState);
-        const savedAt = new Date(state.savedAt);
-        const minutesAgo = (new Date().getTime() - savedAt.getTime()) / (1000 * 60);
-        
-        // Only use saved studio if there's meaningful progress
-        // (not just at step 1 without theme selection)
-        const hasMeaningfulProgress = state.selectedTheme || 
-                                       state.currentStep > 1 || 
-                                       (state.cartItems && state.cartItems.length > 0);
-        
-        // If no meaningful progress, clear the old state
-        if (!hasMeaningfulProgress) {
-          localStorage.removeItem('booking_state');
-        }
-        
-        // If saved within 30 minutes with meaningful progress, use that studio slug
-        if (minutesAgo <= 30 && state.studioSlug && hasMeaningfulProgress) {
-          // Store in sessionStorage for future navigation
-          try {
-            sessionStorage.setItem('current_studio_slug', state.studioSlug);
-          } catch (error) {
-            console.error('Failed to store studio slug in sessionStorage:', error);
-          }
-          // Update URL to include studio parameter
-          const currentUrl = new URL(window.location.href);
-          if (!currentUrl.searchParams.has('studio')) {
-            currentUrl.searchParams.set('studio', state.studioSlug);
-            window.history.replaceState({}, '', currentUrl.toString());
-          }
-          return state.studioSlug;
-        }
-      }
-    } catch (error) {
-      console.error('Failed to read saved studio from localStorage:', error);
-      // Clear corrupted state
-      localStorage.removeItem('booking_state');
-    }
-
-    // Default to najiahstudio for local dev
-    return 'najiahstudio';
+    return studioParam;
   }
 
-  // Production: extract from subdomain
-  // Format: [slug].sesifoto.my
-  const parts = hostname.split('.');
+  try {
+    const currentStudioSlug = sessionStorage.getItem(DOMAIN_SLUG_CACHE_KEY);
+    if (currentStudioSlug) {
+      const currentUrl = new URL(window.location.href);
+      if (!currentUrl.searchParams.has("studio")) {
+        currentUrl.searchParams.set("studio", currentStudioSlug);
+        window.history.replaceState({}, "", currentUrl.toString());
+      }
+      return currentStudioSlug;
+    }
+  } catch (error) {
+    console.error("Failed to read studio slug from sessionStorage:", error);
+  }
 
-  // Should have at least 3 parts: [slug, SESIFOTO, com]
+  try {
+    const savedState = localStorage.getItem("booking_state");
+    if (savedState) {
+      const state = JSON.parse(savedState);
+      const savedAt = new Date(state.savedAt);
+      const minutesAgo =
+        (new Date().getTime() - savedAt.getTime()) / (1000 * 60);
+
+      const hasMeaningfulProgress =
+        state.selectedTheme ||
+        state.currentStep > 1 ||
+        (state.cartItems && state.cartItems.length > 0);
+
+      if (!hasMeaningfulProgress) {
+        localStorage.removeItem("booking_state");
+      }
+
+      if (minutesAgo <= 30 && state.studioSlug && hasMeaningfulProgress) {
+        try {
+          sessionStorage.setItem(DOMAIN_SLUG_CACHE_KEY, state.studioSlug);
+        } catch (error) {
+          console.error("Failed to store studio slug in sessionStorage:", error);
+        }
+        const currentUrl = new URL(window.location.href);
+        if (!currentUrl.searchParams.has("studio")) {
+          currentUrl.searchParams.set("studio", state.studioSlug);
+          window.history.replaceState({}, "", currentUrl.toString());
+        }
+        return state.studioSlug;
+      }
+    }
+  } catch (error) {
+    console.error("Failed to read saved studio from localStorage:", error);
+    localStorage.removeItem("booking_state");
+  }
+
+  return "najiahstudio";
+}
+
+function getSlugFromSesifotoSubdomain(hostname: string): string | null {
+  const parts = hostname.split(".");
+
   if (parts.length >= 3) {
     const slug = parts[0];
 
-    // Exclude www and other non-studio subdomains
-    if (slug === 'www' || slug === 'api' || slug === 'admin') {
+    if (slug === "www" || slug === "api" || slug === "admin") {
       return null;
     }
 
     return slug || null;
+  }
+
+  return null;
+}
+
+export async function resolveStudioByCustomDomain(
+  hostname: string,
+): Promise<CustomDomainResolution | null> {
+  const cacheKey = `${DOMAIN_RESOLUTION_CACHE_KEY}:${hostname}`;
+
+  try {
+    const cached = sessionStorage.getItem(cacheKey);
+    if (cached) {
+      return JSON.parse(cached) as CustomDomainResolution;
+    }
+  } catch {
+    // continue to API
+  }
+
+  const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
+
+  try {
+    const response = await fetch(
+      `${API_BASE}/public/studio/by-domain/${encodeURIComponent(hostname)}`,
+    );
+    if (!response.ok) {
+      return null;
+    }
+
+    const data = (await response.json()) as CustomDomainResolution;
+    if (!data?.slug) {
+      return null;
+    }
+
+    try {
+      sessionStorage.setItem(cacheKey, JSON.stringify(data));
+      sessionStorage.setItem(DOMAIN_SLUG_CACHE_KEY, data.slug);
+    } catch {
+      // ignore storage errors
+    }
+
+    return data;
+  } catch (error) {
+    console.error("Failed to resolve studio by custom domain:", error);
+    return null;
+  }
+}
+
+export async function getStudioSlugFromHost(): Promise<string | null> {
+  const hostname = window.location.hostname;
+
+  if (isLocalHost(hostname)) {
+    return getLocalStudioSlug();
+  }
+
+  if (isSesifotoSubdomain(hostname)) {
+    return getSlugFromSesifotoSubdomain(hostname);
+  }
+
+  const resolution = await resolveStudioByCustomDomain(hostname);
+  return resolution?.slug ?? null;
+}
+
+export function getStudioSlugFromSubdomain(): string | null {
+  const hostname = window.location.hostname;
+
+  if (isLocalHost(hostname)) {
+    return getLocalStudioSlug();
+  }
+
+  if (isSesifotoSubdomain(hostname)) {
+    return getSlugFromSesifotoSubdomain(hostname);
+  }
+
+  try {
+    const cachedSlug = sessionStorage.getItem(DOMAIN_SLUG_CACHE_KEY);
+    if (cachedSlug) {
+      return cachedSlug;
+    }
+  } catch {
+    // ignore
   }
 
   return null;
@@ -114,11 +197,14 @@ export function isStudioSubdomain(): boolean {
 export function getStudioUrl(slug: string): string {
   const hostname = window.location.hostname;
 
-  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+  if (isLocalHost(hostname)) {
     return `http://${hostname}:${window.location.port}?studio=${slug}`;
   }
 
-  // Production
-  const domain = hostname.split('.').slice(-2).join('.'); // Get "sesifoto.my"
+  if (!isSesifotoSubdomain(hostname)) {
+    return `https://${hostname}`;
+  }
+
+  const domain = hostname.split(".").slice(-2).join(".");
   return `https://${slug}.${domain}`;
 }

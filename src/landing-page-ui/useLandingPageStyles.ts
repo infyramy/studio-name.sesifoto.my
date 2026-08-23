@@ -39,34 +39,36 @@ export function useLandingPageStyles(theme: Ref<LandingPageTheme> | ComputedRef<
          radial-gradient(circle at 85% 30%, rgba(194, 65, 12, 0.08), transparent 25%);`
       : `background-color: ${secondary};`;
 
+    const titleFont = (cfg.titleFont || "Inter").replace(/'/g, "\\'");
+    const bodyFont = (cfg.bodyFont || "Inter").replace(/'/g, "\\'");
+
+    const surfaceRules = `
+  --font-title: '${titleFont}', serif;
+  --font-body: '${bodyFont}', sans-serif;
+  --bg-main: ${secondary};
+  --text-main: ${secondaryText};
+  --text-muted: ${textMuted};
+  --border-color: ${borderColor};
+  --card-bg: ${cardBg};
+  --icon-bg: ${iconBg};
+  --card-backdrop: ${cardBackdrop};
+  --card-shadow: ${cardShadow};
+  font-family: var(--font-body);
+  color: var(--text-main);
+  ${surfaceBackground}`;
+
+    const headingRules = `font-family: var(--font-title);`;
+
     return `
 @import url('https://fonts.googleapis.com/css2?family=${title}:wght@400;600;700&family=${body}:wght@300;400;500;600&display=swap');
-.landing-surface h1, .landing-surface h2, .landing-surface h3, .landing-surface h4, .landing-surface h5, .landing-surface h6 { font-family: '${cfg.titleFont}', sans-serif; }
-.landing-surface {
-  --bg-main: ${secondary};
-  --text-main: ${secondaryText};
-  --text-muted: ${textMuted};
-  --border-color: ${borderColor};
-  --card-bg: ${cardBg};
-  --icon-bg: ${iconBg};
-  --card-backdrop: ${cardBackdrop};
-  --card-shadow: ${cardShadow};
-  color: var(--text-main);
-  ${surfaceBackground}
+.landing-surface {${surfaceRules}
 }
-.preview-surface h1, .preview-surface h2, .preview-surface h3, .preview-surface h4, .preview-surface h5, .preview-surface h6 { font-family: '${cfg.titleFont}', sans-serif; }
-.preview-surface {
-  --bg-main: ${secondary};
-  --text-main: ${secondaryText};
-  --text-muted: ${textMuted};
-  --border-color: ${borderColor};
-  --card-bg: ${cardBg};
-  --icon-bg: ${iconBg};
-  --card-backdrop: ${cardBackdrop};
-  --card-shadow: ${cardShadow};
-  color: var(--text-main);
-  ${surfaceBackground}
+.landing-surface h1, .landing-surface h2, .landing-surface h3, .landing-surface h4, .landing-surface h5, .landing-surface h6,
+.landing-surface .font-title { ${headingRules} }
+.preview-surface {${surfaceRules}
 }
+.preview-surface h1, .preview-surface h2, .preview-surface h3, .preview-surface h4, .preview-surface h5, .preview-surface h6,
+.preview-surface .font-title { ${headingRules} }
 `;
   });
 
@@ -78,7 +80,7 @@ export function useLandingPageStyles(theme: Ref<LandingPageTheme> | ComputedRef<
   });
 
   const containerStyle = computed(() => ({
-    fontFamily: theme.value.bodyFont,
+    fontFamily: `'${theme.value.bodyFont || "Inter"}', sans-serif`,
   }));
 
   return {

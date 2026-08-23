@@ -1,3 +1,5 @@
+import type { HomeMarketingContent } from "./home-marketing/types";
+
 export type ThemeMode = "dark" | "light" | "dark-glass";
 export type EmergencyMethods = "both" | "whatsapp" | "call";
 export type EmergencyPhoneType = "system" | "custom";
@@ -14,6 +16,12 @@ export type TestimonialItem = {
 };
 
 export type CustomLinkItem = {
+  id: string;
+  label: string;
+  url: string;
+};
+
+export type SiteNavLink = {
   id: string;
   label: string;
   url: string;
@@ -48,6 +56,8 @@ export type LandingPageTheme = {
   socialInstagram: string;
   socialTiktok: string;
   socialFacebook: string;
+  socialPinterest: string;
+  socialThreads: string;
   socialWebsite: string;
   showGallery: boolean;
   showMaps: boolean;
@@ -66,6 +76,8 @@ export type LandingPageTheme = {
   emergencyText: string;
   heroUrl: string;
   mapAddress: string;
+  mapsLink: string;
+  contactEmail: string;
   galleryImages: string[];
   sectionOrder: SectionKey[];
   faqs: FaqItem[];
@@ -76,7 +88,12 @@ export type LandingPageTheme = {
   testimonials: TestimonialItem[];
   showCustomLinks: boolean;
   customLinks: CustomLinkItem[];
-};
+  siteNavLeft: SiteNavLink[];
+  siteNavRight: SiteNavLink[];
+  footerNav: SiteNavLink[];
+  footerCopyright: string;
+  showLanguageSwitcher: boolean;
+} & HomeMarketingContent;
 
 export type LandingPageConfig = Partial<LandingPageTheme> & Record<string, unknown>;
 
@@ -95,6 +112,8 @@ export interface LandingPagePublicDto {
   config: LandingPageConfig;
   isDefault: boolean;
   products: ProductEntitlements;
+  /** Home page style + site chrome when loading non-home pages */
+  siteStyle?: LandingPageConfig;
 }
 
 export interface LandingPage {
