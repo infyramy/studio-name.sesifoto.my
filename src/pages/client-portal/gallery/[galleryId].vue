@@ -89,7 +89,10 @@
           >
             {{ gallery.studio.name[0] || "S" }}
           </span>
-          <span class="hidden text-[10px] font-semibold uppercase tracking-[0.22em]" :style="{ color: 'var(--p-text)' }" class="sm:inline">
+          <span
+            class="hidden sm:inline text-[10px] font-semibold uppercase tracking-[0.22em]"
+            :style="{ color: 'var(--p-text)' }"
+          >
             {{ gallery.studio.name }}
           </span>
         </div>
