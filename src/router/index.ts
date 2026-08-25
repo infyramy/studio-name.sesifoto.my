@@ -111,6 +111,53 @@ const routes: RouteRecordRaw[] = [
     meta: { title: "SESIFOTO" },
   },
   {
+    path: "/client-portal",
+    name: "client-portal-access",
+    component: () => import("@/pages/client-portal/access.vue"),
+    meta: { title: "Client Portal" },
+  },
+  {
+    path: "/client-portal/jobs",
+    name: "client-portal-jobs",
+    component: () => import("@/pages/client-portal/jobs/index.vue"),
+    meta: { title: "Your Jobs" },
+  },
+  {
+    path: "/client-portal/jobs/:jobId",
+    component: () => import("@/pages/client-portal/jobs/[jobId].vue"),
+    meta: { title: "Client Portal" },
+    children: [
+      {
+        path: "",
+        redirect: { name: "client-portal-job-overview" },
+      },
+      {
+        path: "overview",
+        name: "client-portal-job-overview",
+        component: () => import("@/pages/client-portal/jobs/overview.vue"),
+        meta: { title: "Overview" },
+      },
+      {
+        path: "contract",
+        name: "client-portal-job-contract",
+        component: () => import("@/pages/client-portal/jobs/contract.vue"),
+        meta: { title: "Contract" },
+      },
+      {
+        path: "payment",
+        name: "client-portal-job-payment",
+        component: () => import("@/pages/client-portal/jobs/payment.vue"),
+        meta: { title: "Payment" },
+      },
+      {
+        path: "link",
+        name: "client-portal-job-link",
+        component: () => import("@/pages/client-portal/jobs/link.vue"),
+        meta: { title: "Link" },
+      },
+    ],
+  },
+  {
     path: "/client-portal/:jobId/start",
     name: "client-portal-start",
     component: () => import("@/pages/client-portal/[id].vue"),

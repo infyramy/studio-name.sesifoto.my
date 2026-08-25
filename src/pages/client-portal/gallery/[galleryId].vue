@@ -1,26 +1,28 @@
 <template>
-  <div class="gallery-page h-dvh overflow-y-auto bg-[#faf9f6] text-zinc-900 transition-colors duration-300 dark:bg-zinc-950 dark:text-zinc-100">
+  <div class="gallery-page h-dvh overflow-y-auto transition-colors duration-300" :style="[{ background: 'var(--p-shell)', color: 'var(--p-text)', fontFamily: '&quot;DM Sans&quot;, system-ui, sans-serif' }, themeVars]">
     <div
       v-if="notice"
-      class="fixed bottom-20 left-1/2 z-[60] max-w-sm -translate-x-1/2 rounded-md border border-zinc-200 bg-white px-4 py-2 text-center text-xs text-zinc-900 shadow-lg dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-100"
+      class="fixed bottom-20 left-1/2 z-[60] max-w-sm -translate-x-1/2 rounded-md border px-4 py-2 text-center text-xs shadow-lg"
+      :style="{ background: 'var(--p-card)', borderColor: 'var(--p-border)', color: 'var(--p-text)' }"
       role="status"
     >
       {{ notice }}
     </div>
 
     <div v-if="isLoading" class="flex min-h-dvh items-center justify-center">
-      <p class="text-sm text-zinc-500 dark:text-zinc-400">Loading gallery...</p>
+      <p class="text-sm tracking-wide" :style="{ color: 'var(--p-muted)' }">Loading gallery...</p>
     </div>
     <div v-else-if="loadError" class="flex min-h-dvh items-center justify-center px-6">
       <div class="max-w-sm text-center">
-        <p class="font-serif text-2xl">Gallery unavailable</p>
-        <p class="mt-2 text-sm text-zinc-500 dark:text-zinc-400">{{ loadError }}</p>
-        <button class="mt-5 text-xs font-semibold uppercase tracking-[0.18em]" :style="{ color: accentColor }" @click="loadGallery">
+        <p class="font-medium tracking-tight" style="font-family: 'Cormorant Garamond', serif; font-size: 2.4rem;">Gallery unavailable</p>
+        <p class="mt-2 text-sm tracking-wide" :style="{ color: 'var(--p-muted)' }">{{ loadError }}</p>
+        <button class="mt-6 text-xs font-semibold uppercase tracking-[0.2em]" :style="{ color: accentColor }" @click="loadGallery">
           Try again
         </button>
         <button
           type="button"
-          class="mt-3 block w-full text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500 dark:text-zinc-400"
+          class="mt-4 block w-full text-[10px] font-semibold uppercase tracking-[0.2em] transition hover:opacity-80"
+          :style="{ color: 'var(--p-muted)' }"
           @click="goBackToPortal"
         >
           Back to portal
@@ -61,32 +63,33 @@
       </button>
     </section>
 
-    <!-- Gallery navigation -->
-    <nav ref="galleryNav" class="gallery-reveal gallery-reveal-nav relative z-20 border-b border-zinc-200/80 bg-white/95 backdrop-blur transition-colors duration-300 dark:border-white/10 dark:bg-zinc-950/95">
+    <nav ref="galleryNav" class="gallery-reveal gallery-reveal-nav relative z-20 border-b backdrop-blur transition-colors duration-300"
+         :style="{ background: 'color-mix(in srgb, var(--p-shell) 95%, transparent)', borderColor: 'color-mix(in srgb, var(--p-border) 40%, transparent)' }">
       <div class="mx-auto grid h-16 max-w-7xl grid-cols-3 items-center px-4 sm:px-6 lg:px-8">
-        <div class="flex min-w-0 items-center gap-1 sm:gap-2">
+        <div class="flex min-w-0 items-center gap-2 sm:gap-4">
           <button
             type="button"
-            class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-white"
+            class="inline-flex h-9 w-9 shrink-0 items-center justify-center transition-colors hover:opacity-70"
+            :style="{ color: 'var(--p-text)' }"
             aria-label="Back to portal"
             title="Back to portal"
             @click="goBackToPortal"
           >
             <ChevronLeft class="h-4 w-4" />
           </button>
-          <p class="truncate text-xs font-medium tracking-wide text-zinc-700 dark:text-zinc-200 sm:text-sm">
+          <p class="truncate text-xs font-semibold tracking-wide sm:text-sm" :style="{ color: 'var(--p-text)' }">
             {{ clientName }}
           </p>
         </div>
 
-        <div class="flex items-center justify-center gap-2">
+        <div class="flex items-center justify-center gap-3">
           <span
-            class="flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-semibold text-white"
-            :style="{ backgroundColor: accentColor }"
+            class="flex h-7 w-7 items-center justify-center rounded-sm text-[11px] font-semibold"
+            :style="{ backgroundColor: 'var(--p-accent-bg)', color: 'var(--p-accent)' }"
           >
             {{ gallery.studio.name[0] || "S" }}
           </span>
-          <span class="hidden text-xs font-semibold uppercase tracking-[0.22em] text-zinc-800 dark:text-zinc-100 sm:inline">
+          <span class="hidden text-[10px] font-semibold uppercase tracking-[0.22em]" :style="{ color: 'var(--p-text)' }" class="sm:inline">
             {{ gallery.studio.name }}
           </span>
         </div>
@@ -94,7 +97,8 @@
         <div class="flex items-center justify-end gap-1">
           <button
             type="button"
-            class="inline-flex h-9 w-9 items-center justify-center rounded-full text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-white"
+            class="inline-flex h-9 w-9 items-center justify-center transition-colors hover:opacity-70"
+            :style="{ color: 'var(--p-text)' }"
             :aria-label="isDark ? 'Switch to light mode' : 'Switch to dark mode'"
             :title="isDark ? 'Switch to light mode' : 'Switch to dark mode'"
             @click="toggleTheme"
@@ -104,7 +108,8 @@
           </button>
           <button
             type="button"
-            class="inline-flex h-9 w-9 items-center justify-center rounded-full text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-white"
+            class="inline-flex h-9 w-9 items-center justify-center transition-colors hover:opacity-70"
+            :style="{ color: 'var(--p-text)' }"
             aria-label="Share gallery"
             title="Share gallery"
             @click="shareGallery"
@@ -114,7 +119,8 @@
           <button
             v-if="gallery.allowDownload"
             type="button"
-            class="inline-flex h-9 w-9 items-center justify-center rounded-full text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-white"
+            class="inline-flex h-9 w-9 items-center justify-center transition-colors hover:opacity-70"
+            :style="{ color: 'var(--p-text)' }"
             aria-label="Download gallery"
             title="Download gallery"
             @click="downloadAll"
@@ -127,30 +133,33 @@
 
     <main class="gallery-reveal gallery-reveal-content mx-auto max-w-7xl px-4 py-12 sm:px-6 sm:py-16 lg:px-8 lg:py-20">
       <!-- Collection introduction -->
-      <header class="mb-14 flex flex-col gap-7 border-b border-zinc-200 pb-10 dark:border-white/10 sm:flex-row sm:items-end sm:justify-between">
+      <header class="mb-14 flex flex-col gap-7 border-b pb-10 sm:flex-row sm:items-end sm:justify-between" :style="{ borderColor: 'color-mix(in srgb, var(--p-border) 40%, transparent)' }">
         <div>
           <p
-            class="mb-3 text-[10px] font-semibold uppercase tracking-[0.32em]"
+            class="mb-4 text-[10px] font-semibold uppercase tracking-[0.32em]"
             :style="{ color: accentColor }"
           >
             The collection
           </p>
-          <h2 class="font-serif text-3xl font-light tracking-tight text-zinc-900 dark:text-zinc-100 sm:text-4xl">
+          <h2 class="font-medium tracking-tight" style="font-family: 'Cormorant Garamond', serif; font-size: 3rem; line-height: 1.1;" :style="{ color: 'var(--p-text)' }">
             {{ gallery.title }}
           </h2>
-          <p class="mt-3 text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">
+          <p class="mt-4 text-sm tracking-wide" :style="{ color: 'var(--p-muted)' }">
             {{ photoCount }} photographs · {{ videoCount }} film
           </p>
         </div>
 
         <div class="relative w-full sm:w-72">
-          <Search class="absolute left-0 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400 dark:text-zinc-500" />
+          <Search class="absolute left-0 top-1/2 h-4 w-4 -translate-y-1/2" :style="{ color: 'var(--p-muted)' }" />
           <input
             v-model="searchQuery"
             type="search"
             placeholder="Search this collection"
             aria-label="Search photos"
-            class="gallery-search h-10 w-full rounded-none border-0 border-b border-zinc-300 bg-transparent pl-7 pr-0 text-sm shadow-none outline-none transition-colors focus:border-zinc-500 dark:border-zinc-700 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-zinc-500"
+            class="gallery-search h-10 w-full rounded-none border-0 border-b bg-transparent pl-8 pr-0 text-sm shadow-none outline-none transition-colors"
+            :style="{ borderColor: 'color-mix(in srgb, var(--p-border) 40%, transparent)', color: 'var(--p-text)' }"
+            @focus="(e) => (e.target as HTMLElement).style.borderColor = accentColor"
+            @blur="(e) => (e.target as HTMLElement).style.borderColor = 'color-mix(in srgb, var(--p-border) 40%, transparent)'"
           />
         </div>
       </header>
@@ -159,15 +168,17 @@
       <section v-if="videoCount" class="mb-16 sm:mb-24">
         <button
           type="button"
-          class="mb-6 flex w-full items-center justify-between border-b border-zinc-200 pb-3 text-left dark:border-white/10"
+          class="mb-6 flex w-full items-center justify-between border-b pb-3 text-left"
+          :style="{ borderColor: 'color-mix(in srgb, var(--p-border) 40%, transparent)' }"
           :aria-expanded="videoOpen"
           @click="videoOpen = !videoOpen"
         >
-          <span class="text-[11px] font-semibold uppercase tracking-[0.25em] text-zinc-600 dark:text-zinc-300">
+          <span class="text-[11px] font-semibold uppercase tracking-[0.25em]" :style="{ color: 'var(--p-text)' }">
             Film · {{ videoCount }}
           </span>
           <ChevronDown
-            class="h-4 w-4 text-zinc-400 transition-transform duration-300 dark:text-zinc-500"
+            class="h-4 w-4 transition-transform duration-300"
+            :style="{ color: 'var(--p-muted)' }"
             :class="{ '-rotate-90': !videoOpen }"
           />
         </button>
@@ -202,18 +213,19 @@
 
       <!-- Photos -->
       <section>
-        <div class="mb-6 flex items-center border-b border-zinc-200 pb-3 dark:border-white/10">
+        <div class="mb-6 flex items-center border-b pb-3" :style="{ borderColor: 'color-mix(in srgb, var(--p-border) 40%, transparent)' }">
           <button
             type="button"
             class="flex min-w-0 flex-1 items-center justify-between text-left"
             :aria-expanded="photoOpen"
             @click="photoOpen = !photoOpen"
           >
-            <span class="text-[11px] font-semibold uppercase tracking-[0.25em] text-zinc-600 dark:text-zinc-300">
+            <span class="text-[11px] font-semibold uppercase tracking-[0.25em]" :style="{ color: 'var(--p-text)' }">
               Photographs · {{ visiblePhotos.length }}
             </span>
             <ChevronDown
-              class="h-4 w-4 text-zinc-400 transition-transform duration-300 dark:text-zinc-500"
+              class="h-4 w-4 transition-transform duration-300"
+              :style="{ color: 'var(--p-muted)' }"
               :class="{ '-rotate-90': !photoOpen }"
             />
           </button>
@@ -234,18 +246,19 @@
             <div class="min-h-0 overflow-hidden">
               <div
                 v-if="!visiblePhotos.length"
-                class="border border-dashed border-zinc-300 px-6 py-20 text-center dark:border-zinc-700"
+                class="border border-dashed px-6 py-20 text-center"
+                :style="{ borderColor: 'color-mix(in srgb, var(--p-border) 60%, transparent)' }"
               >
-                <Search class="mx-auto mb-4 h-5 w-5 text-zinc-400 dark:text-zinc-500" />
-                <p class="font-serif text-xl text-zinc-700 dark:text-zinc-200">
+                <Search class="mx-auto mb-4 h-5 w-5" :style="{ color: 'var(--p-muted)' }" />
+                <p class="font-medium tracking-tight" style="font-family: 'Cormorant Garamond', serif; font-size: 1.8rem;" :style="{ color: 'var(--p-text)' }">
                   {{ searchQuery ? "No photographs found" : "No photographs shared yet" }}
                 </p>
-                <p v-if="searchQuery" class="mt-2 text-sm text-zinc-500 dark:text-zinc-400">Try another photo name or asset ID.</p>
+                <p v-if="searchQuery" class="mt-3 text-sm tracking-wide" :style="{ color: 'var(--p-muted)' }">Try another photo name or asset ID.</p>
               </div>
 
               <div v-else class="space-y-12">
                 <section v-for="section in visiblePhotoSections" :key="section.id">
-                  <h3 v-if="visiblePhotoSections.length > 1" class="mb-4 font-serif text-xl font-light">
+                  <h3 v-if="visiblePhotoSections.length > 1" class="mb-5 font-medium tracking-tight" style="font-family: 'Cormorant Garamond', serif; font-size: 2.2rem;" :style="{ color: 'var(--p-text)' }">
                     {{ section.name }}
                   </h3>
                   <div class="columns-2 gap-2 sm:columns-3 sm:gap-3 lg:columns-4">
@@ -255,8 +268,8 @@
                       role="button"
                       tabindex="0"
                       :aria-label="`View ${photo.label}`"
-                      class="group relative mb-2 cursor-pointer break-inside-avoid overflow-hidden bg-zinc-100 outline-none ring-offset-2 ring-offset-[#faf9f6] focus-visible:ring-2 dark:bg-zinc-900 dark:ring-offset-zinc-950 sm:mb-3"
-                      :style="{ '--tw-ring-color': accentColor }"
+                      class="group relative mb-2 cursor-pointer break-inside-avoid overflow-hidden outline-none focus-visible:ring-2 sm:mb-3"
+                      :style="{ '--tw-ring-color': accentColor, background: 'color-mix(in srgb, var(--p-card) 50%, transparent)' }"
                       @click="openPhotoViewer(photo)"
                       @keydown.enter="openPhotoViewer(photo)"
                       @keydown.space.prevent="openPhotoViewer(photo)"
@@ -289,10 +302,11 @@
       </section>
     </main>
 
-    <footer class="border-t border-zinc-200 bg-white px-4 py-10 transition-colors duration-300 dark:border-white/10 dark:bg-zinc-950">
-      <div class="flex items-center justify-center gap-2 text-[11px] uppercase tracking-[0.2em] text-zinc-400 dark:text-zinc-500">
+    <footer class="border-t py-12 transition-colors duration-300"
+            :style="{ borderColor: 'color-mix(in srgb, var(--p-border) 40%, transparent)', background: 'var(--p-shell)' }">
+      <div class="flex items-center justify-center gap-2 text-[10px] uppercase tracking-[0.25em]" :style="{ color: 'var(--p-muted)' }">
         <span>Powered by</span>
-        <span class="font-semibold text-zinc-700 dark:text-zinc-300">Sesifoto</span>
+        <span class="font-semibold" :style="{ color: 'var(--p-text)' }">Sesifoto</span>
       </div>
     </footer>
 
@@ -423,8 +437,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from "vue";
+import {
+  ref,
+  computed,
+  onMounted,
+  onUnmounted,
+  watch,
+} from "vue";
 import { useRoute, useRouter } from "vue-router";
+import { usePortalTheme } from "@/composables/usePortalTheme";
 import {
   Check,
   ChevronDown,
@@ -516,10 +537,7 @@ const showViewer = ref(false);
 const viewerItems = ref<ViewerMedia[]>([]);
 const viewerIndex = ref(0);
 const viewerPlaying = ref(false);
-const isDark = ref(
-  typeof window !== "undefined"
-    && window.matchMedia("(prefers-color-scheme: dark)").matches,
-);
+const { isDark, toggleDark, setAccent } = usePortalTheme();
 
 const photoCount = computed(() => allPhotos.value.length);
 const videoCount = computed(() => allMedia.value.filter((media) => media.type === "video").length);
@@ -576,12 +594,12 @@ function clearSelection() {
 }
 
 function toggleTheme() {
-  isDark.value = !isDark.value;
+  toggleDark();
 }
 
 function goBackToPortal() {
   router.push({
-    name: "client-portal",
+    name: "client-portal-job-overview",
     params: { jobId },
     query: route.query,
   });
@@ -704,6 +722,7 @@ async function loadGallery() {
   loadError.value = "";
   try {
     gallery.value = await galleryService.getPublic(String(route.params.galleryId || galleryId));
+    setAccent(gallery.value?.accentColor);
   } catch (error: unknown) {
     loadError.value =
       error instanceof Error && error.message

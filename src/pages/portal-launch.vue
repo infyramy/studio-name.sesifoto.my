@@ -21,7 +21,7 @@ onMounted(() => {
   } catch {
     // Storage can be blocked.
   }
-  router.replace({ name: "home", query: route.query });
+  router.replace({ name: "client-portal-access", query: route.query });
 });
 </script>
 

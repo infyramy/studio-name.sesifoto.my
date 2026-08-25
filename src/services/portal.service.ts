@@ -107,6 +107,42 @@ export type ExchangePortalSessionResponse =
   | { status: "authenticated"; shareUrl: string }
   | { status: "passcode_required"; gate: PortalAccessGate };
 
+export interface PortalClientLoginRequest {
+  studioSlug: string;
+  email: string;
+  passcode: string;
+}
+
+export interface PortalClientLoginResponse {
+  status: "authenticated";
+  contact: { id: string; name: string; email: string | null };
+  studio: {
+    id: string;
+    name: string;
+    logoUrl: string | null;
+    brandColor: string;
+  };
+}
+
+export interface PortalLoginGate {
+  studioName: string;
+  logoUrl: string | null;
+  brandColor: string;
+  accentColor: string;
+  heroUrl: string | null;
+}
+
+export interface PortalJobSummary {
+  id: string;
+  title: string;
+  status: string;
+  eventDate: string | null;
+  venue: string | null;
+  balanceDue: number;
+  currency: string | null;
+  heroThumb: string | null;
+}
+
 export interface ChangePortalPasscodeRequest {
   currentPasscode: string;
   newPasscode: string;
@@ -200,6 +236,53 @@ async function portalRequest<T>(request: Promise<T>): Promise<T> {
 }
 
 export const portalService = {
+  getLoginGate(
+    studioSlug: string,
+    options: PortalRequestOptions & { jobId?: string } = {},
+  ): Promise<PortalLoginGate> {
+    return portalRequest(
+      portalApi<PortalLoginGate>("/portal/auth/gate", {
+        query: {
+          studioSlug,
+          ...(options.jobId ? { jobId: options.jobId } : {}),
+        },
+        signal: options.signal,
+      }),
+    );
+  },
+
+  login(
+    payload: PortalClientLoginRequest,
+    options: PortalRequestOptions = {},
+  ): Promise<PortalClientLoginResponse> {
+    return portalRequest(
+      portalApi<PortalClientLoginResponse>("/portal/auth/login", {
+        method: "POST",
+        body: payload,
+        signal: options.signal,
+      }),
+    );
+  },
+
+  logout(options: PortalRequestOptions = {}): Promise<{ status: "ok" }> {
+    return portalRequest(
+      portalApi<{ status: "ok" }>("/portal/auth/session", {
+        method: "DELETE",
+        signal: options.signal,
+      }),
+    );
+  },
+
+  listMyJobs(
+    options: PortalRequestOptions = {},
+  ): Promise<PortalJobSummary[]> {
+    return portalRequest(
+      portalApi<PortalJobSummary[]>("/portal/me/jobs", {
+        signal: options.signal,
+      }),
+    );
+  },
+
   exchangeSession(
     jobId: string,
     payload: ExchangePortalSessionRequest,
