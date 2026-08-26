@@ -66,7 +66,7 @@
               }}
             </p>
             <p class="mt-1.5 text-xs tracking-wider uppercase" :style="{ color: 'var(--p-muted)' }">
-              Status: {{ portalData.status.replace(/_/g, " ") }}
+              Status: {{ portalData.statusLabel || portalData.status.replace(/_/g, " ") }}
             </p>
           </div>
         </div>

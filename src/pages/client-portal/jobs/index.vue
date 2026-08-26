@@ -51,7 +51,7 @@
           <div class="jobs__meta">
             <p class="jobs__name">{{ job.title }}</p>
             <p class="jobs__row">
-              <span>{{ formatStatus(job.status) }}</span>
+              <span>{{ job.statusLabel || formatStatus(job.status) }}</span>
               <span v-if="job.eventDate"> · {{ formatDate(job.eventDate) }}</span>
             </p>
             <p v-if="job.venue" class="jobs__venue">{{ job.venue }}</p>

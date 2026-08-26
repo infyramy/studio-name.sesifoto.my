@@ -60,7 +60,12 @@ export interface PortalGalleryPreview {
 export interface PortalData {
   jobId: string;
   title: string;
+  /** Client-facing main stage value */
   status: string;
+  /** Client-facing main stage label */
+  statusLabel: string;
+  /** Ordered main stages for progress UI */
+  pipeline: Array<{ value: string; label: string }>;
   portalHeroUrl: string | null;
   accentColor: string;
   shareUrl: string;
@@ -136,6 +141,7 @@ export interface PortalJobSummary {
   id: string;
   title: string;
   status: string;
+  statusLabel: string;
   eventDate: string | null;
   venue: string | null;
   balanceDue: number;

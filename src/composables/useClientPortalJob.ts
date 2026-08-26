@@ -161,26 +161,26 @@ export function useClientPortalJobProvide(): ClientPortalJobContext {
   );
 
   const jobSteps = computed(() => {
-    const status = portalData.value?.status ?? "";
-    const statusOrder = [
-      "inquiry",
-      "awaiting_booking",
-      "booked",
-      "planning",
-      "confirmed",
-      "scheduled",
-      "in_production",
-      "ready_for_delivery",
-      "delivered",
-      "completed",
-    ];
-    const idx = statusOrder.indexOf(status);
-    return [
-      { label: "Confirmed", note: "Booking secured", done: idx >= 2 },
-      { label: "Shoot Completed", note: "Session wrapped", done: idx >= 6 },
-      { label: "Editing", note: "Post-production done", done: idx >= 7 },
-      { label: "Delivery Ready", note: "Pending final payment", done: idx >= 8 },
-    ];
+    const data = portalData.value;
+    const pipeline = data?.pipeline?.length
+      ? data.pipeline
+      : [
+          { value: "awaiting_booking", label: "Awaiting Booking" },
+          { value: "planning", label: "Planning" },
+          { value: "scheduled", label: "Scheduled" },
+          { value: "in_production", label: "In Production" },
+          { value: "ready_for_delivery", label: "Ready for Delivery" },
+          { value: "delivered", label: "Delivered" },
+          { value: "completed", label: "Completed" },
+        ];
+    const status = data?.status ?? "";
+    const idx = pipeline.findIndex((step) => step.value === status);
+    const current = idx >= 0 ? idx : 0;
+    return pipeline.map((step, i) => ({
+      label: step.label,
+      note: i < current ? "Complete" : i === current ? "Current" : "Upcoming",
+      done: i <= current,
+    }));
   });
 
   const studioWhatsApp = computed(() => {
