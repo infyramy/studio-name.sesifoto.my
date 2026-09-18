@@ -205,6 +205,13 @@
       :accent-color="portalData?.accentColor"
       @update:open="handleInvoicePdfOpen"
     />
+    <PortalContractDialog
+      :open="isContractOpen"
+      :job-id="currentJobId"
+      :contract="selectedContract"
+      :accent-color="portalData?.accentColor"
+      @update:open="handleContractOpen"
+    />
     <PortalInstallHelpDialog
       :open="isInstallHelpOpen"
       :is-ios-safari="isIosSafari"
@@ -231,6 +238,7 @@ import {
   Share2,
   Sun,
 } from "lucide-vue-next";
+import PortalContractDialog from "@/components/portal/PortalContractDialog.vue";
 import PortalInstallHelpDialog from "@/components/portal/PortalInstallHelpDialog.vue";
 import PortalInvoicePdfDialog from "@/components/portal/PortalInvoicePdfDialog.vue";
 import PortalPasscodeDialog from "@/components/portal/PortalPasscodeDialog.vue";
@@ -250,6 +258,8 @@ const {
   isChangingPasscode,
   selectedInvoice,
   isInvoicePdfOpen,
+  selectedContract,
+  isContractOpen,
   isInstallHelpOpen,
   hasDifferentSavedPortal,
   actionsOpen,
@@ -260,6 +270,7 @@ const {
   themeVars,
   runPortalAction,
   handleInvoicePdfOpen,
+  handleContractOpen,
   copyPortalLink,
   sharePortal,
   savePortalToHomeScreen,

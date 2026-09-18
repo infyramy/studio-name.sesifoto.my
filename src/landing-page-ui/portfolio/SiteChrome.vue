@@ -172,7 +172,7 @@ function setLanguage(lang: StudioLanguage) {
           </a>
         </nav>
 
-        <div class="flex min-w-0 flex-1 justify-center px-1 md:px-2">
+        <div class="flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 md:px-2">
           <img
             v-if="styleConfig.logoUrl"
             :src="styleConfig.logoUrl"
@@ -180,7 +180,15 @@ function setLanguage(lang: StudioLanguage) {
             class="h-9 w-auto max-w-[140px] object-contain md:h-12 md:max-w-none"
             referrerpolicy="no-referrer"
           />
-          <span v-else class="truncate text-base font-semibold md:text-lg">
+          <span
+            v-if="styleConfig.studioName"
+            class="truncate text-center font-semibold"
+            :class="
+              styleConfig.logoUrl
+                ? 'text-xs md:text-sm font-medium tracking-wide'
+                : 'text-base md:text-lg'
+            "
+          >
             {{ styleConfig.studioName }}
           </span>
         </div>

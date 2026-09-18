@@ -1,9 +1,18 @@
 <script setup lang="ts">
-import { computed, ref, toRef } from "vue";
-import { Calendar, ChevronLeft, ChevronRight } from "lucide-vue-next";
+import { computed, nextTick, reactive, ref, toRef, watch } from "vue";
+import { ChevronLeft, ChevronRight } from "lucide-vue-next";
 import SiteChrome from "../portfolio/SiteChrome.vue";
-import { leadFormT } from "./i18n";
+import { leadFormT, leadFormValidationMessages } from "./i18n";
+import LeadFormDateField from "./LeadFormDateField.vue";
+import LeadFormSelectField from "./LeadFormSelectField.vue";
 import type { LeadFormPageConfig, LeadFormSubmitPayload } from "./types";
+import {
+  firstFieldError,
+  todayIsoDate,
+  validateLeadForm,
+  type LeadFormFieldErrors,
+  type LeadFormFieldKey,
+} from "./validate";
 import type { LandingPageTheme, StudioLanguage } from "../types";
 import { useLandingPageStyles } from "../useLandingPageStyles";
 
@@ -48,18 +57,34 @@ const brandLabel = computed(
 const fieldClass =
   "w-full border-0 border-b border-[var(--border-color)] bg-transparent py-2 text-sm text-[var(--text-main)] outline-none focus:border-[var(--text-main)] placeholder:text-[var(--text-muted)]";
 
+const fieldErrorClass = "border-red-500";
+const minEventDate = todayIsoDate();
+
 const contactName = ref("");
 const contactPhone = ref("");
 const eventDate = ref("");
-const eventType = ref(props.leadForm.eventTypes[0]?.id ?? "wedding");
+const eventType = ref("");
 const serviceInterest = ref<"photo" | "video" | "photo_video">("photo_video");
 const venue = ref("");
 const notes = ref("");
 const submitting = ref(false);
 const submitMessage = ref<string | null>(null);
 const submitError = ref<string | null>(null);
+const fieldErrors = reactive<LeadFormFieldErrors>({});
 
 const recentWorkIndex = ref(0);
+
+const eventTypeOptions = computed(() =>
+  props.leadForm.eventTypes.map((type) => ({
+    value: type.id,
+    label: type.label,
+  })),
+);
+
+const shellClass = computed(() => {
+  if (!props.leadForm.showHero) return "flex min-h-full flex-col";
+  return "flex min-h-full flex-col lg:grid lg:grid-cols-[2fr_3fr] lg:min-h-[calc(100vh-8rem)]";
+});
 
 const visibleRecentImages = computed(() => {
   const images = props.leadForm.recentWorkImages;
@@ -67,6 +92,54 @@ const visibleRecentImages = computed(() => {
   const start = recentWorkIndex.value;
   return [images[start % images.length], images[(start + 1) % images.length]];
 });
+
+watch(
+  () => props.leadForm.eventTypes,
+  (types) => {
+    if (eventType.value && !types.some((type) => type.id === eventType.value)) {
+      eventType.value = "";
+    }
+  },
+  { deep: true },
+);
+
+function clearFieldError(key: LeadFormFieldKey) {
+  if (fieldErrors[key]) delete fieldErrors[key];
+}
+
+function runValidation(): boolean {
+  const next = validateLeadForm(
+    {
+      contactName: contactName.value,
+      contactPhone: contactPhone.value,
+      eventDate: eventDate.value,
+      eventType: eventType.value,
+      serviceInterest: serviceInterest.value,
+      requireEventType: props.leadForm.showEventTypes,
+    },
+    leadFormValidationMessages(props.language),
+  );
+
+  (Object.keys(fieldErrors) as LeadFormFieldKey[]).forEach((key) => {
+    delete fieldErrors[key];
+  });
+  Object.assign(fieldErrors, next);
+  return Object.keys(next).length === 0;
+}
+
+async function focusFirstError() {
+  const key = firstFieldError(fieldErrors);
+  if (!key) return;
+  await nextTick();
+  const el = document.getElementById(`lead-field-${key}`);
+  el?.scrollIntoView({ block: "center", behavior: "smooth" });
+  if (el instanceof HTMLElement) {
+    const focusable = el.querySelector<HTMLElement>(
+      "input, textarea, button, [tabindex]:not([tabindex='-1'])",
+    );
+    focusable?.focus();
+  }
+}
 
 function prevRecentWork() {
   const len = props.leadForm.recentWorkImages.length;
@@ -84,8 +157,8 @@ async function onSubmit() {
   submitMessage.value = null;
   submitError.value = null;
 
-  if (!contactName.value.trim() || !contactPhone.value.trim()) {
-    submitError.value = t.value.submitError;
+  if (!runValidation()) {
+    await focusFirstError();
     return;
   }
 
@@ -117,8 +190,12 @@ function markSubmitSuccess() {
   contactName.value = "";
   contactPhone.value = "";
   eventDate.value = "";
+  eventType.value = "";
   venue.value = "";
   notes.value = "";
+  (Object.keys(fieldErrors) as LeadFormFieldKey[]).forEach((key) => {
+    delete fieldErrors[key];
+  });
 }
 
 function markSubmitFailure(message?: string) {
@@ -129,7 +206,18 @@ function markSubmitFailure(message?: string) {
 function setServiceInterest(value: string) {
   if (value === "photo" || value === "video" || value === "photo_video") {
     serviceInterest.value = value;
+    clearFieldError("serviceInterest");
   }
+}
+
+function onEventDateUpdate(value: string) {
+  eventDate.value = value;
+  clearFieldError("eventDate");
+}
+
+function onEventTypeUpdate(value: string) {
+  eventType.value = value;
+  clearFieldError("eventType");
 }
 
 defineExpose({ markSubmitSuccess, markSubmitFailure });
@@ -169,8 +257,11 @@ defineExpose({ markSubmitSuccess, markSubmitFailure });
       @navigate="emit('navigate', $event)"
       @language-change="emit('languageChange', $event)"
     >
-      <div class="lg:grid lg:grid-cols-[2fr_3fr] lg:min-h-[calc(100vh-8rem)]">
-        <aside class="relative min-h-[42vh] lg:min-h-full">
+      <div :class="shellClass">
+        <aside
+          v-if="leadForm.showHero"
+          class="relative min-h-[42vh] lg:min-h-full"
+        >
           <img
             :src="leadForm.heroImageUrl"
             alt=""
@@ -181,7 +272,7 @@ defineExpose({ markSubmitSuccess, markSubmitFailure });
             class="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-black/10"
           />
           <div class="relative flex h-full flex-col justify-end p-6 md:p-10 text-white">
-            <p class="mb-3 text-[10px] font-medium uppercase tracking-[0.3em] opacity-90">
+            <p class="mb-3 text-[10px] font-medium tracking-[0.3em] opacity-90">
               {{ brandLabel }}
             </p>
             <h1 class="mb-3 max-w-md text-3xl md:text-4xl leading-tight">
@@ -196,29 +287,31 @@ defineExpose({ markSubmitSuccess, markSubmitFailure });
           </div>
         </aside>
 
-        <div class="bg-[var(--bg-main)] text-[var(--text-main)]">
+        <div class="bg-[var(--bg-main)] text-[var(--text-main)] min-h-full">
           <div class="mx-auto max-w-xl px-5 py-8 md:px-10 md:py-10">
-            <p
-              class="mb-2 text-[10px] font-semibold uppercase tracking-[0.25em] text-[var(--text-muted)]"
-            >
-              {{ leadForm.sectionLabel }}
-            </p>
-            <h2 class="mb-2 text-3xl leading-tight text-[var(--text-main)]">
-              {{ leadForm.formHeading }}
-            </h2>
-            <p class="mb-8 text-sm text-[var(--text-muted)]">
-              {{ leadForm.priceNote }}
-              <strong class="font-semibold text-[var(--text-main)]">{{
-                leadForm.priceAmount
-              }}</strong>
-            </p>
+            <template v-if="leadForm.showFormHeader">
+              <p
+                class="mb-2 text-[10px] font-semibold tracking-[0.25em] text-[var(--text-muted)]"
+              >
+                {{ leadForm.sectionLabel }}
+              </p>
+              <h2 class="mb-2 text-3xl leading-tight text-[var(--text-main)]">
+                {{ leadForm.formHeading }}
+              </h2>
+              <p class="mb-8 text-sm text-[var(--text-muted)]">
+                {{ leadForm.priceNote }}
+                <strong class="font-semibold text-[var(--text-main)]">{{
+                  leadForm.priceAmount
+                }}</strong>
+              </p>
+            </template>
 
             <section
               v-if="leadForm.showRecentWork && leadForm.recentWorkImages.length"
               class="mb-8"
             >
               <div class="mb-3 flex items-center justify-between">
-                <p class="text-[10px] font-semibold uppercase tracking-[0.2em]">
+                <p class="text-[10px] font-semibold tracking-[0.2em]">
                   {{ leadForm.recentWorkLabel }}
                 </p>
                 <div
@@ -264,71 +357,112 @@ defineExpose({ markSubmitSuccess, markSubmitFailure });
               </p>
             </section>
 
-            <form class="space-y-6" @submit.prevent="onSubmit">
-              <div>
+            <form class="space-y-6" novalidate @submit.prevent="onSubmit">
+              <div id="lead-field-contactName">
                 <label
-                  class="mb-2 block text-[10px] font-semibold uppercase tracking-[0.15em] text-[var(--text-main)]"
+                  class="mb-2 block text-[10px] font-semibold tracking-[0.15em] text-[var(--text-main)]"
                 >
                   {{ t.nameLabel }}
                 </label>
                 <input
                   v-model="contactName"
                   type="text"
+                  autocomplete="name"
                   :placeholder="t.namePlaceholder"
-                  :class="fieldClass"
+                  :aria-invalid="!!fieldErrors.contactName"
+                  :class="[
+                    fieldClass,
+                    fieldErrors.contactName ? fieldErrorClass : '',
+                  ]"
+                  @input="clearFieldError('contactName')"
                 />
+                <p
+                  v-if="fieldErrors.contactName"
+                  class="mt-1.5 text-xs text-red-600"
+                >
+                  {{ fieldErrors.contactName }}
+                </p>
               </div>
 
-              <div>
+              <div id="lead-field-contactPhone">
                 <label
-                  class="mb-2 block text-[10px] font-semibold uppercase tracking-[0.15em] text-[var(--text-main)]"
+                  class="mb-2 block text-[10px] font-semibold tracking-[0.15em] text-[var(--text-main)]"
                 >
                   {{ t.whatsappLabel }}
                 </label>
                 <input
                   v-model="contactPhone"
                   type="tel"
+                  inputmode="tel"
+                  autocomplete="tel"
                   :placeholder="t.whatsappPlaceholder"
-                  :class="fieldClass"
+                  :aria-invalid="!!fieldErrors.contactPhone"
+                  :class="[
+                    fieldClass,
+                    fieldErrors.contactPhone ? fieldErrorClass : '',
+                  ]"
+                  @input="clearFieldError('contactPhone')"
                 />
+                <p
+                  v-if="fieldErrors.contactPhone"
+                  class="mt-1.5 text-xs text-red-600"
+                >
+                  {{ fieldErrors.contactPhone }}
+                </p>
               </div>
 
-              <div class="grid gap-6 sm:grid-cols-2">
-                <div>
+              <div
+                class="grid gap-6"
+                :class="leadForm.showEventTypes ? 'sm:grid-cols-2' : ''"
+              >
+                <div id="lead-field-eventDate">
                   <label
-                    class="mb-2 block text-[10px] font-semibold uppercase tracking-[0.15em] text-[var(--text-main)]"
+                    class="mb-2 block text-[10px] font-semibold tracking-[0.15em] text-[var(--text-main)]"
                   >
                     {{ t.eventDateLabel }}
                   </label>
-                  <div class="relative">
-                    <input v-model="eventDate" type="date" :class="[fieldClass, 'pr-8']" />
-                    <Calendar
-                      class="pointer-events-none absolute right-0 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--text-muted)]"
-                    />
-                  </div>
+                  <LeadFormDateField
+                    :model-value="eventDate"
+                    :placeholder="t.eventDatePlaceholder"
+                    :min-date="minEventDate"
+                    :invalid="!!fieldErrors.eventDate"
+                    :clear-label="t.clearDate"
+                    @update:model-value="onEventDateUpdate"
+                  />
+                  <p
+                    v-if="fieldErrors.eventDate"
+                    class="mt-1.5 text-xs text-red-600"
+                  >
+                    {{ fieldErrors.eventDate }}
+                  </p>
                 </div>
-                <div>
+
+                <div v-if="leadForm.showEventTypes" id="lead-field-eventType">
                   <label
-                    class="mb-2 block text-[10px] font-semibold uppercase tracking-[0.15em] text-[var(--text-main)]"
+                    class="mb-2 block text-[10px] font-semibold tracking-[0.15em] text-[var(--text-main)]"
                   >
                     {{ t.eventTypeLabel }}
                   </label>
-                  <select v-model="eventType" :class="fieldClass">
-                    <option
-                      v-for="type in leadForm.eventTypes"
-                      :key="type.id"
-                      :value="type.id"
-                    >
-                      {{ type.label }}
-                    </option>
-                  </select>
+                  <LeadFormSelectField
+                    :model-value="eventType"
+                    :options="eventTypeOptions"
+                    :placeholder="t.eventTypePlaceholder"
+                    :invalid="!!fieldErrors.eventType"
+                    @update:model-value="onEventTypeUpdate"
+                  />
+                  <p
+                    v-if="fieldErrors.eventType"
+                    class="mt-1.5 text-xs text-red-600"
+                  >
+                    {{ fieldErrors.eventType }}
+                  </p>
                 </div>
               </div>
               <p class="text-[11px] text-[var(--text-muted)]">{{ t.eventDateHint }}</p>
 
-              <div>
+              <div id="lead-field-serviceInterest">
                 <label
-                  class="mb-3 block text-[10px] font-semibold uppercase tracking-[0.15em] text-[var(--text-main)]"
+                  class="mb-3 block text-[10px] font-semibold tracking-[0.15em] text-[var(--text-main)]"
                 >
                   {{ t.serviceLabel }}
                 </label>
@@ -343,6 +477,7 @@ defineExpose({ markSubmitSuccess, markSubmitFailure });
                     type="button"
                     class="rounded-full border px-4 py-2 text-xs transition-colors"
                     :class="buttonRadiusClass"
+                    :aria-pressed="serviceInterest === option.key"
                     :style="
                       serviceInterest === option.key
                         ? {
@@ -361,11 +496,17 @@ defineExpose({ markSubmitSuccess, markSubmitFailure });
                     {{ option.label }}
                   </button>
                 </div>
+                <p
+                  v-if="fieldErrors.serviceInterest"
+                  class="mt-1.5 text-xs text-red-600"
+                >
+                  {{ fieldErrors.serviceInterest }}
+                </p>
               </div>
 
-              <div>
+              <div id="lead-field-venue">
                 <label
-                  class="mb-2 block text-[10px] font-semibold uppercase tracking-[0.15em] text-[var(--text-main)]"
+                  class="mb-2 block text-[10px] font-semibold tracking-[0.15em] text-[var(--text-main)]"
                 >
                   {{ t.locationLabel }}
                 </label>
@@ -377,9 +518,9 @@ defineExpose({ markSubmitSuccess, markSubmitFailure });
                 />
               </div>
 
-              <div>
+              <div id="lead-field-notes">
                 <label
-                  class="mb-2 block text-[10px] font-semibold uppercase tracking-[0.15em] text-[var(--text-main)]"
+                  class="mb-2 block text-[10px] font-semibold tracking-[0.15em] text-[var(--text-main)]"
                 >
                   {{ t.notesLabel }}
                 </label>
@@ -394,27 +535,29 @@ defineExpose({ markSubmitSuccess, markSubmitFailure });
               <p v-if="submitError" class="text-sm text-red-600">{{ submitError }}</p>
               <p v-if="submitMessage" class="text-sm text-green-700">{{ submitMessage }}</p>
 
-              <button
-                type="submit"
-                class="w-full px-6 py-3.5 text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-60"
-                :class="buttonRadiusClass"
-                :style="{
-                  backgroundColor: styleConfig.primaryColor,
-                  color: styleConfig.primaryTextColor,
-                }"
-                :disabled="submitting"
-              >
-                {{ submitting ? t.sending : leadForm.submitLabel }}
-              </button>
+              <template v-if="leadForm.showSubmitFooter">
+                <button
+                  type="submit"
+                  class="w-full px-6 py-3.5 text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-60"
+                  :class="buttonRadiusClass"
+                  :style="{
+                    backgroundColor: styleConfig.primaryColor,
+                    color: styleConfig.primaryTextColor,
+                  }"
+                  :disabled="submitting"
+                >
+                  {{ submitting ? t.sending : leadForm.submitLabel }}
+                </button>
 
-              <p class="text-center text-[11px] text-[var(--text-muted)]">
-                {{ leadForm.privacyNote }}
-              </p>
+                <p class="text-center text-[11px] text-[var(--text-muted)]">
+                  {{ leadForm.privacyNote }}
+                </p>
+              </template>
             </form>
 
             <p
-              v-if="leadForm.showPoweredBy"
-              class="mt-10 text-center text-[10px] uppercase tracking-[0.2em] text-[var(--text-muted)]"
+              v-if="leadForm.showSubmitFooter && leadForm.showPoweredBy"
+              class="mt-10 text-center text-[10px] tracking-[0.2em] text-[var(--text-muted)]"
             >
               {{ leadForm.poweredByLabel }}
             </p>

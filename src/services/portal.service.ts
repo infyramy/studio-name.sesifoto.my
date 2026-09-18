@@ -34,6 +34,9 @@ export interface PortalContract {
   title: string;
   status: string;
   updatedAt: string;
+  signer: string | null;
+  bodyHtml: string | null;
+  hasFile: boolean;
 }
 
 export interface PortalInspirationImage {
@@ -94,7 +97,16 @@ export interface PortalData {
   deliveryLinks: PortalDeliveryLink[];
   contracts: PortalContract[];
   inspirationImages: PortalInspirationImage[];
-  gallery: PortalGalleryPreview | null;
+  galleries: PortalGalleryPreview[];
+  agreement: {
+    requireTerms: boolean;
+    requireSignature: boolean;
+    termsAcceptedAt: string | null;
+    signedAt: string | null;
+    signerName: string | null;
+    complete: boolean;
+    termsUrl: string | null;
+  };
 }
 
 export interface ExchangePortalSessionRequest {
@@ -185,13 +197,15 @@ export interface PortalPaymentIntent {
 export type PortalErrorCode =
   | "PORTAL_TOKEN_INVALID"
   | "PORTAL_PASSCODE_INCORRECT"
-  | "PORTAL_CURRENT_PASSCODE_INCORRECT";
+  | "PORTAL_CURRENT_PASSCODE_INCORRECT"
+  | "TERMS_REQUIRED";
 
 export class PortalApiError extends Error {
   constructor(
     public readonly status: number,
     public readonly code: PortalErrorCode | null,
     message: string,
+    public readonly termsUrl: string | null = null,
   ) {
     super(message);
     this.name = "PortalApiError";
@@ -219,7 +233,7 @@ async function portalRequest<T>(request: Promise<T>): Promise<T> {
       caught as {
         response?: {
           status?: unknown;
-          _data?: { message?: unknown; code?: unknown };
+          _data?: { message?: unknown; code?: unknown; termsUrl?: unknown };
         };
       }
     ).response;
@@ -229,6 +243,7 @@ async function portalRequest<T>(request: Promise<T>): Promise<T> {
       rawCode === "PORTAL_TOKEN_INVALID"
       || rawCode === "PORTAL_PASSCODE_INCORRECT"
       || rawCode === "PORTAL_CURRENT_PASSCODE_INCORRECT"
+      || rawCode === "TERMS_REQUIRED"
         ? rawCode
         : null;
     const rawMessage = response?._data?.message;
@@ -236,8 +251,13 @@ async function portalRequest<T>(request: Promise<T>): Promise<T> {
       typeof rawMessage === "string" && rawMessage.trim()
         ? rawMessage
         : "Unable to complete the portal request.";
+    const rawTermsUrl = response?._data?.termsUrl;
+    const termsUrl =
+      typeof rawTermsUrl === "string" && rawTermsUrl.trim()
+        ? rawTermsUrl
+        : null;
 
-    throw new PortalApiError(status, code, message);
+    throw new PortalApiError(status, code, message, termsUrl);
   }
 }
 
@@ -327,6 +347,27 @@ export const portalService = {
         `/portal/${encodeURIComponent(jobId)}/invoices/${encodeURIComponent(invoiceId)}/pdf`,
         { responseType: "blob", signal: options.signal },
       ),
+    ).then((blob) =>
+      blob.type === "application/pdf"
+        ? blob
+        : new Blob([blob], { type: "application/pdf" }),
+    );
+  },
+
+  getContractPdf(
+    jobId: string,
+    documentId: string,
+    options: PortalRequestOptions = {},
+  ): Promise<Blob> {
+    return portalRequest(
+      portalApi<Blob>(
+        `/portal/${encodeURIComponent(jobId)}/contracts/${encodeURIComponent(documentId)}/pdf`,
+        { responseType: "blob", signal: options.signal },
+      ),
+    ).then((blob) =>
+      blob.type === "application/pdf"
+        ? blob
+        : new Blob([blob], { type: "application/pdf" }),
     );
   },
 

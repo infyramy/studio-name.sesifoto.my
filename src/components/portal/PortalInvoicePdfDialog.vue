@@ -1,6 +1,12 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref, watch } from "vue";
-import { Download, FileWarning, Loader2, X } from "lucide-vue-next";
+import {
+  Download,
+  ExternalLink,
+  FileWarning,
+  Loader2,
+  X,
+} from "lucide-vue-next";
 import PortalOverlay from "./PortalOverlay.vue";
 import {
   portalService,
@@ -93,6 +99,11 @@ function downloadPdf() {
   link.click();
 }
 
+function openInNewTab() {
+  if (!pdfUrl.value) return;
+  window.open(pdfUrl.value, "_blank", "noopener,noreferrer");
+}
+
 watch(
   () => [props.open, props.jobId, props.invoice?.id] as const,
   ([open]) => {
@@ -124,6 +135,15 @@ onBeforeUnmount(clearPdf);
           {{ invoice?.number || "Invoice PDF" }}
         </p>
       </div>
+      <button
+        type="button"
+        :disabled="!pdfUrl || isLoading"
+        class="portal-focus flex h-9 shrink-0 items-center gap-2 rounded-xl border border-white/15 px-3 text-xs font-medium text-white/75 transition hover:bg-white/5 hover:text-white disabled:cursor-not-allowed disabled:opacity-35"
+        @click="openInNewTab"
+      >
+        <ExternalLink class="h-4 w-4" />
+        <span class="hidden sm:inline">Open</span>
+      </button>
       <button
         type="button"
         :disabled="!pdfUrl || isLoading"
@@ -170,13 +190,35 @@ onBeforeUnmount(clearPdf);
           Try again
         </button>
       </div>
-      <iframe
+      <object
         v-else-if="pdfUrl"
-        :src="pdfUrl"
+        :data="pdfUrl"
+        type="application/pdf"
         :title="`${invoice?.number || 'Invoice'} PDF`"
-        sandbox="allow-downloads"
         class="h-full min-h-72 w-full border-0 bg-white"
-      />
+      >
+        <div class="flex h-full min-h-72 flex-col items-center justify-center gap-4 px-6 text-center">
+          <p class="max-w-md text-sm text-white/60">
+            Browser blocked the PDF preview. Open it in a new tab or download the file.
+          </p>
+          <div class="flex flex-wrap items-center justify-center gap-3">
+            <button
+              type="button"
+              class="portal-primary portal-focus h-10 rounded-xl px-4 text-sm font-semibold transition hover:brightness-105"
+              @click="openInNewTab"
+            >
+              Open PDF
+            </button>
+            <button
+              type="button"
+              class="portal-focus h-10 rounded-xl border border-white/15 px-4 text-sm font-medium text-white/80 transition hover:bg-white/5"
+              @click="downloadPdf"
+            >
+              Download
+            </button>
+          </div>
+        </div>
+      </object>
     </div>
   </PortalOverlay>
 </template>

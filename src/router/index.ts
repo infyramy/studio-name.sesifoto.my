@@ -158,6 +158,18 @@ const routes: RouteRecordRaw[] = [
     ],
   },
   {
+    path: "/client-action/terms",
+    name: "client-action-terms",
+    component: () => import("@/pages/client-action/terms.vue"),
+    meta: { title: "Terms" },
+  },
+  {
+    path: "/client-action/pay",
+    name: "client-action-pay",
+    component: () => import("@/pages/client-action/pay.vue"),
+    meta: { title: "Payment" },
+  },
+  {
     path: "/client-portal/:jobId/start",
     name: "client-portal-start",
     component: () => import("@/pages/client-portal/[id].vue"),

@@ -83,12 +83,12 @@ export function applyStudioProfileOverrides(
   pickStudioString(theme, raw, factory, "socialPinterest", studio.pinterest);
   pickStudioString(theme, raw, factory, "socialThreads", studio.threads);
 
-  if (studio.email?.trim() && isEmptyValue(raw.contactEmail)) {
-    theme.contactEmail = studio.email.trim();
+  if (studio.email?.trim()) {
+    pickStudioString(theme, raw, factory, "contactEmail", studio.email);
   }
 
-  if (studio.mapsLink?.trim() && isEmptyValue(raw.mapsLink)) {
-    theme.mapsLink = studio.mapsLink.trim();
+  if (studio.mapsLink?.trim()) {
+    pickStudioString(theme, raw, factory, "mapsLink", studio.mapsLink);
   }
 
   if (studio.whatsapp?.trim()) {

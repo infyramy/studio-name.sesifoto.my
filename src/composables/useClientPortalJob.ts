@@ -9,6 +9,7 @@ import {
   PortalApiError,
   portalService,
   type CreatePortalCheckoutRequest,
+  type PortalContract,
   type PortalData,
   type PortalInvoice,
 } from "@/services/portal.service";
@@ -30,6 +31,8 @@ export interface ClientPortalJobContext {
   isChangingPasscode: Ref<boolean>;
   selectedInvoice: Ref<PortalInvoice | null>;
   isInvoicePdfOpen: Ref<boolean>;
+  selectedContract: Ref<PortalContract | null>;
+  isContractOpen: Ref<boolean>;
   isInstallHelpOpen: Ref<boolean>;
   hasDifferentSavedPortal: Ref<boolean>;
   activeCheckout: Ref<string | null>;
@@ -55,6 +58,9 @@ export interface ClientPortalJobContext {
   runPortalAction: (action: () => void | Promise<void>) => void;
   openInvoicePdf: (invoice: PortalInvoice) => void;
   handleInvoicePdfOpen: (open: boolean) => void;
+  openContract: (contract: PortalContract) => void;
+  handleContractOpen: (open: boolean) => void;
+  downloadContractPdf: (contract: PortalContract) => Promise<void>;
   copyPortalLink: () => Promise<void>;
   sharePortal: () => Promise<void>;
   savePortalToHomeScreen: () => Promise<void>;
@@ -97,6 +103,8 @@ export function useClientPortalJobProvide(): ClientPortalJobContext {
   const isChangingPasscode = ref(false);
   const selectedInvoice = ref<PortalInvoice | null>(null);
   const isInvoicePdfOpen = ref(false);
+  const selectedContract = ref<PortalContract | null>(null);
+  const isContractOpen = ref(false);
   const isInstallHelpOpen = ref(false);
   const hasDifferentSavedPortal = ref(false);
   const activeCheckout = ref<string | null>(null);
@@ -154,8 +162,8 @@ export function useClientPortalJobProvide(): ClientPortalJobContext {
   const portalHeroImage = computed(
     () =>
       portalData.value?.portalHeroUrl
-      ?? portalData.value?.gallery?.coverUrl
-      ?? portalData.value?.gallery?.preview?.[0]?.url
+      ?? portalData.value?.galleries?.[0]?.coverUrl
+      ?? portalData.value?.galleries?.[0]?.preview?.[0]?.url
       ?? portalData.value?.inspirationImages?.[0]?.imageUrl
       ?? "",
   );
@@ -248,9 +256,9 @@ export function useClientPortalJobProvide(): ClientPortalJobContext {
   function getSafeErrorMessage(value: unknown, fallback: string): string {
     if (
       value instanceof PortalApiError
-      && !value.code
-      && value.status > 0
       && value.message
+      && (value.code === "TERMS_REQUIRED"
+        || (!value.code && value.status > 0))
     ) {
       return value.message;
     }
@@ -271,6 +279,8 @@ export function useClientPortalJobProvide(): ClientPortalJobContext {
     isChangingPasscode.value = false;
     selectedInvoice.value = null;
     isInvoicePdfOpen.value = false;
+    selectedContract.value = null;
+    isContractOpen.value = false;
     isInstallHelpOpen.value = false;
     activeCheckout.value = null;
     actionsOpen.value = false;
@@ -356,6 +366,42 @@ export function useClientPortalJobProvide(): ClientPortalJobContext {
   function handleInvoicePdfOpen(open: boolean) {
     isInvoicePdfOpen.value = open;
     if (!open) selectedInvoice.value = null;
+  }
+
+  function openContract(contract: PortalContract) {
+    selectedContract.value = contract;
+    isContractOpen.value = true;
+  }
+
+  function handleContractOpen(open: boolean) {
+    isContractOpen.value = open;
+    if (!open) selectedContract.value = null;
+  }
+
+  async function downloadContractPdf(contract: PortalContract) {
+    const jobId = currentJobId.value;
+    if (!jobId) {
+      showNotice("Unable to download contract right now.");
+      return;
+    }
+    try {
+      showNotice("Preparing PDF…");
+      const blob = await portalService.getContractPdf(jobId, contract.id);
+      const safeTitle = contract.title.replace(/[^a-z0-9_-]+/gi, "-");
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${safeTitle || "contract"}.pdf`;
+      link.click();
+      URL.revokeObjectURL(url);
+      showNotice("Contract PDF downloaded.");
+    } catch (error: unknown) {
+      showNotice(
+        error instanceof Error
+          ? error.message
+          : "Failed to download contract PDF.",
+      );
+    }
   }
 
   async function writePortalLinkToClipboard(): Promise<void> {
@@ -515,6 +561,19 @@ export function useClientPortalJobProvide(): ClientPortalJobContext {
   async function startCheckout(payload: CreatePortalCheckoutRequest) {
     if (activeCheckout.value || !portalData.value) return;
     if (payload.scope === "all" && !portalData.value.billing.canPayAll) return;
+    if (
+      portalData.value.agreement?.requireTerms
+      && !portalData.value.agreement.complete
+    ) {
+      const termsUrl = portalData.value.agreement.termsUrl;
+      showNotice(
+        portalData.value.agreement.requireSignature
+          ? "Please accept and sign the terms before payment."
+          : "Please accept the terms before payment.",
+      );
+      if (termsUrl) window.location.assign(termsUrl);
+      return;
+    }
     const jobId = currentJobId.value;
     const generation = loadGeneration;
     const actionKey =
@@ -552,6 +611,25 @@ export function useClientPortalJobProvide(): ClientPortalJobContext {
         && generation === loadGeneration
         && currentJobId.value === jobId
       ) {
+        if (
+          caught instanceof PortalApiError
+          && caught.code === "TERMS_REQUIRED"
+        ) {
+          const termsUrl =
+            caught.termsUrl
+            || portalData.value?.agreement?.termsUrl
+            || null;
+          if (termsUrl) {
+            showNotice(
+              getSafeErrorMessage(
+                caught,
+                "Please accept the terms before payment.",
+              ),
+            );
+            window.location.assign(termsUrl);
+            return;
+          }
+        }
         showNotice(getSafeErrorMessage(caught, "Unable to start checkout."));
       }
     } finally {
@@ -811,6 +889,8 @@ export function useClientPortalJobProvide(): ClientPortalJobContext {
     isChangingPasscode,
     selectedInvoice,
     isInvoicePdfOpen,
+    selectedContract,
+    isContractOpen,
     isInstallHelpOpen,
     hasDifferentSavedPortal,
     activeCheckout,
@@ -832,6 +912,9 @@ export function useClientPortalJobProvide(): ClientPortalJobContext {
     runPortalAction,
     openInvoicePdf,
     handleInvoicePdfOpen,
+    openContract,
+    handleContractOpen,
+    downloadContractPdf,
     copyPortalLink,
     sharePortal,
     savePortalToHomeScreen,
