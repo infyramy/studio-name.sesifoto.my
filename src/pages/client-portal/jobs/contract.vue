@@ -36,6 +36,8 @@
                 Updated {{ formatDate(doc.updatedAt) }}
                 <span v-if="doc.signer" class="opacity-50 mx-1">|</span>
                 <span v-if="doc.signer">{{ doc.signer }}</span>
+                <span v-if="doc.signatureImage" class="opacity-50 mx-1">|</span>
+                <span v-if="doc.signatureImage">Signed</span>
               </p>
             </div>
           </div>

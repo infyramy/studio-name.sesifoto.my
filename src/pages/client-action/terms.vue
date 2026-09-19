@@ -67,6 +67,16 @@
       >
         Terms already accepted
         <span v-if="data.signerName"> by {{ data.signerName }}</span>.
+        <div v-if="data.signatureImage" class="action__signed">
+          <p class="action__field-label" :style="{ color: 'var(--p-muted)' }">
+            Signature
+          </p>
+          <img
+            :src="data.signatureImage"
+            :alt="data.signerName ? `${data.signerName} signature` : 'Signature'"
+            class="action__signed-img"
+          />
+        </div>
       </div>
 
       <form v-else class="action__form" @submit.prevent="submit">
@@ -386,6 +396,24 @@ onMounted(load);
   border: 1px solid;
   padding: 1rem 1.1rem;
   font-size: 0.9rem;
+}
+
+.action__signed {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 1.1rem;
+}
+
+.action__signed-img {
+  display: block;
+  max-width: 16rem;
+  max-height: 6rem;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  background: #fff;
+  border: 1px solid color-mix(in srgb, var(--p-border) 50%, transparent);
+  padding: 0.5rem;
 }
 
 .action__form {

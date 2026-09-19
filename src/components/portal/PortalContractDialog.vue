@@ -67,6 +67,16 @@ watch(
     if (!open) downloadError.value = "";
   },
 );
+
+function formatSignedAt(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
 </script>
 
 <template>
@@ -88,6 +98,7 @@ watch(
         <p id="portal-contract-description" class="mt-0.5 truncate text-xs text-white/45">
           <template v-if="contract?.signer">Signer: {{ contract.signer }}</template>
           <template v-else>Agreement document</template>
+          <template v-if="contract?.signedAt"> · Signed</template>
         </p>
       </div>
       <button
@@ -158,6 +169,26 @@ watch(
             Download PDF
           </button>
         </div>
+
+        <section
+          v-if="contract?.signatureImage"
+          class="mt-10 border-t border-neutral-200 pt-6"
+        >
+          <p class="text-[11px] font-medium tracking-[0.16em] text-neutral-500">
+            Signature
+          </p>
+          <img
+            :src="contract.signatureImage"
+            :alt="contract.signer ? `${contract.signer} signature` : 'Signature'"
+            class="mt-3 max-h-28 max-w-xs rounded-md border border-neutral-200 bg-white object-contain p-3"
+          />
+          <p v-if="contract.signer" class="mt-2 text-sm text-neutral-700">
+            {{ contract.signer }}
+          </p>
+          <p v-if="contract.signedAt" class="mt-1 text-xs text-neutral-500">
+            Signed {{ formatSignedAt(contract.signedAt) }}
+          </p>
+        </section>
       </article>
     </div>
   </PortalOverlay>

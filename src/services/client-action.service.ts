@@ -15,6 +15,7 @@ export interface ClientActionTermsData {
   termsAcceptedAt: string | null;
   signedAt: string | null;
   signerName: string | null;
+  signatureImage: string | null;
   contract: {
     id: string | null;
     title: string;

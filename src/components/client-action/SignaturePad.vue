@@ -3,7 +3,6 @@
     <div
       ref="wrapEl"
       class="sig__canvas-wrap"
-      :style="{ borderColor: 'color-mix(in srgb, var(--p-border) 55%, transparent)' }"
     >
       <canvas
         ref="canvasEl"
@@ -17,7 +16,6 @@
       <p
         v-if="!hasInk"
         class="sig__hint"
-        :style="{ color: 'var(--p-muted)' }"
       >
         Draw your signature here
       </p>
@@ -38,6 +36,10 @@
 
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from "vue";
+
+/** Always dark ink on white pad so PNG stays readable in any theme. */
+const INK_COLOR = "#1c1c1a";
+const PAD_COLOR = "#ffffff";
 
 const emit = defineEmits<{
   (e: "change", payload: { empty: boolean; dataUrl: string | null }): void;
@@ -64,6 +66,18 @@ function emitChange() {
   });
 }
 
+function prepareContext(ctx: CanvasRenderingContext2D, width: number, height: number) {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  const ratio = Math.max(window.devicePixelRatio || 1, 1);
+  ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+  ctx.fillStyle = PAD_COLOR;
+  ctx.fillRect(0, 0, width, height);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.lineWidth = 2.2;
+  ctx.strokeStyle = INK_COLOR;
+}
+
 function resizeCanvas() {
   const canvas = canvasEl.value;
   const wrap = wrapEl.value;
@@ -81,27 +95,17 @@ function resizeCanvas() {
 
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
-  ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
-  ctx.lineWidth = 2.2;
-  const ink =
-    getComputedStyle(wrap).getPropertyValue("--p-text").trim()
-    || getComputedStyle(document.body).getPropertyValue("color").trim()
-    || "#1c1c1a";
-  ctx.strokeStyle = ink;
+  prepareContext(ctx, width, height);
 
   if (hadInk) {
     const img = new Image();
     img.onload = () => {
-      ctx.clearRect(0, 0, width, height);
+      prepareContext(ctx, width, height);
       ctx.drawImage(img, 0, 0, width, height);
       hasInk.value = true;
       emitChange();
     };
     img.src = prev;
-  } else {
-    ctx.clearRect(0, 0, width, height);
   }
 }
 
@@ -125,6 +129,10 @@ function onPointerDown(event: PointerEvent) {
   lastY = point.y;
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
+  ctx.strokeStyle = INK_COLOR;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.lineWidth = 2.2;
   ctx.beginPath();
   ctx.moveTo(lastX, lastY);
   ctx.lineTo(lastX + 0.01, lastY + 0.01);
@@ -155,9 +163,12 @@ function onPointerUp() {
 
 function clear() {
   const canvas = canvasEl.value;
+  const wrap = wrapEl.value;
   const ctx = canvas?.getContext("2d");
-  if (!canvas || !ctx) return;
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (!canvas || !wrap || !ctx) return;
+  const width = wrap.clientWidth;
+  const height = Math.max(160, Math.round(wrap.clientWidth * 0.36));
+  prepareContext(ctx, width, height);
   hasInk.value = false;
   emitChange();
 }
@@ -188,8 +199,9 @@ defineExpose({ clear, hasInk });
 
 .sig__canvas-wrap {
   position: relative;
-  border-bottom: 1px solid;
-  background: color-mix(in srgb, var(--p-card) 70%, transparent);
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 2px;
+  background: #ffffff;
   touch-action: none;
 }
 
@@ -198,6 +210,7 @@ defineExpose({ clear, hasInk });
   width: 100%;
   cursor: crosshair;
   touch-action: none;
+  background: #ffffff;
 }
 
 .sig__hint {
@@ -209,6 +222,7 @@ defineExpose({ clear, hasInk });
   margin: 0;
   font-size: 0.82rem;
   letter-spacing: 0.04em;
+  color: #8a8a86;
 }
 
 .sig__actions {

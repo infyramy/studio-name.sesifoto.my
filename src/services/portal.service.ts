@@ -37,6 +37,8 @@ export interface PortalContract {
   signer: string | null;
   bodyHtml: string | null;
   hasFile: boolean;
+  signedAt: string | null;
+  signatureImage: string | null;
 }
 
 export interface PortalInspirationImage {
@@ -104,6 +106,7 @@ export interface PortalData {
     termsAcceptedAt: string | null;
     signedAt: string | null;
     signerName: string | null;
+    signatureImage: string | null;
     complete: boolean;
     termsUrl: string | null;
   };
