@@ -116,8 +116,10 @@ export const DEFAULT_SERVICES_CATEGORIES: ServicesCategory[] = [
 export function createDefaultServicesConfig(): ServicesPageConfig {
   return {
     pageTemplate: "services",
+    showHero: true,
     sectionLabel: "PILIHAN",
     title: "Pakej & Harga",
+    showPackages: true,
     categories: DEFAULT_SERVICES_CATEGORIES.map((cat) => ({
       ...cat,
       packages: cat.packages.map((p) => ({ ...p })),
@@ -126,7 +128,7 @@ export function createDefaultServicesConfig(): ServicesPageConfig {
     ctaImageUrl:
       "https://images.unsplash.com/photo-1522673607200-164d1b6ce486?q=80&w=600&auto=format&fit=crop",
     ctaHeading: "Ceritakan Hari Bahagia Anda Bersama Kami",
-    ctaPrimaryLabel: "TEMPAH SEKARANG",
-    ctaPrimaryUrl: "/check-booking",
+    ctaPrimaryPreset: "book_appointment",
+    ctaSecondaryPreset: "none",
   };
 }

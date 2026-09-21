@@ -140,7 +140,7 @@ defineExpose({ clearSensitiveFields });
       <section class="w-full max-w-sm rounded-[18px] border border-white/15 bg-[#0b0d0c]/95 px-6 py-7 shadow-[0_22px_64px_rgba(0,0,0,0.48)] backdrop-blur-md sm:px-8">
         <p
           v-if="gate?.clientName"
-          class="text-[11px] font-semibold uppercase tracking-[0.22em]"
+          class="text-[11px] font-semibold tracking-wide"
           :style="{ color: 'var(--gate-accent)' }"
         >
           {{ gate.clientName }}

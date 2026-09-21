@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, toRef } from "vue";
 import SiteChrome from "../portfolio/SiteChrome.vue";
+import LandingPageBootState from "../LandingPageBootState.vue";
 import { tLandingPage } from "../i18n";
 import { resolveHomeCtaPreset } from "./cta-presets";
 import { normalizeHomeSectionOrder } from "./section-order";
@@ -61,30 +62,21 @@ function onCtaClick(url: string) {
 </script>
 
 <template>
-  <div :class="['min-h-full w-full max-w-full overflow-x-hidden', surfaceClass]">
+  <div :class="['min-h-full w-full max-w-full overflow-x-clip', surfaceClass]">
     <component :is="'style'" v-html="themeStyle" />
 
-    <div
+    <LandingPageBootState
       v-if="loading"
-      class="flex min-h-[60vh] items-center justify-center py-24 text-[var(--text-muted)]"
-    >
-      Loading...
-    </div>
+      :theme="config"
+      label="Loading"
+    />
 
-    <div
+    <LandingPageBootState
       v-else-if="loadError"
-      class="flex min-h-[60vh] flex-col items-center justify-center gap-4 px-6 py-24 text-center"
-    >
-      <p class="text-[var(--text-muted)]">{{ loadError }}</p>
-      <button
-        type="button"
-        class="rounded-md border px-4 py-2 text-sm"
-        :class="buttonRadiusClass"
-        @click="emit('retryLoad')"
-      >
-        Try again
-      </button>
-    </div>
+      :theme="config"
+      :error="loadError"
+      @retry="emit('retryLoad')"
+    />
 
     <SiteChrome
       v-else
@@ -106,18 +98,24 @@ function onCtaClick(url: string) {
               :class="[layout.heroContentPaddingClass, layout.heroTextOrderClass]"
             >
               <p
-                class="mb-3 text-xs font-medium uppercase tracking-[0.2em] text-[var(--text-muted)]"
+                class="lp-reveal-child mb-3 text-xs font-medium tracking-[0.2em] text-[var(--text-muted)]"
+                style="--child-i: 0"
               >
                 {{ config.heroSubtitle }}
               </p>
-              <h1 :class="layout.heroTitleClass">
+              <h1
+                class="lp-reveal-child"
+                :class="layout.heroTitleClass"
+                style="--child-i: 1"
+              >
                 {{ config.heroTagline }}
               </h1>
               <button
                 type="button"
-                class="self-start px-5 py-3 text-xs font-semibold uppercase tracking-wider border sm:px-6"
+                class="lp-reveal-child self-start px-5 py-3 text-xs font-semibold tracking-wider border sm:px-6"
                 :class="buttonRadiusClass"
                 :style="{
+                  '--child-i': 2,
                   borderColor: 'var(--border-color)',
                   color: 'var(--text-main)',
                   backgroundColor: 'transparent',
@@ -129,7 +127,7 @@ function onCtaClick(url: string) {
             </div>
             <div
               :class="[
-                'relative overflow-hidden',
+                'lp-reveal-media relative overflow-hidden',
                 layout.heroImageOrderClass,
                 layout.heroImageMinHeightClass,
               ]"

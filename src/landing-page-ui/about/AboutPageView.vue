@@ -1,8 +1,12 @@
 <script setup lang="ts">
-import { toRef } from "vue";
+import { computed, toRef } from "vue";
 import SiteChrome from "../portfolio/SiteChrome.vue";
+import LandingPageBootState from "../LandingPageBootState.vue";
 import type { AboutPageConfig } from "./types";
 import type { LandingPageTheme, StudioLanguage } from "../types";
+import type { HomePreviewLayout } from "../home-marketing/useHomeLayout";
+import { resolveHomeCtaPreset } from "../home-marketing/cta-presets";
+import { useAboutLayout } from "./useAboutLayout";
 import { useLandingPageStyles } from "../useLandingPageStyles";
 
 const props = withDefaults(
@@ -11,6 +15,7 @@ const props = withDefaults(
     styleConfig: LandingPageTheme;
     language?: StudioLanguage;
     mode?: "live" | "preview";
+    previewLayout?: HomePreviewLayout;
     loading?: boolean;
     loadError?: string | null;
     surfaceClass?: string;
@@ -18,6 +23,7 @@ const props = withDefaults(
   {
     language: "en",
     mode: "preview",
+    previewLayout: null,
     loading: false,
     loadError: null,
     surfaceClass: "landing-surface",
@@ -31,7 +37,17 @@ const emit = defineEmits<{
 }>();
 
 const styleRef = toRef(props, "styleConfig");
+const previewLayoutRef = toRef(props, "previewLayout");
 const { themeStyle, buttonRadiusClass } = useLandingPageStyles(styleRef);
+const layout = useAboutLayout(previewLayoutRef);
+
+const primaryCta = computed(() =>
+  resolveHomeCtaPreset(props.about.ctaPrimaryPreset, props.language),
+);
+
+const secondaryCta = computed(() =>
+  resolveHomeCtaPreset(props.about.ctaSecondaryPreset, props.language),
+);
 
 function onCtaClick(url: string) {
   emit("navigate", url);
@@ -42,81 +58,85 @@ function onCtaClick(url: string) {
   <div :class="['min-h-full', surfaceClass]">
     <component :is="'style'" v-html="themeStyle" />
 
-    <div
+    <LandingPageBootState
       v-if="loading"
-      class="flex min-h-[60vh] items-center justify-center py-24 text-[var(--text-muted)]"
-    >
-      Loading...
-    </div>
+      :theme="styleConfig"
+      label="Loading"
+    />
 
-    <div
+    <LandingPageBootState
       v-else-if="loadError"
-      class="flex min-h-[60vh] flex-col items-center justify-center gap-4 px-6 py-24 text-center"
-    >
-      <p class="text-[var(--text-muted)]">{{ loadError }}</p>
-      <button
-        type="button"
-        class="rounded-md border px-4 py-2 text-sm"
-        :class="buttonRadiusClass"
-        @click="emit('retryLoad')"
-      >
-        Try again
-      </button>
-    </div>
+      :theme="styleConfig"
+      :error="loadError"
+      @retry="emit('retryLoad')"
+    />
 
     <SiteChrome
       v-else
       :style-config="styleConfig"
       :language="language"
       :mode="mode"
+      :preview-layout="previewLayout"
       @navigate="emit('navigate', $event)"
       @language-change="emit('languageChange', $event)"
     >
       <!-- Hero intro -->
-      <section class="mx-auto max-w-4xl px-4 pt-12 pb-8 md:px-6 md:pt-16 text-center">
+      <section :class="layout.heroIntroClass">
         <p
-          class="mb-3 text-xs font-medium uppercase tracking-[0.2em] text-[var(--text-muted)]"
+          class="lp-reveal-child mb-3 text-xs font-medium tracking-[0.2em] text-[var(--text-muted)]"
+          style="--child-i: 0"
         >
           {{ about.sectionLabel }}
         </p>
         <h1
-          class="mb-3 text-4xl md:text-5xl text-[var(--text-main)]"
+          class="lp-reveal-child"
+          :class="layout.heroTitleClass"
+          style="--child-i: 1"
         >
           {{ about.title }}
         </h1>
-        <p class="text-base text-[var(--text-muted)] font-light">
+        <p
+          class="lp-reveal-child text-base text-[var(--text-muted)] font-light"
+          style="--child-i: 2"
+        >
           {{ about.subtitle }}
         </p>
       </section>
 
-      <section class="mx-auto max-w-4xl px-4 md:px-6 space-y-6 pb-12">
+      <section :class="layout.heroImagesClass">
         <img
           v-if="about.heroImageUrl"
           :src="about.heroImageUrl"
           :alt="about.title"
-          class="w-full max-h-[480px] object-cover grayscale"
+          class="w-full object-cover grayscale"
+          :class="layout.heroImageMaxHeightClass"
           referrerpolicy="no-referrer"
         />
         <img
           v-if="about.teamImageUrl"
           :src="about.teamImageUrl"
           :alt="about.subtitle"
-          class="w-full max-h-[480px] object-cover"
+          class="w-full object-cover"
+          :class="layout.heroImageMaxHeightClass"
           referrerpolicy="no-referrer"
         />
       </section>
 
       <!-- Mission -->
-      <section class="mx-auto max-w-3xl px-4 md:px-6 py-12 text-center">
-        <p class="text-lg md:text-xl font-title leading-relaxed text-[var(--text-main)]">
+      <section :class="layout.missionClass">
+        <p :class="layout.missionTextClass">
           {{ about.missionStatement }}
         </p>
       </section>
 
       <!-- Values -->
-      <section class="mx-auto max-w-6xl px-4 md:px-6 py-12">
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-10 text-center">
-          <article v-for="value in about.values" :key="value.id">
+      <section :class="layout.sectionPaddingClass">
+        <div :class="layout.valuesGridClass">
+          <article
+            v-for="value in about.values"
+            :key="value.id"
+            :class="layout.valuesItemClass"
+          >
             <h3 class="mb-3 text-lg text-[var(--text-main)]">
               {{ value.title }}
             </h3>
@@ -128,17 +148,15 @@ function onCtaClick(url: string) {
       </section>
 
       <!-- Process -->
-      <section class="mx-auto max-w-6xl px-4 md:px-6 py-16">
-        <h2
-          class="mb-12 text-center text-3xl md:text-4xl text-[var(--text-main)]"
-        >
+      <section :class="layout.processSectionClass">
+        <h2 :class="layout.processHeadingClass">
           {{ about.processLabel }}
         </h2>
-        <div class="grid grid-cols-2 md:grid-cols-5 gap-8">
+        <div :class="layout.processGridClass">
           <article
             v-for="step in about.processSteps"
             :key="step.id"
-            class="text-center"
+            :class="layout.processItemClass"
           >
             <p class="mb-2 text-xs font-medium text-[var(--text-muted)]">
               {{ step.number }}
@@ -156,10 +174,13 @@ function onCtaClick(url: string) {
       <!-- Testimonial -->
       <section
         v-if="about.showTestimonial"
-        class="mx-auto max-w-6xl px-4 md:px-6 py-16"
+        :class="layout.sectionPaddingClass"
       >
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-10 items-center">
-          <div class="overflow-hidden aspect-[3/4] max-h-[520px] bg-[var(--icon-bg)]">
+        <div :class="layout.testimonialGridClass">
+          <div
+            class="overflow-hidden aspect-[3/4] bg-[var(--icon-bg)]"
+            :class="layout.testimonialImageMaxHeightClass"
+          >
             <img
               v-if="about.testimonial.imageUrl"
               :src="about.testimonial.imageUrl"
@@ -169,12 +190,10 @@ function onCtaClick(url: string) {
             />
           </div>
           <div>
-            <blockquote
-              class="mb-6 text-xl md:text-2xl font-title leading-relaxed text-[var(--text-main)]"
-            >
+            <blockquote :class="layout.testimonialQuoteClass">
               "{{ about.testimonial.quote }}"
             </blockquote>
-            <p class="text-xs uppercase tracking-wide text-[var(--text-muted)]">
+            <p class="text-xs tracking-wide text-[var(--text-muted)]">
               {{ about.testimonial.attribution }}
             </p>
           </div>
@@ -184,7 +203,7 @@ function onCtaClick(url: string) {
       <!-- CTA -->
       <section
         v-if="about.showCta"
-        class="mx-auto max-w-3xl px-4 md:px-6 pb-20 text-center"
+        :class="layout.ctaSectionClass"
       >
         <img
           v-if="about.ctaImageUrl"
@@ -193,36 +212,35 @@ function onCtaClick(url: string) {
           class="mx-auto mb-8 h-28 w-28 object-cover rounded-sm"
           referrerpolicy="no-referrer"
         />
-        <h2
-          class="mb-8 text-2xl md:text-3xl leading-snug text-[var(--text-main)]"
-        >
+        <h2 :class="layout.ctaHeadingClass">
           {{ about.ctaHeading }}
         </h2>
-        <div class="flex flex-col sm:flex-row items-center justify-center gap-3">
+        <div :class="layout.ctaButtonsClass">
           <button
+            v-if="primaryCta"
             type="button"
-            class="min-w-[200px] px-6 py-3 text-xs font-semibold uppercase tracking-wider"
-            :class="buttonRadiusClass"
+            :class="[layout.ctaButtonClass, buttonRadiusClass]"
             :style="{
               backgroundColor: styleConfig.primaryColor,
               color: styleConfig.primaryTextColor,
             }"
-            @click="onCtaClick(about.ctaPrimaryUrl)"
+            @click="onCtaClick(primaryCta.url)"
           >
-            {{ about.ctaPrimaryLabel }}
+            {{ primaryCta.label }}
           </button>
           <button
+            v-if="secondaryCta"
             type="button"
-            class="min-w-[200px] px-6 py-3 text-xs font-semibold uppercase tracking-wider border"
-            :class="buttonRadiusClass"
+            class="border"
+            :class="[layout.ctaButtonClass, buttonRadiusClass]"
             :style="{
               borderColor: 'var(--border-color)',
               color: 'var(--text-main)',
               backgroundColor: 'transparent',
             }"
-            @click="onCtaClick(about.ctaSecondaryUrl)"
+            @click="onCtaClick(secondaryCta.url)"
           >
-            {{ about.ctaSecondaryLabel }}
+            {{ secondaryCta.label }}
           </button>
         </div>
       </section>

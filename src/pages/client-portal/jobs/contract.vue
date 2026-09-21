@@ -9,7 +9,7 @@
           <p class="text-sm tracking-wide" :style="{ color: 'var(--p-muted)' }">
             Documents shared for your booking.
           </p>
-          <span class="text-[10px] tracking-[0.2em]" :style="{ color: 'var(--p-muted)' }">
+          <span class="text-[10px] tracking-wide" :style="{ color: 'var(--p-muted)' }">
             {{ portalData.contracts.length }} files
           </span>
         </div>
@@ -32,7 +32,7 @@
             </span>
             <div class="min-w-0">
               <p class="truncate text-base font-semibold tracking-wide">{{ doc.title }}</p>
-              <p class="mt-1.5 text-xs tracking-wider" :style="{ color: 'var(--p-muted)' }">
+              <p class="mt-1.5 text-xs tracking-wide" :style="{ color: 'var(--p-muted)' }">
                 Updated {{ formatDate(doc.updatedAt) }}
                 <span v-if="doc.signer" class="opacity-50 mx-1">|</span>
                 <span v-if="doc.signer">{{ doc.signer }}</span>
@@ -42,7 +42,7 @@
             </div>
           </div>
           <div class="flex items-center gap-3 sm:mt-1">
-            <p class="text-[10px] font-semibold tracking-[0.2em]" :style="{ color: 'var(--p-text)' }">
+            <p class="text-[10px] font-semibold tracking-wide" :style="{ color: 'var(--p-text)' }">
               {{ doc.status }}
             </p>
             <button

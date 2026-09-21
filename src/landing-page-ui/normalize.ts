@@ -4,6 +4,7 @@ import { applyStudioProfileOverrides } from "./studio-profile-merge";
 import { safeHttpUrl, safeHttpsUrl } from "./useLandingPageStyles";
 import {
   SECTION_KEYS,
+  normalizeLandingPageDesignId,
   type CustomLinkItem,
   type FaqItem,
   type LandingPageConfig,
@@ -204,6 +205,8 @@ export function normalizeLandingPageConfig(
     theme.showLanguageSwitcher,
     defaults.showLanguageSwitcher,
   );
+
+  theme.designId = normalizeLandingPageDesignId(theme.designId);
 
   Object.assign(theme, normalizeHomeMarketingContent(raw));
 

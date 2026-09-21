@@ -5,6 +5,29 @@ export type EmergencyMethods = "both" | "whatsapp" | "call";
 export type EmergencyPhoneType = "system" | "custom";
 export type LogoStyle = "transparent" | "circle" | "square";
 export type StudioLanguage = "en" | "bm";
+export type LandingPageDesignId = "classic" | "editorial" | "atelier" | "billboard";
+
+export const LANDING_PAGE_DESIGN_IDS = [
+  "classic",
+  "editorial",
+  "atelier",
+  "billboard",
+] as const;
+
+export function isLandingPageDesignId(
+  value: unknown,
+): value is LandingPageDesignId {
+  return (
+    typeof value === "string" &&
+    (LANDING_PAGE_DESIGN_IDS as readonly string[]).includes(value)
+  );
+}
+
+export function normalizeLandingPageDesignId(
+  value: unknown,
+): LandingPageDesignId {
+  return isLandingPageDesignId(value) ? value : "classic";
+}
 
 export type FaqItem = { id: string; question: string; answer: string };
 
@@ -39,6 +62,7 @@ export const SECTION_KEYS = [
 export type SectionKey = (typeof SECTION_KEYS)[number];
 
 export type LandingPageTheme = {
+  designId: LandingPageDesignId;
   presetName: string;
   primaryColor: string;
   primaryTextColor: string;

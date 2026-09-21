@@ -13,6 +13,7 @@ import {
   type PortalData,
   type PortalInvoice,
 } from "@/services/portal.service";
+import { useStudioStore } from "@/stores/studio";
 
 export type PortalPasscodeSubmit =
   | { mode: "unlock"; passcode: string }
@@ -48,6 +49,11 @@ export interface ClientPortalJobContext {
   studioWhatsApp: ComputedRef<string | null>;
   themeVars: ComputedRef<Record<string, string>>;
   formatDate: (dateStr: string) => string;
+  formatTime: (timeStr: string | null | undefined) => string;
+  formatTimeRange: (
+    start?: string | null,
+    end?: string | null,
+  ) => string;
   formatMoney: (value: number, currency: string | null) => string;
   galleryRoute: (galleryId: string) => {
     name: string;
@@ -77,6 +83,7 @@ export const CLIENT_PORTAL_JOB_KEY: InjectionKey<ClientPortalJobContext> =
 export function useClientPortalJobProvide(): ClientPortalJobContext {
   const route = useRoute();
   const router = useRouter();
+  const studioStore = useStudioStore();
   const {
     isIosSafari,
     isStandalone,
@@ -124,6 +131,31 @@ export function useClientPortalJobProvide(): ClientPortalJobContext {
     }
   };
 
+  /** Convert "HH:mm" / "HH:mm:ss" to 12-hour display, e.g. "2:30 PM". */
+  const formatTime = (timeStr: string | null | undefined) => {
+    if (!timeStr) return "";
+    const match = /^(\d{1,2}):(\d{2})/.exec(timeStr.trim());
+    if (!match) return timeStr;
+    const hour = Number.parseInt(match[1]!, 10);
+    const minutes = match[2]!;
+    if (Number.isNaN(hour) || hour < 0 || hour > 23) return timeStr;
+    const period = hour >= 12 ? "PM" : "AM";
+    const hour12 = hour % 12 || 12;
+    return `${hour12}:${minutes} ${period}`;
+  };
+
+  const formatTimeRange = (
+    start?: string | null,
+    end?: string | null,
+  ) => {
+    const startLabel = formatTime(start);
+    const endLabel = formatTime(end);
+    if (startLabel && endLabel) return `${startLabel} – ${endLabel}`;
+    if (startLabel) return startLabel;
+    if (endLabel) return endLabel;
+    return "TBC";
+  };
+
   const formatMoney = (value: number, currency: string | null) => {
     if (!currency) {
       return value.toLocaleString("en-MY", {
@@ -154,11 +186,23 @@ export function useClientPortalJobProvide(): ClientPortalJobContext {
 
   const primarySession = computed(() => portalData.value?.sessions[0] ?? null);
   const currentJobId = computed(() => String(route.params.jobId || ""));
-  const galleryRoute = (galleryId: string) => ({
-    name: "client-portal-gallery",
-    params: { jobId: currentJobId.value, galleryId },
-    query: route.query,
-  });
+  const galleryRoute = (galleryId: string) => {
+    // New tabs do not share sessionStorage. Keep ?studio= so localhost
+    // (and any host that resolves studio from query) still boots.
+    const query = { ...route.query };
+    const studioFromQuery = Array.isArray(query.studio)
+      ? query.studio[0]
+      : query.studio;
+    const slug = studioFromQuery || studioStore.studio?.slug;
+    if (slug && !studioFromQuery) {
+      query.studio = slug;
+    }
+    return {
+      name: "client-portal-gallery",
+      params: { jobId: currentJobId.value, galleryId },
+      query,
+    };
+  };
   const portalHeroImage = computed(
     () =>
       portalData.value?.portalHeroUrl
@@ -350,7 +394,7 @@ export function useClientPortalJobProvide(): ClientPortalJobContext {
     resetPortalState();
 
     if (!jobId) {
-      error.value = "No job ID provided.";
+      error.value = "No booking ID provided.";
       isLoading.value = false;
       return;
     }
@@ -906,6 +950,8 @@ export function useClientPortalJobProvide(): ClientPortalJobContext {
     studioWhatsApp,
     themeVars,
     formatDate,
+    formatTime,
+    formatTimeRange,
     formatMoney,
     galleryRoute,
     showNotice,

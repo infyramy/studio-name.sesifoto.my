@@ -7,11 +7,30 @@ import {
   ServicesPageView,
   LeadFormPageView,
   AboutPageView,
+  EditorialHomePageView,
+  EditorialPortfolioPageView,
+  EditorialServicesPageView,
+  EditorialAboutPageView,
+  EditorialLeadFormPageView,
+  AtelierHomePageView,
+  AtelierPortfolioPageView,
+  AtelierServicesPageView,
+  AtelierAboutPageView,
+  AtelierLeadFormPageView,
+  BillboardHomePageView,
+  BillboardPortfolioPageView,
+  BillboardServicesPageView,
+  BillboardAboutPageView,
+  BillboardLeadFormPageView,
+  LandingPageBootState,
   normalizeLandingPageConfig,
   normalizePortfolioConfig,
   normalizeServicesConfig,
   normalizeLeadFormConfig,
   normalizeAboutConfig,
+  isEditorialDesign,
+  isAtelierDesign,
+  isBillboardDesign,
   type LandingPageTheme,
   type PortfolioPageConfig,
   type ServicesPageConfig,
@@ -57,13 +76,32 @@ const leadFormConfig = ref<LeadFormPageConfig | null>(null);
 const aboutConfig = ref<AboutPageConfig | null>(null);
 const siteStyle = ref<LandingPageTheme | null>(null);
 
-const leadFormViewRef = ref<InstanceType<typeof LeadFormPageView> | null>(null);
+const leadFormViewRef = ref<{
+  markSubmitSuccess: () => void;
+  markSubmitFailure: (message?: string) => void;
+} | null>(null);
 
 const isGalleryOpen = ref(false);
 const galleryInitialIndex = ref(0);
 
 const language = computed<StudioLanguage>(() =>
   studioStore.currentLanguage === "EN" ? "en" : "bm",
+);
+
+const isEditorial = computed(() =>
+  isEditorialDesign(
+    (isTemplatePage.value ? siteStyle.value : theme.value)?.designId,
+  ),
+);
+const isAtelier = computed(() =>
+  isAtelierDesign(
+    (isTemplatePage.value ? siteStyle.value : theme.value)?.designId,
+  ),
+);
+const isBillboard = computed(() =>
+  isBillboardDesign(
+    (isTemplatePage.value ? siteStyle.value : theme.value)?.designId,
+  ),
 );
 
 const studioDefaults = computed(() => {
@@ -112,6 +150,50 @@ const canonicalUrl = computed(() => {
 
 useLandingPageMeta(theme, { studioName, canonicalUrl });
 
+const lastSiteTheme = ref<LandingPageTheme | null>(readCachedSiteTheme());
+
+function siteThemeCacheKey() {
+  const slug =
+    studioStore.studioSlug ||
+    getStudioSlugFromSubdomain() ||
+    "default";
+  return `sesifoto_lp_theme_${slug}`;
+}
+
+function readCachedSiteTheme(): LandingPageTheme | null {
+  try {
+    const raw = sessionStorage.getItem(siteThemeCacheKey());
+    if (!raw) return null;
+    return normalizeLandingPageConfig(JSON.parse(raw) as Record<string, unknown>);
+  } catch {
+    return null;
+  }
+}
+
+function rememberSiteTheme(next: LandingPageTheme) {
+  lastSiteTheme.value = next;
+  try {
+    sessionStorage.setItem(
+      siteThemeCacheKey(),
+      JSON.stringify({
+        presetName: next.presetName,
+        primaryColor: next.primaryColor,
+        primaryTextColor: next.primaryTextColor,
+        secondaryColor: next.secondaryColor,
+        secondaryTextColor: next.secondaryTextColor,
+        mode: next.mode,
+        titleFont: next.titleFont,
+        bodyFont: next.bodyFont,
+        logoUrl: next.logoUrl,
+        studioName: next.studioName,
+        radius: next.radius,
+      }),
+    );
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
 const isInitialLoading = computed(
   () =>
     pageLoading.value ||
@@ -123,6 +205,34 @@ const isInitialLoading = computed(
     (isLeadForm.value && (!leadFormConfig.value || !siteStyle.value)) ||
     (isAboutUs.value && (!aboutConfig.value || !siteStyle.value)),
 );
+
+const hasReadyPage = computed(() => {
+  if (isPortfolio.value) return !!(portfolioConfig.value && siteStyle.value);
+  if (isServices.value) return !!(servicesConfig.value && siteStyle.value);
+  if (isLeadForm.value) return !!(leadFormConfig.value && siteStyle.value);
+  if (isAboutUs.value) return !!(aboutConfig.value && siteStyle.value);
+  return !!theme.value;
+});
+
+const showBoot = computed(
+  () => isInitialLoading.value || (!!pageError.value && !hasReadyPage.value),
+);
+
+const bootTheme = computed(
+  () =>
+    siteStyle.value ||
+    theme.value ||
+    lastSiteTheme.value ||
+    normalizeLandingPageConfig({}, studioDefaults.value),
+);
+
+function clearPageConfigs() {
+  portfolioConfig.value = null;
+  servicesConfig.value = null;
+  leadFormConfig.value = null;
+  aboutConfig.value = null;
+  // Keep theme/siteStyle for themed boot until new page data arrives.
+}
 
 async function loadPage() {
   const slug =
@@ -137,6 +247,7 @@ async function loadPage() {
 
   pageLoading.value = true;
   pageError.value = null;
+  clearPageConfigs();
 
   try {
     if (!studioStore.studio && !studioStore.loading) {
@@ -150,69 +261,53 @@ async function loadPage() {
 
     if (isPortfolio.value) {
       portfolioConfig.value = normalizePortfolioConfig(data.config);
-      servicesConfig.value = null;
-      leadFormConfig.value = null;
-      aboutConfig.value = null;
       siteStyle.value = normalizeLandingPageConfig(
         data.siteStyle ?? {},
         studioDefaults.value,
         { products: data.products },
       );
       theme.value = siteStyle.value;
+      rememberSiteTheme(siteStyle.value);
     } else if (isServices.value) {
       servicesConfig.value = normalizeServicesConfig(data.config);
-      portfolioConfig.value = null;
-      leadFormConfig.value = null;
-      aboutConfig.value = null;
       siteStyle.value = normalizeLandingPageConfig(
         data.siteStyle ?? {},
         studioDefaults.value,
         { products: data.products },
       );
       theme.value = siteStyle.value;
+      rememberSiteTheme(siteStyle.value);
     } else if (isLeadForm.value) {
       leadFormConfig.value = normalizeLeadFormConfig(data.config);
-      portfolioConfig.value = null;
-      servicesConfig.value = null;
-      aboutConfig.value = null;
       siteStyle.value = normalizeLandingPageConfig(
         data.siteStyle ?? {},
         studioDefaults.value,
         { products: data.products },
       );
       theme.value = siteStyle.value;
+      rememberSiteTheme(siteStyle.value);
     } else if (isAboutUs.value) {
       aboutConfig.value = normalizeAboutConfig(data.config);
-      portfolioConfig.value = null;
-      servicesConfig.value = null;
-      leadFormConfig.value = null;
       siteStyle.value = normalizeLandingPageConfig(
         data.siteStyle ?? {},
         studioDefaults.value,
         { products: data.products },
       );
       theme.value = siteStyle.value;
+      rememberSiteTheme(siteStyle.value);
     } else {
       theme.value = normalizeLandingPageConfig(
         data.config,
         studioDefaults.value,
         { pageType: data.type, products: data.products },
       );
-      portfolioConfig.value = null;
-      servicesConfig.value = null;
-      leadFormConfig.value = null;
-      aboutConfig.value = null;
-      siteStyle.value = null;
+      siteStyle.value = theme.value;
+      rememberSiteTheme(theme.value);
     }
   } catch (err: unknown) {
     pageError.value =
       err instanceof Error ? err.message : "Failed to load page";
-    theme.value = null;
-    portfolioConfig.value = null;
-    servicesConfig.value = null;
-    leadFormConfig.value = null;
-    aboutConfig.value = null;
-    siteStyle.value = null;
+    clearPageConfigs();
   } finally {
     pageLoading.value = false;
   }
@@ -259,83 +354,242 @@ function onLeadGallery(index: number) {
 </script>
 
 <template>
-  <PortfolioPageView
-    v-if="isPortfolio && portfolioConfig && siteStyle"
-    :portfolio="portfolioConfig"
-    :style-config="siteStyle"
-    :language="language"
-    mode="live"
-    :loading="isInitialLoading"
-    :load-error="pageError"
-    @navigate="onNavigate"
-    @language-change="onLanguageChange"
-    @retry-load="retryLoad"
-  />
-  <ServicesPageView
-    v-else-if="isServices && servicesConfig && siteStyle"
-    :services="servicesConfig"
-    :style-config="siteStyle"
-    :language="language"
-    mode="live"
-    :loading="isInitialLoading"
-    :load-error="pageError"
-    @navigate="onNavigate"
-    @language-change="onLanguageChange"
-    @retry-load="retryLoad"
-  />
-  <LeadFormPageView
-    v-else-if="isLeadForm && leadFormConfig && siteStyle"
-    ref="leadFormViewRef"
-    :lead-form="leadFormConfig"
-    :style-config="siteStyle"
-    :language="language"
-    mode="live"
-    :crm-enabled="productEntitlements.crm"
-    :loading="isInitialLoading"
-    :load-error="pageError"
-    @language-change="onLanguageChange"
-    @navigate="onNavigate"
-    @submit="onLeadSubmit"
-    @open-gallery="onLeadGallery"
-    @retry-load="retryLoad"
-  />
-  <AboutPageView
-    v-else-if="isAboutUs && aboutConfig && siteStyle"
-    :about="aboutConfig"
-    :style-config="siteStyle"
-    :language="language"
-    mode="live"
-    :loading="isInitialLoading"
-    :load-error="pageError"
-    @navigate="onNavigate"
-    @language-change="onLanguageChange"
-    @retry-load="retryLoad"
-  />
-  <MarketingHomePageView
-    v-else-if="theme"
-    :config="theme"
-    :language="language"
-    mode="live"
-    :loading="isInitialLoading"
-    :load-error="pageError"
-    @navigate="onNavigate"
-    @language-change="onLanguageChange"
-    @retry-load="retryLoad"
-  />
-  <MarketingHomePageView
-    v-else
-    :config="normalizeLandingPageConfig({}, studioDefaults)"
-    :language="language"
-    mode="live"
-    :loading="true"
-  />
-  <ImageCarousel
-    v-if="isLeadForm"
-    :show="isGalleryOpen"
-    :images="galleryImages.filter((x) => x?.trim())"
-    :initial-index="galleryInitialIndex"
-    title="Gallery"
-    description="View our gallery"
-    @close="isGalleryOpen = false"
-  />
+  <div class="min-h-dvh w-full">
+    <LandingPageBootState
+      v-if="showBoot"
+      :theme="bootTheme"
+      :error="pageError"
+      label="Loading"
+      @retry="retryLoad"
+    />
+    <template v-else-if="isEditorial">
+      <EditorialPortfolioPageView
+        v-if="isPortfolio && portfolioConfig && siteStyle"
+        :portfolio="portfolioConfig"
+        :style-config="siteStyle"
+        :language="language"
+        mode="live"
+        @navigate="onNavigate"
+        @language-change="onLanguageChange"
+        @retry-load="retryLoad"
+      />
+      <EditorialServicesPageView
+        v-else-if="isServices && servicesConfig && siteStyle"
+        :services="servicesConfig"
+        :style-config="siteStyle"
+        :language="language"
+        mode="live"
+        @navigate="onNavigate"
+        @language-change="onLanguageChange"
+        @retry-load="retryLoad"
+      />
+      <EditorialLeadFormPageView
+        v-else-if="isLeadForm && leadFormConfig && siteStyle"
+        ref="leadFormViewRef"
+        :lead-form="leadFormConfig"
+        :style-config="siteStyle"
+        :language="language"
+        mode="live"
+        :crm-enabled="productEntitlements.crm"
+        @language-change="onLanguageChange"
+        @navigate="onNavigate"
+        @submit="onLeadSubmit"
+        @open-gallery="onLeadGallery"
+        @retry-load="retryLoad"
+      />
+      <EditorialAboutPageView
+        v-else-if="isAboutUs && aboutConfig && siteStyle"
+        :about="aboutConfig"
+        :style-config="siteStyle"
+        :language="language"
+        mode="live"
+        @navigate="onNavigate"
+        @language-change="onLanguageChange"
+        @retry-load="retryLoad"
+      />
+      <EditorialHomePageView
+        v-else-if="theme"
+        :config="theme"
+        :language="language"
+        mode="live"
+        @navigate="onNavigate"
+        @language-change="onLanguageChange"
+        @retry-load="retryLoad"
+      />
+    </template>
+    <template v-else-if="isAtelier">
+      <AtelierPortfolioPageView
+        v-if="isPortfolio && portfolioConfig && siteStyle"
+        :portfolio="portfolioConfig"
+        :style-config="siteStyle"
+        :language="language"
+        mode="live"
+        @navigate="onNavigate"
+        @language-change="onLanguageChange"
+        @retry-load="retryLoad"
+      />
+      <AtelierServicesPageView
+        v-else-if="isServices && servicesConfig && siteStyle"
+        :services="servicesConfig"
+        :style-config="siteStyle"
+        :language="language"
+        mode="live"
+        @navigate="onNavigate"
+        @language-change="onLanguageChange"
+        @retry-load="retryLoad"
+      />
+      <AtelierLeadFormPageView
+        v-else-if="isLeadForm && leadFormConfig && siteStyle"
+        ref="leadFormViewRef"
+        :lead-form="leadFormConfig"
+        :style-config="siteStyle"
+        :language="language"
+        mode="live"
+        :crm-enabled="productEntitlements.crm"
+        @language-change="onLanguageChange"
+        @navigate="onNavigate"
+        @submit="onLeadSubmit"
+        @open-gallery="onLeadGallery"
+        @retry-load="retryLoad"
+      />
+      <AtelierAboutPageView
+        v-else-if="isAboutUs && aboutConfig && siteStyle"
+        :about="aboutConfig"
+        :style-config="siteStyle"
+        :language="language"
+        mode="live"
+        @navigate="onNavigate"
+        @language-change="onLanguageChange"
+        @retry-load="retryLoad"
+      />
+      <AtelierHomePageView
+        v-else-if="theme"
+        :config="theme"
+        :language="language"
+        mode="live"
+        @navigate="onNavigate"
+        @language-change="onLanguageChange"
+        @retry-load="retryLoad"
+      />
+    </template>
+    <template v-else-if="isBillboard">
+      <BillboardPortfolioPageView
+        v-if="isPortfolio && portfolioConfig && siteStyle"
+        :portfolio="portfolioConfig"
+        :style-config="siteStyle"
+        :language="language"
+        mode="live"
+        @navigate="onNavigate"
+        @language-change="onLanguageChange"
+        @retry-load="retryLoad"
+      />
+      <BillboardServicesPageView
+        v-else-if="isServices && servicesConfig && siteStyle"
+        :services="servicesConfig"
+        :style-config="siteStyle"
+        :language="language"
+        mode="live"
+        @navigate="onNavigate"
+        @language-change="onLanguageChange"
+        @retry-load="retryLoad"
+      />
+      <BillboardLeadFormPageView
+        v-else-if="isLeadForm && leadFormConfig && siteStyle"
+        ref="leadFormViewRef"
+        :lead-form="leadFormConfig"
+        :style-config="siteStyle"
+        :language="language"
+        mode="live"
+        :crm-enabled="productEntitlements.crm"
+        @language-change="onLanguageChange"
+        @navigate="onNavigate"
+        @submit="onLeadSubmit"
+        @open-gallery="onLeadGallery"
+        @retry-load="retryLoad"
+      />
+      <BillboardAboutPageView
+        v-else-if="isAboutUs && aboutConfig && siteStyle"
+        :about="aboutConfig"
+        :style-config="siteStyle"
+        :language="language"
+        mode="live"
+        @navigate="onNavigate"
+        @language-change="onLanguageChange"
+        @retry-load="retryLoad"
+      />
+      <BillboardHomePageView
+        v-else-if="theme"
+        :config="theme"
+        :language="language"
+        mode="live"
+        @navigate="onNavigate"
+        @language-change="onLanguageChange"
+        @retry-load="retryLoad"
+      />
+    </template>
+    <template v-else>
+      <PortfolioPageView
+        v-if="isPortfolio && portfolioConfig && siteStyle"
+        :portfolio="portfolioConfig"
+        :style-config="siteStyle"
+        :language="language"
+        mode="live"
+        @navigate="onNavigate"
+        @language-change="onLanguageChange"
+        @retry-load="retryLoad"
+      />
+      <ServicesPageView
+        v-else-if="isServices && servicesConfig && siteStyle"
+        :services="servicesConfig"
+        :style-config="siteStyle"
+        :language="language"
+        mode="live"
+        @navigate="onNavigate"
+        @language-change="onLanguageChange"
+        @retry-load="retryLoad"
+      />
+      <LeadFormPageView
+        v-else-if="isLeadForm && leadFormConfig && siteStyle"
+        ref="leadFormViewRef"
+        :lead-form="leadFormConfig"
+        :style-config="siteStyle"
+        :language="language"
+        mode="live"
+        :crm-enabled="productEntitlements.crm"
+        @language-change="onLanguageChange"
+        @navigate="onNavigate"
+        @submit="onLeadSubmit"
+        @open-gallery="onLeadGallery"
+        @retry-load="retryLoad"
+      />
+      <AboutPageView
+        v-else-if="isAboutUs && aboutConfig && siteStyle"
+        :about="aboutConfig"
+        :style-config="siteStyle"
+        :language="language"
+        mode="live"
+        @navigate="onNavigate"
+        @language-change="onLanguageChange"
+        @retry-load="retryLoad"
+      />
+      <MarketingHomePageView
+        v-else-if="theme"
+        :config="theme"
+        :language="language"
+        mode="live"
+        @navigate="onNavigate"
+        @language-change="onLanguageChange"
+        @retry-load="retryLoad"
+      />
+    </template>
+    <ImageCarousel
+      v-if="isLeadForm"
+      :show="isGalleryOpen"
+      :images="galleryImages.filter((x) => x?.trim())"
+      :initial-index="galleryInitialIndex"
+      title="Gallery"
+      description="View our gallery"
+      @close="isGalleryOpen = false"
+    />
+  </div>
 </template>

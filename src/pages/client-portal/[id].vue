@@ -1,40 +1,21 @@
 <template>
-  <div
-    class="flex min-h-screen items-center justify-center px-6"
-    :style="themeVars"
-  >
-    <div
-      class="space-y-3 text-center"
-      :style="{ color: 'var(--p-text)', background: 'transparent' }"
-    >
-      <div
-        class="mx-auto h-9 w-9 animate-spin rounded-full border-2 border-t-transparent"
-        :style="{ borderColor: 'var(--p-accent)', borderTopColor: 'transparent' }"
-      />
-      <p
-        class="text-xs uppercase tracking-[0.2em]"
-        :style="{ color: 'var(--p-muted)' }"
-      >
-        Opening portal
-      </p>
-      <p v-if="error" class="mt-4 max-w-sm text-sm" :style="{ color: 'var(--p-text)' }">
-        {{ error }}
-      </p>
-      <RouterLink
-        v-if="error"
-        :to="{ name: 'client-portal-access' }"
-        class="mt-4 inline-block text-xs font-semibold uppercase tracking-wider"
-        :style="{ color: 'var(--p-accent)' }"
-      >
-        Go to login
-      </RouterLink>
-    </div>
+  <div class="portal-font" :style="[{ background: 'var(--p-shell)', color: 'var(--p-text)' }, themeVars]">
+    <PortalErrorState
+      v-if="error"
+      :title="'Unable to open portal'"
+      :message="error"
+      action-label="Go to login"
+      @action="goLogin"
+    />
+    <PortalLoadingState v-else label="Opening portal" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { onBeforeUnmount, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import PortalErrorState from "@/components/portal/PortalErrorState.vue";
+import PortalLoadingState from "@/components/portal/PortalLoadingState.vue";
 import { PortalApiError, portalService } from "@/services/portal.service";
 import { usePortalTheme } from "@/composables/usePortalTheme";
 
@@ -78,6 +59,10 @@ function jobOverviewLocation(jobId: string) {
   };
 }
 
+function goLogin() {
+  void router.replace({ name: "client-portal-access" });
+}
+
 async function start() {
   controller?.abort();
   const next = new AbortController();
@@ -87,7 +72,7 @@ async function start() {
   error.value = "";
 
   if (!jobId) {
-    error.value = "No job ID provided.";
+    error.value = "No booking ID provided.";
     return;
   }
 
@@ -99,19 +84,18 @@ async function start() {
     return;
   } catch (caught: unknown) {
     if (gen !== generation || next.signal.aborted) return;
-    if (caught instanceof PortalApiError && caught.status === 401) {
+    if (caught instanceof PortalApiError && (caught.status === 401 || caught.status === 403)) {
       await accessRedirect(jobId);
       return;
     }
-    // Token links without session → email + passcode gate
-    if (getRouteToken()) {
+    if (caught instanceof PortalApiError && caught.status === 404) {
       await accessRedirect(jobId);
       return;
     }
     error.value =
       caught instanceof PortalApiError
         ? caught.message
-        : "Failed to open this portal.";
+        : "Unable to open this portal.";
   }
 }
 
@@ -124,7 +108,6 @@ watch(
 );
 
 onBeforeUnmount(() => {
-  generation += 1;
   controller?.abort();
 });
 </script>

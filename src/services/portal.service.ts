@@ -8,6 +8,11 @@ export interface PortalSession {
   endTime: string;
   venue: string | null;
   cityState: string | null;
+  crew: Array<{
+    name: string;
+    role: string | null;
+    avatar: string | null;
+  }>;
 }
 
 export interface PortalInvoice {
@@ -129,8 +134,8 @@ export type ExchangePortalSessionResponse =
 
 export interface PortalClientLoginRequest {
   studioSlug: string;
-  email: string;
   passcode: string;
+  clientId?: string;
 }
 
 export interface PortalClientLoginResponse {
@@ -142,6 +147,8 @@ export interface PortalClientLoginResponse {
     logoUrl: string | null;
     brandColor: string;
   };
+  accentColor: string;
+  heroUrl: string | null;
 }
 
 export interface PortalLoginGate {
@@ -162,6 +169,13 @@ export interface PortalJobSummary {
   balanceDue: number;
   currency: string | null;
   heroThumb: string | null;
+}
+
+export interface PortalMyJobsResponse {
+  accentColor: string;
+  brandColor: string;
+  heroUrl: string | null;
+  jobs: PortalJobSummary[];
 }
 
 export interface ChangePortalPasscodeRequest {
@@ -267,13 +281,14 @@ async function portalRequest<T>(request: Promise<T>): Promise<T> {
 export const portalService = {
   getLoginGate(
     studioSlug: string,
-    options: PortalRequestOptions & { jobId?: string } = {},
+    options: PortalRequestOptions & { jobId?: string; clientId?: string } = {},
   ): Promise<PortalLoginGate> {
     return portalRequest(
       portalApi<PortalLoginGate>("/portal/auth/gate", {
         query: {
           studioSlug,
           ...(options.jobId ? { jobId: options.jobId } : {}),
+          ...(options.clientId ? { clientId: options.clientId } : {}),
         },
         signal: options.signal,
       }),
@@ -304,9 +319,9 @@ export const portalService = {
 
   listMyJobs(
     options: PortalRequestOptions = {},
-  ): Promise<PortalJobSummary[]> {
+  ): Promise<PortalMyJobsResponse> {
     return portalRequest(
-      portalApi<PortalJobSummary[]>("/portal/me/jobs", {
+      portalApi<PortalMyJobsResponse>("/portal/me/jobs", {
         signal: options.signal,
       }),
     );

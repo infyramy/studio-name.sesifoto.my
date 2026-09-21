@@ -1,8 +1,12 @@
 <script setup lang="ts">
 import { computed, ref, toRef } from "vue";
 import SiteChrome from "./SiteChrome.vue";
+import LandingPageBootState from "../LandingPageBootState.vue";
 import type { PortfolioPageConfig } from "./types";
 import type { LandingPageTheme, StudioLanguage } from "../types";
+import type { HomePreviewLayout } from "../home-marketing/useHomeLayout";
+import { resolveHomeCtaPreset } from "../home-marketing/cta-presets";
+import { usePortfolioLayout } from "./usePortfolioLayout";
 import { useLandingPageStyles } from "../useLandingPageStyles";
 
 const props = withDefaults(
@@ -11,6 +15,7 @@ const props = withDefaults(
     styleConfig: LandingPageTheme;
     language?: StudioLanguage;
     mode?: "live" | "preview";
+    previewLayout?: HomePreviewLayout;
     loading?: boolean;
     loadError?: string | null;
     surfaceClass?: string;
@@ -18,6 +23,7 @@ const props = withDefaults(
   {
     language: "en",
     mode: "preview",
+    previewLayout: null,
     loading: false,
     loadError: null,
     surfaceClass: "landing-surface",
@@ -33,7 +39,9 @@ const emit = defineEmits<{
 const activeCategoryId = ref("all");
 
 const styleRef = toRef(props, "styleConfig");
+const previewLayoutRef = toRef(props, "previewLayout");
 const { themeStyle, buttonRadiusClass } = useLandingPageStyles(styleRef);
+const layout = usePortfolioLayout(previewLayoutRef);
 
 const filteredItems = computed(() => {
   if (activeCategoryId.value === "all") return props.portfolio.items;
@@ -41,6 +49,14 @@ const filteredItems = computed(() => {
     (item) => item.categoryId === activeCategoryId.value,
   );
 });
+
+const primaryCta = computed(() =>
+  resolveHomeCtaPreset(props.portfolio.ctaPrimaryPreset, props.language),
+);
+
+const secondaryCta = computed(() =>
+  resolveHomeCtaPreset(props.portfolio.ctaSecondaryPreset, props.language),
+);
 
 function onCtaClick(url: string) {
   emit("navigate", url);
@@ -51,71 +67,70 @@ function onCtaClick(url: string) {
   <div :class="['min-h-full', surfaceClass]">
     <component :is="'style'" v-html="themeStyle" />
 
-    <div
+    <LandingPageBootState
       v-if="loading"
-      class="flex min-h-[60vh] items-center justify-center py-24 text-[var(--text-muted)]"
-    >
-      Loading...
-    </div>
+      :theme="styleConfig"
+      label="Loading"
+    />
 
-    <div
+    <LandingPageBootState
       v-else-if="loadError"
-      class="flex min-h-[60vh] flex-col items-center justify-center gap-4 px-6 py-24 text-center"
-    >
-      <p class="text-[var(--text-muted)]">{{ loadError }}</p>
-      <button
-        type="button"
-        class="rounded-md border px-4 py-2 text-sm"
-        :class="buttonRadiusClass"
-        @click="emit('retryLoad')"
-      >
-        Try again
-      </button>
-    </div>
+      :theme="styleConfig"
+      :error="loadError"
+      @retry="emit('retryLoad')"
+    />
 
     <SiteChrome
       v-else
       :style-config="styleConfig"
       :language="language"
       :mode="mode"
+      :preview-layout="previewLayout"
       @navigate="emit('navigate', $event)"
       @language-change="emit('languageChange', $event)"
     >
       <!-- Hero -->
-      <section class="mx-auto max-w-6xl px-4 pt-10 pb-8 md:px-6 md:pt-14 text-center">
+      <section :class="layout.heroClass">
         <p
-          class="mb-3 text-xs font-medium uppercase tracking-[0.2em] text-[var(--text-muted)]"
+          class="lp-reveal-child mb-3 text-xs font-medium tracking-[0.2em] text-[var(--text-muted)]"
+          style="--child-i: 0"
         >
           {{ portfolio.sectionLabel }}
         </p>
         <h1
-          class="mb-3 text-4xl md:text-5xl font-bold tracking-tight text-[var(--text-main)]"
+          class="lp-reveal-child"
+          :class="layout.heroTitleClass"
+          style="--child-i: 1"
         >
           {{ portfolio.title }}
         </h1>
-        <p class="mx-auto max-w-xl text-base text-[var(--text-muted)] font-light">
+        <p
+          class="lp-reveal-child mx-auto max-w-xl text-base text-[var(--text-muted)] font-light"
+          style="--child-i: 2"
+        >
           {{ portfolio.subtitle }}
         </p>
       </section>
 
-      <section class="mx-auto max-w-6xl px-4 md:px-6 mb-10">
+      <section :class="layout.featuredImageClass">
         <img
           v-if="portfolio.featuredImageUrl"
           :src="portfolio.featuredImageUrl"
           :alt="portfolio.title"
-          class="w-full max-h-[420px] object-cover rounded-sm"
+          class="lp-reveal-media w-full object-cover rounded-sm"
+          :class="layout.featuredImageMaxHeightClass"
           referrerpolicy="no-referrer"
         />
       </section>
 
       <!-- Gallery filters -->
-      <section class="mx-auto max-w-6xl px-4 md:px-6 pb-6">
-        <div class="flex flex-wrap items-center justify-center gap-2 md:gap-4">
+      <section :class="layout.filtersClass">
+        <div class="flex flex-wrap items-center justify-center gap-2">
           <button
             v-for="cat in portfolio.categories"
             :key="cat.id"
             type="button"
-            class="px-3 py-1.5 text-xs font-medium uppercase tracking-wide transition-colors"
+            class="px-3 py-1.5 text-xs font-medium tracking-wide transition-colors"
             :class="
               activeCategoryId === cat.id
                 ? 'text-[var(--text-main)] border-b-2 border-[var(--text-main)]'
@@ -129,8 +144,8 @@ function onCtaClick(url: string) {
       </section>
 
       <!-- Gallery grid -->
-      <section class="mx-auto max-w-6xl px-4 md:px-6 pb-16">
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
+      <section :class="layout.gallerySectionClass">
+        <div :class="layout.galleryGridClass">
           <article v-for="item in filteredItems" :key="item.id" class="group">
             <div class="overflow-hidden mb-3 aspect-[3/4] bg-[var(--icon-bg)]">
               <img
@@ -140,10 +155,10 @@ function onCtaClick(url: string) {
                 referrerpolicy="no-referrer"
               />
             </div>
-            <h3 class="text-sm font-bold uppercase tracking-wide text-[var(--text-main)]">
+            <h3 class="text-sm font-bold tracking-wide text-[var(--text-main)]">
               {{ item.title }}
             </h3>
-            <p class="mt-1 text-xs text-[var(--text-muted)] uppercase tracking-wide">
+            <p class="mt-1 text-xs text-[var(--text-muted)] tracking-wide">
               {{ item.subtitle }}
             </p>
           </article>
@@ -153,7 +168,7 @@ function onCtaClick(url: string) {
       <!-- CTA -->
       <section
         v-if="portfolio.showCta"
-        class="mx-auto max-w-3xl px-4 md:px-6 pb-20 text-center"
+        :class="layout.ctaSectionClass"
       >
         <img
           v-if="portfolio.ctaImageUrl"
@@ -163,40 +178,39 @@ function onCtaClick(url: string) {
           referrerpolicy="no-referrer"
         />
         <p
-          class="mb-3 text-xs font-medium uppercase tracking-[0.2em] text-[var(--text-muted)]"
+          class="mb-3 text-xs font-medium tracking-[0.2em] text-[var(--text-muted)]"
         >
           {{ portfolio.ctaSectionLabel }}
         </p>
-        <h2
-          class="mb-8 text-2xl md:text-3xl font-bold leading-snug text-[var(--text-main)] max-w-lg mx-auto"
-        >
+        <h2 :class="layout.ctaHeadingClass">
           {{ portfolio.ctaHeading }}
         </h2>
-        <div class="flex flex-col sm:flex-row items-center justify-center gap-3">
+        <div :class="layout.ctaButtonsClass">
           <button
+            v-if="primaryCta"
             type="button"
-            class="min-w-[200px] px-6 py-3 text-xs font-semibold uppercase tracking-wider"
-            :class="buttonRadiusClass"
+            :class="[layout.ctaButtonClass, buttonRadiusClass]"
             :style="{
               backgroundColor: styleConfig.primaryColor,
               color: styleConfig.primaryTextColor,
             }"
-            @click="onCtaClick(portfolio.ctaPrimaryUrl)"
+            @click="onCtaClick(primaryCta.url)"
           >
-            {{ portfolio.ctaPrimaryLabel }}
+            {{ primaryCta.label }}
           </button>
           <button
+            v-if="secondaryCta"
             type="button"
-            class="min-w-[200px] px-6 py-3 text-xs font-semibold uppercase tracking-wider border"
-            :class="buttonRadiusClass"
+            class="border"
+            :class="[layout.ctaButtonClass, buttonRadiusClass]"
             :style="{
               borderColor: 'var(--border-color)',
               color: 'var(--text-main)',
               backgroundColor: 'transparent',
             }"
-            @click="onCtaClick(portfolio.ctaSecondaryUrl)"
+            @click="onCtaClick(secondaryCta.url)"
           >
-            {{ portfolio.ctaSecondaryLabel }}
+            {{ secondaryCta.label }}
           </button>
         </div>
       </section>

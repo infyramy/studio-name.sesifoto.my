@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onUnmounted, ref, watch } from "vue";
 import { Facebook, Instagram, Mail, MapPin, Menu, MessageCircle, X } from "lucide-vue-next";
+import { useLandingPageEnter } from "../useLandingPageEnter";
 import {
   getSiteNavLabel,
   SITE_NAV_FOOTER,
@@ -31,6 +32,10 @@ const emit = defineEmits<{
 }>();
 
 const mobileMenuOpen = ref(false);
+const chromeRef = ref<HTMLElement | null>(null);
+const animateEnter = computed(() => props.mode === "live");
+
+useLandingPageEnter(chromeRef, animateEnter);
 
 const headerNavLeft = computed(() =>
   SITE_NAV_HEADER_LEFT.map((item) => ({
@@ -118,29 +123,113 @@ const mobileMenuButtonClass = computed(() =>
   forceMobileChrome.value ? "inline-flex" : "inline-flex md:hidden",
 );
 
-const mobileMenuPanelClass = computed(() =>
-  forceMobileChrome.value ? "block" : "md:hidden",
+const headerBarClass = computed(() =>
+  forceMobileChrome.value
+    ? "mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-3"
+    : "mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-3 md:gap-3 md:px-6 md:py-4",
 );
+
+const brandLinkClass = computed(() =>
+  forceMobileChrome.value
+    ? "flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 transition-opacity hover:opacity-80"
+    : "flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 md:px-2 transition-opacity hover:opacity-80",
+);
+
+const logoClass = computed(() =>
+  forceMobileChrome.value
+    ? "h-9 w-auto max-w-[140px] object-contain"
+    : "h-9 w-auto max-w-[140px] object-contain md:h-12 md:max-w-none",
+);
+
+const footerInnerClass = computed(() =>
+  forceMobileChrome.value
+    ? "mx-auto max-w-6xl px-4 py-8 text-center"
+    : "mx-auto max-w-6xl px-4 py-8 text-center md:px-6 md:py-10",
+);
+
+const mobileMenuShellClass = computed(() =>
+  forceMobileChrome.value
+    ? "lp-mobile-menu lp-mobile-menu--embedded"
+    : "lp-mobile-menu",
+);
+
+const mobileMenuSurfaceStyle = computed(() => {
+  const t = props.styleConfig;
+  const isDark = (t.mode || "dark") !== "light";
+  const bg = t.secondaryColor || (isDark ? "#050505" : "#f7f7f5");
+  const fg = t.secondaryTextColor || (isDark ? "#ffffff" : "#111111");
+  return {
+    backgroundColor: bg,
+    color: fg,
+    ["--bg-main" as string]: bg,
+    ["--text-main" as string]: fg,
+    ["--text-muted" as string]: isDark
+      ? "rgba(255,255,255,0.65)"
+      : "rgba(0,0,0,0.55)",
+    ["--border-color" as string]: isDark
+      ? "rgba(255,255,255,0.12)"
+      : "rgba(0,0,0,0.1)",
+  };
+});
+
+function lockBodyScroll(lock: boolean) {
+  if (typeof document === "undefined") return;
+  if (forceMobileChrome.value) return;
+  document.documentElement.style.overflow = lock ? "hidden" : "";
+}
+
+watch(mobileMenuOpen, (open) => {
+  lockBodyScroll(open);
+});
+
+watch(
+  () => props.previewLayout,
+  () => {
+    closeMobileMenu();
+  },
+);
+
+onUnmounted(() => {
+  lockBodyScroll(false);
+});
+
+function toggleMobileMenu() {
+  mobileMenuOpen.value = !mobileMenuOpen.value;
+}
+
+function closeMobileMenu() {
+  mobileMenuOpen.value = false;
+}
 
 function onNavClick(url: string, event: MouseEvent) {
   if (url.startsWith("http")) return;
   event.preventDefault();
-  mobileMenuOpen.value = false;
+  closeMobileMenu();
   emit("navigate", url);
+}
+
+function goHome(event: MouseEvent) {
+  onNavClick("/", event);
 }
 
 function setLanguage(lang: StudioLanguage) {
   emit("languageChange", lang);
-  mobileMenuOpen.value = false;
+  closeMobileMenu();
 }
 </script>
 
 <template>
-  <div class="flex min-h-full w-full max-w-full flex-col overflow-x-hidden">
-    <header class="w-full shrink-0 border-b border-[var(--border-color)] bg-[var(--bg-main)]">
-      <div
-        class="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-3 md:gap-3 md:px-6 md:py-4"
-      >
+  <div
+    ref="chromeRef"
+    :class="[
+      'relative flex min-h-full w-full max-w-full flex-col',
+      animateEnter ? 'lp-chrome--animate' : '',
+    ]"
+  >
+    <header
+      class="lp-reveal-header sticky top-0 z-40 w-full shrink-0 border-b border-[var(--border-color)] bg-[var(--bg-main)]"
+    >
+      <div :class="headerBarClass">
         <button
           type="button"
           :class="[
@@ -148,8 +237,8 @@ function setLanguage(lang: StudioLanguage) {
             'h-10 w-10 shrink-0 items-center justify-center rounded-md border border-[var(--border-color)] text-[var(--text-main)]',
           ]"
           :aria-expanded="mobileMenuOpen"
-          aria-label="Toggle menu"
-          @click="mobileMenuOpen = !mobileMenuOpen"
+          :aria-label="mobileMenuOpen ? 'Close menu' : 'Open menu'"
+          @click="toggleMobileMenu"
         >
           <Menu v-if="!mobileMenuOpen" class="h-5 w-5" />
           <X v-else class="h-5 w-5" />
@@ -165,33 +254,33 @@ function setLanguage(lang: StudioLanguage) {
             v-for="link in headerNavLeft"
             :key="link.id"
             :href="link.url"
-            class="uppercase text-[var(--text-main)] transition-opacity hover:opacity-70"
+            class="text-[var(--text-main)] transition-opacity hover:opacity-70"
             @click="onNavClick(link.url, $event)"
           >
             {{ link.label }}
           </a>
         </nav>
 
-        <div class="flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 px-1 md:px-2">
+        <a
+          href="/"
+          :class="brandLinkClass"
+          :aria-label="styleConfig.studioName || 'Home'"
+          @click="goHome"
+        >
           <img
             v-if="styleConfig.logoUrl"
             :src="styleConfig.logoUrl"
-            :alt="styleConfig.studioName"
-            class="h-9 w-auto max-w-[140px] object-contain md:h-12 md:max-w-none"
+            :alt="styleConfig.studioName || 'Home'"
+            :class="logoClass"
             referrerpolicy="no-referrer"
           />
           <span
-            v-if="styleConfig.studioName"
-            class="truncate text-center font-semibold"
-            :class="
-              styleConfig.logoUrl
-                ? 'text-xs md:text-sm font-medium tracking-wide'
-                : 'text-base md:text-lg'
-            "
+            v-else-if="styleConfig.studioName"
+            class="truncate text-center text-base font-semibold"
           >
             {{ styleConfig.studioName }}
           </span>
-        </div>
+        </a>
 
         <div :class="[desktopNavClass, 'items-center gap-5']">
           <nav class="flex items-center gap-5 text-xs font-medium tracking-wide">
@@ -199,7 +288,7 @@ function setLanguage(lang: StudioLanguage) {
               v-for="link in headerNavRight"
               :key="link.id"
               :href="link.url"
-              class="uppercase text-[var(--text-main)] transition-opacity hover:opacity-70"
+              class="text-[var(--text-main)] transition-opacity hover:opacity-70"
               @click="onNavClick(link.url, $event)"
             >
               {{ link.label }}
@@ -211,7 +300,7 @@ function setLanguage(lang: StudioLanguage) {
           >
             <button
               type="button"
-              class="uppercase transition-opacity"
+              class="transition-opacity"
               :class="language === 'bm' ? 'text-[var(--text-main)]' : 'text-[var(--text-muted)]'"
               @click="setLanguage('bm')"
             >
@@ -220,7 +309,7 @@ function setLanguage(lang: StudioLanguage) {
             <span class="text-[var(--text-muted)]">|</span>
             <button
               type="button"
-              class="uppercase transition-opacity"
+              class="transition-opacity"
               :class="language === 'en' ? 'text-[var(--text-main)]' : 'text-[var(--text-muted)]'"
               @click="setLanguage('en')"
             >
@@ -234,68 +323,118 @@ function setLanguage(lang: StudioLanguage) {
           aria-hidden="true"
         />
       </div>
-
-      <div
-        v-if="mobileMenuOpen"
-        :class="[
-          mobileMenuPanelClass,
-          'border-t border-[var(--border-color)] bg-[var(--bg-main)]',
-        ]"
-      >
-        <nav class="mx-auto flex max-w-6xl flex-col px-4 py-3">
-          <a
-            v-for="link in mobileNavLinks"
-            :key="link.id"
-            :href="link.url"
-            class="border-b border-[var(--border-color)] py-3 text-sm font-medium uppercase tracking-wide text-[var(--text-main)] last:border-b-0"
-            @click="onNavClick(link.url, $event)"
-          >
-            {{ link.label }}
-          </a>
-          <div
-            v-if="styleConfig.showLanguageSwitcher"
-            class="flex items-center gap-3 pt-4 text-xs font-medium"
-          >
-            <button
-              type="button"
-              class="uppercase transition-opacity"
-              :class="language === 'bm' ? 'text-[var(--text-main)]' : 'text-[var(--text-muted)]'"
-              @click="setLanguage('bm')"
-            >
-              BM
-            </button>
-            <span class="text-[var(--text-muted)]">|</span>
-            <button
-              type="button"
-              class="uppercase transition-opacity"
-              :class="language === 'en' ? 'text-[var(--text-main)]' : 'text-[var(--text-muted)]'"
-              @click="setLanguage('en')"
-            >
-              EN
-            </button>
-          </div>
-        </nav>
-      </div>
     </header>
 
-    <main class="w-full min-w-0 flex-1">
+    <Teleport to="body" :disabled="forceMobileChrome">
+      <Transition name="lp-menu">
+        <div
+          v-if="mobileMenuOpen"
+          :class="mobileMenuShellClass"
+          :style="mobileMenuSurfaceStyle"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Site menu"
+        >
+          <div class="lp-mobile-menu__panel">
+            <div class="lp-mobile-menu__top">
+              <button
+                type="button"
+                class="lp-mobile-menu__close"
+                aria-label="Close menu"
+                @click="closeMobileMenu"
+              >
+                <X class="h-5 w-5" />
+              </button>
+              <a
+                href="/"
+                class="lp-mobile-menu__brand"
+                :aria-label="styleConfig.studioName || 'Home'"
+                @click="goHome"
+              >
+                <img
+                  v-if="styleConfig.logoUrl"
+                  :src="styleConfig.logoUrl"
+                  :alt="styleConfig.studioName"
+                  class="h-9 w-auto max-w-[140px] object-contain"
+                  referrerpolicy="no-referrer"
+                />
+                <span
+                  v-else-if="styleConfig.studioName"
+                  class="text-base font-semibold"
+                >
+                  {{ styleConfig.studioName }}
+                </span>
+              </a>
+              <div class="h-10 w-10 shrink-0" aria-hidden="true" />
+            </div>
+
+            <nav class="lp-mobile-menu__nav">
+              <a
+                v-for="(link, index) in mobileNavLinks"
+                :key="link.id"
+                :href="link.url"
+                class="lp-mobile-menu__link"
+                :style="{ '--menu-i': index }"
+                @click="onNavClick(link.url, $event)"
+              >
+                {{ link.label }}
+              </a>
+            </nav>
+
+            <div
+              v-if="styleConfig.showLanguageSwitcher"
+              class="lp-mobile-menu__lang"
+            >
+              <button
+                type="button"
+                class="transition-opacity"
+                :class="language === 'bm' ? 'text-[var(--text-main)]' : 'text-[var(--text-muted)]'"
+                @click="setLanguage('bm')"
+              >
+                BM
+              </button>
+              <span class="text-[var(--text-muted)]">|</span>
+              <button
+                type="button"
+                class="transition-opacity"
+                :class="language === 'en' ? 'text-[var(--text-main)]' : 'text-[var(--text-muted)]'"
+                @click="setLanguage('en')"
+              >
+                EN
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <main class="w-full min-w-0 flex-1 overflow-x-clip">
       <slot />
     </main>
 
-    <footer class="w-full shrink-0 border-t border-[var(--border-color)] bg-[var(--bg-main)]">
-      <div class="mx-auto max-w-6xl px-4 py-8 text-center md:px-6 md:py-10">
+    <footer
+      class="lp-reveal-footer w-full shrink-0 border-t border-[var(--border-color)] bg-[var(--bg-main)]"
+    >
+      <div :class="footerInnerClass">
         <div class="mb-6 flex justify-center">
-          <img
+          <a
             v-if="styleConfig.logoUrl"
-            :src="styleConfig.logoUrl"
-            :alt="styleConfig.studioName"
-            class="h-10 w-auto max-w-[160px] object-contain opacity-90"
-            referrerpolicy="no-referrer"
-          />
+            href="/"
+            class="inline-flex transition-opacity hover:opacity-70"
+            :aria-label="styleConfig.studioName || 'Home'"
+            @click="goHome"
+          >
+            <img
+              :src="styleConfig.logoUrl"
+              :alt="styleConfig.studioName"
+              class="h-10 w-auto max-w-[160px] object-contain opacity-90"
+              referrerpolicy="no-referrer"
+            />
+          </a>
         </div>
 
         <nav
-          class="mb-6 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs uppercase tracking-wide text-[var(--text-muted)]"
+          class="mb-6 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs tracking-wide text-[var(--text-muted)]"
         >
           <a
             v-for="link in footerNav"

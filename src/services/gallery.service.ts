@@ -5,6 +5,7 @@ const api = ofetch.create({
 });
 
 export type CrmGalleryMediaType = "image" | "video";
+export type CrmGalleryDesignId = "classic" | "magazine" | "film-strip";
 
 export interface CrmGalleryMedia {
   id: string;
@@ -28,6 +29,7 @@ export interface PublicGallery {
   status: "published";
   coverUrl: string | null;
   accentColor: string;
+  designId?: CrmGalleryDesignId;
   allowDownload: boolean;
   allowSelection: boolean;
   publishedAt: string | null;

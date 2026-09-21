@@ -163,20 +163,20 @@ export function createDefaultSiteNav(): {
 } {
   return {
     siteNavLeft: [
-      { id: "nav-about", label: "Tentang Kami", url: "/about-us" },
+      { id: "nav-home", label: "Home", url: "/" },
+      { id: "nav-about", label: "About us", url: "/about-us" },
       { id: "nav-portfolio", label: "Portfolio", url: "/portfolio" },
-      { id: "nav-packages", label: "Pakej", url: "/services" },
     ],
     siteNavRight: [
-      { id: "nav-contact", label: "Hubungi Kami", url: "/lead-form" },
-      { id: "nav-faq", label: "Soalan Lazim", url: "/#faq" },
+      { id: "nav-services", label: "Services", url: "/services" },
+      { id: "nav-lead-form", label: "Lead form", url: "/lead-form" },
     ],
     footerNav: [
-      { id: "footer-about", label: "Tentang Kami", url: "/about-us" },
+      { id: "footer-home", label: "Home", url: "/" },
+      { id: "footer-about", label: "About us", url: "/about-us" },
       { id: "footer-portfolio", label: "Portfolio", url: "/portfolio" },
-      { id: "footer-packages", label: "Pakej", url: "/services" },
-      { id: "footer-contact", label: "Hubungi Kami", url: "/lead-form" },
-      { id: "footer-faq", label: "Soalan Lazim", url: "/#faq" },
+      { id: "footer-services", label: "Services", url: "/services" },
+      { id: "footer-lead-form", label: "Lead form", url: "/lead-form" },
     ],
   };
 }
@@ -185,6 +185,7 @@ export function createDefaultTheme(): LandingPageTheme {
   const siteNav = createDefaultSiteNav();
   const marketing = createDefaultHomeMarketingContent();
   return {
+    designId: "classic",
     presetName: "Sand Light",
     primaryColor: "#1a1a1a",
     primaryTextColor: "#ffffff",

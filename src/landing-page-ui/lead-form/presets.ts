@@ -19,6 +19,7 @@ export const DEFAULT_LEAD_FORM_EVENT_TYPES: LeadFormEventType[] = [
 export function createDefaultLeadFormConfig(): LeadFormPageConfig {
   return {
     pageTemplate: "lead-form",
+    showHero: true,
     heroImageUrl: HERO_IMAGE,
     brandLabel: "STUDIO",
     heroHeading: "Ceritakan tentang hari anda",
@@ -26,6 +27,7 @@ export function createDefaultLeadFormConfig(): LeadFormPageConfig {
       "Nota ringkas — kami akan balas melalui WhatsApp, biasanya dalam sehari.",
     heroDescription:
       "Kami percaya setiap detik berharga. Sejak 2019, kami merakam detik-detik indah pasangan di seluruh Malaysia.",
+    showFormHeader: true,
     sectionLabel: "PERTANYAAN",
     formHeading: "Ceritakan tentang hari anda",
     priceNote: "Pakej bermula",
@@ -34,10 +36,10 @@ export function createDefaultLeadFormConfig(): LeadFormPageConfig {
     recentWorkLabel: "KERJA TERKINI",
     recentWorkImages: [WORK_A, WORK_B],
     recentWorkCaption: "Ketik foto untuk lihat galeri penuh",
+    showEventTypes: true,
     eventTypes: DEFAULT_LEAD_FORM_EVENT_TYPES.map((t) => ({ ...t })),
+    showSubmitFooter: true,
     submitLabel: "Hantar pertanyaan →",
     privacyNote: "Kami hanya guna ini untuk membalas pertanyaan anda.",
-    showPoweredBy: true,
-    poweredByLabel: "DIKUASAKI OLEH SESIFOTO",
   };
 }

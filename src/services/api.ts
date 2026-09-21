@@ -257,11 +257,24 @@ export const api = {
       serviceInterest: "photo" | "video" | "photo_video";
       venue?: string;
       notes?: string;
+      referralCode?: string;
     },
   ): Promise<{ id: string }> {
+    let referralCode = payload.referralCode;
+    if (!referralCode) {
+      try {
+        referralCode = sessionStorage.getItem("referral_code") || undefined;
+      } catch {
+        // sessionStorage not available
+      }
+    }
+
     return apiFetch(`/public/studio/${slug}/leads`, {
       method: "POST",
-      body: payload,
+      body: {
+        ...payload,
+        referralCode: referralCode || undefined,
+      },
     });
   },
 

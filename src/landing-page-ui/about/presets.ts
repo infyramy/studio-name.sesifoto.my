@@ -78,14 +78,18 @@ export const DEFAULT_ABOUT_TESTIMONIAL: AboutTestimonial = {
 export function createDefaultAboutConfig(): AboutPageConfig {
   return {
     pageTemplate: "about-us",
+    showHero: true,
     sectionLabel: "TENTANG KAMI",
     title: "Where it all starts",
     subtitle: "Photographer and Videographer Group",
     heroImageUrl: HERO_IMG,
     teamImageUrl: TEAM_IMG,
+    showMission: true,
     missionStatement:
       "Tulipsfilm consist of passionate photographer and videographer in which their goals is to capture every moment for yours truly to relive the memories since 2019.",
+    showValues: true,
     values: DEFAULT_ABOUT_VALUES.map((v) => ({ ...v })),
+    showProcess: true,
     processLabel: "Cara kami bekerja",
     processSteps: DEFAULT_ABOUT_PROCESS.map((s) => ({ ...s })),
     showTestimonial: true,
@@ -93,9 +97,7 @@ export function createDefaultAboutConfig(): AboutPageConfig {
     showCta: true,
     ctaImageUrl: CTA_IMG,
     ctaHeading: "Ceritakan hari bahagia anda bersama kami",
-    ctaPrimaryLabel: "HUBUNGI KAMI SEKARANG →",
-    ctaPrimaryUrl: "/lead-form",
-    ctaSecondaryLabel: "Lihat Pakej →",
-    ctaSecondaryUrl: "/services",
+    ctaPrimaryPreset: "contact_us",
+    ctaSecondaryPreset: "view_packages",
   };
 }

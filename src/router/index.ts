@@ -120,7 +120,7 @@ const routes: RouteRecordRaw[] = [
     path: "/client-portal/jobs",
     name: "client-portal-jobs",
     component: () => import("@/pages/client-portal/jobs/index.vue"),
-    meta: { title: "Your Jobs" },
+    meta: { title: "Your Bookings" },
   },
   {
     path: "/client-portal/jobs/:jobId",
@@ -153,7 +153,7 @@ const routes: RouteRecordRaw[] = [
         path: "link",
         name: "client-portal-job-link",
         component: () => import("@/pages/client-portal/jobs/link.vue"),
-        meta: { title: "Link" },
+        meta: { title: "Gallery" },
       },
     ],
   },
@@ -211,9 +211,10 @@ const router = createRouter({
 router.beforeEach(async (to, _from, next) => {
   const studioStore = useStudioStore();
 
-  if (to.query.r) {
+  if (to.query.r || to.query.ref) {
     try {
-      const referralCode = (to.query.r as string).toUpperCase();
+      const raw = (to.query.r || to.query.ref) as string;
+      const referralCode = raw.toUpperCase();
       sessionStorage.setItem("referral_code", referralCode);
       console.log(
         `[Referral] Stored referral code from query: ${referralCode}`

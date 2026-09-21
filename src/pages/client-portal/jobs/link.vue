@@ -3,117 +3,111 @@
     <section>
       <div class="mb-12 border-b pb-4" :style="{ borderColor: 'color-mix(in srgb, var(--p-border) 40%, transparent)' }">
         <h2 class="font-medium" style="font-family: 'Cormorant Garamond', serif; font-size: 2.8rem; line-height: 1.1;">
-          Links
+          Gallery
         </h2>
-        <div class="mt-4 flex items-center justify-between">
+        <div class="mt-4 flex items-center justify-between gap-4">
           <p class="text-sm tracking-wide" :style="{ color: 'var(--p-muted)' }">
-            Your published galleries and external delivery links.
+            Photos shared for your booking.
           </p>
+          <span class="shrink-0 text-[10px] tracking-wide" :style="{ color: 'var(--p-muted)' }">
+            {{ portalData.galleries.length }}
+            {{ portalData.galleries.length === 1 ? "gallery" : "galleries" }}
+          </span>
         </div>
       </div>
 
-      <div class="grid gap-16 lg:grid-cols-2 lg:gap-12">
-        <div>
-          <div class="mb-6 flex items-end justify-between border-b pb-3" :style="{ borderColor: 'color-mix(in srgb, var(--p-border) 40%, transparent)' }">
-            <h3 class="font-medium" style="font-family: 'Cormorant Garamond', serif; font-size: 1.8rem;">Gallery</h3>
-            <span class="text-[10px] uppercase tracking-[0.2em]" :style="{ color: 'var(--p-muted)' }">
-              {{ portalData.galleries.length }}
-              {{ portalData.galleries.length === 1 ? "gallery" : "galleries" }}
+      <p
+        v-if="!portalData.galleries.length"
+        class="py-6 text-sm tracking-wide"
+        :style="{ color: 'var(--p-muted)' }"
+      >
+        No published client gallery yet.
+      </p>
+      <div v-else class="grid gap-8 sm:grid-cols-2">
+        <RouterLink
+          v-for="gallery in portalData.galleries"
+          :key="gallery.id"
+          :to="galleryRoute(gallery.id)"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="group block"
+        >
+          <div
+            v-if="gallery.coverUrl"
+            class="overflow-hidden"
+          >
+            <img
+              :src="gallery.coverUrl"
+              :alt="gallery.title"
+              class="aspect-[4/3] w-full object-cover transition duration-500 group-hover:scale-[1.02]"
+              loading="lazy"
+            />
+          </div>
+          <div
+            v-else
+            class="flex aspect-[4/3] w-full items-center justify-center"
+            :style="{ background: 'var(--p-accent-bg)' }"
+          >
+            <span class="text-sm tracking-wide" :style="{ color: 'var(--p-accent)' }">
+              Open gallery
             </span>
           </div>
-          <p
-            v-if="!portalData.galleries.length"
-            class="py-4 text-sm tracking-wide"
-            :style="{ color: 'var(--p-muted)' }"
-          >
-            No published client gallery yet.
-          </p>
-          <div v-else class="grid gap-10">
-            <RouterLink
-              v-for="gallery in portalData.galleries"
-              :key="gallery.id"
-              :to="galleryRoute(gallery.id)"
-              class="group block"
+          <div class="mt-4 flex items-center justify-between gap-3">
+            <p class="min-w-0 truncate text-base font-semibold tracking-wide transition group-hover:opacity-80">
+              {{ gallery.title }}
+            </p>
+            <span
+              class="flex shrink-0 items-center gap-1.5 text-[11px] font-medium tracking-wide transition group-hover:opacity-70"
+              :style="{ color: 'var(--p-muted)' }"
             >
-              <div class="mb-4 flex items-center justify-between gap-3">
-                <p class="min-w-0 truncate text-base font-semibold tracking-wide transition group-hover:opacity-80">
-                  {{ gallery.title }}
-                </p>
-                <span
-                  class="flex shrink-0 items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] transition group-hover:opacity-70"
-                  :style="{ color: 'var(--p-text)' }"
-                >
-                  Open <ExternalLink class="h-3.5 w-3.5" />
-                </span>
-              </div>
-              <div v-if="gallery.preview.length" class="grid grid-cols-3 gap-3">
-                <div
-                  v-for="media in gallery.preview"
-                  :key="media.id"
-                  class="overflow-hidden bg-transparent"
-                >
-                  <img
-                    :src="media.url"
-                    :alt="media.label || gallery.title"
-                    class="aspect-[4/5] w-full object-cover transition duration-500 group-hover:scale-105"
-                    loading="lazy"
-                  />
-                </div>
-              </div>
-              <div
-                v-else-if="gallery.coverUrl"
-                class="overflow-hidden bg-transparent"
-              >
-                <img
-                  :src="gallery.coverUrl"
-                  :alt="gallery.title"
-                  class="aspect-video w-full object-cover transition duration-500 group-hover:scale-105"
-                  loading="lazy"
-                />
-              </div>
-            </RouterLink>
+              Open <ExternalLink class="h-3.5 w-3.5" />
+            </span>
           </div>
-        </div>
+        </RouterLink>
+      </div>
+    </section>
 
-        <div>
-          <div class="mb-6 flex items-end justify-between border-b pb-3" :style="{ borderColor: 'color-mix(in srgb, var(--p-border) 40%, transparent)' }">
-            <h3 class="font-medium" style="font-family: 'Cormorant Garamond', serif; font-size: 1.8rem;">Delivery</h3>
-            <span class="text-[10px] uppercase tracking-[0.2em]" :style="{ color: 'var(--p-muted)' }">
-              {{ portalData.deliveryLinks.length }} links
-            </span>
-          </div>
-          <p
-            v-if="!portalData.deliveryLinks.length"
-            class="py-4 text-sm tracking-wide"
-            :style="{ color: 'var(--p-muted)' }"
-          >
-            No delivery links available yet.
-          </p>
-          <div v-else class="grid gap-6">
-            <a
-              v-for="link in portalData.deliveryLinks"
-              :key="link.id"
-              :href="link.url"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="group flex items-center justify-between gap-4 py-2 transition hover:opacity-70"
+    <section class="mt-20">
+      <div class="mb-8 flex items-end justify-between border-b pb-3" :style="{ borderColor: 'color-mix(in srgb, var(--p-border) 40%, transparent)' }">
+        <h3 class="font-medium" style="font-family: 'Cormorant Garamond', serif; font-size: 1.8rem;">
+          Link
+        </h3>
+        <span class="text-[11px] tracking-wide" :style="{ color: 'var(--p-muted)' }">
+          {{ portalData.deliveryLinks.length }}
+          {{ portalData.deliveryLinks.length === 1 ? "link" : "links" }}
+        </span>
+      </div>
+      <p
+        v-if="!portalData.deliveryLinks.length"
+        class="py-4 text-sm tracking-wide"
+        :style="{ color: 'var(--p-muted)' }"
+      >
+        No links available yet.
+      </p>
+      <div v-else class="grid gap-1">
+        <a
+          v-for="link in portalData.deliveryLinks"
+          :key="link.id"
+          :href="link.url"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="group flex items-center justify-between gap-4 border-b py-4 transition hover:opacity-70"
+          :style="{ borderColor: 'color-mix(in srgb, var(--p-border) 35%, transparent)' }"
+        >
+          <div class="min-w-0">
+            <p class="truncate text-base font-semibold tracking-wide">{{ link.name }}</p>
+            <p
+              v-if="link.expiresAt"
+              class="mt-1.5 text-xs tracking-wide"
+              :style="{ color: 'var(--p-muted)' }"
             >
-              <div class="min-w-0">
-                <p class="truncate text-base font-semibold tracking-wide">{{ link.name }}</p>
-                <p
-                  v-if="link.expiresAt"
-                  class="mt-1.5 text-xs tracking-wider uppercase"
-                  :style="{ color: 'var(--p-muted)' }"
-                >
-                  Expires {{ formatDate(link.expiresAt) }}
-                </p>
-              </div>
-              <span class="flex h-10 w-10 shrink-0 items-center justify-center transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5">
-                <ExternalLink class="h-5 w-5" :style="{ color: 'var(--p-accent)' }" />
-              </span>
-            </a>
+              Expires {{ formatDate(link.expiresAt) }}
+            </p>
           </div>
-        </div>
+          <span class="flex h-10 w-10 shrink-0 items-center justify-center transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5">
+            <ExternalLink class="h-5 w-5" :style="{ color: 'var(--p-accent)' }" />
+          </span>
+        </a>
       </div>
     </section>
   </main>

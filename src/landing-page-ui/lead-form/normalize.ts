@@ -17,6 +17,10 @@ function trim(value: unknown, max: number): string {
   return value.trim().slice(0, max);
 }
 
+function coerceBoolean(value: unknown, fallback: boolean): boolean {
+  return typeof value === "boolean" ? value : fallback;
+}
+
 function normalizeEventTypes(input: unknown): LeadFormEventType[] {
   if (!Array.isArray(input)) return [];
   return input
@@ -60,20 +64,19 @@ export function normalizeLeadFormConfig(
 
   return {
     pageTemplate: "lead-form",
+    showHero: coerceBoolean(src.showHero, defaults.showHero),
     heroImageUrl,
     brandLabel: trim(src.brandLabel, MAX_SHORT) || defaults.brandLabel,
     heroHeading: trim(src.heroHeading, MAX_TEXT) || defaults.heroHeading,
     heroSubtitle: trim(src.heroSubtitle, MAX_TEXT) || defaults.heroSubtitle,
     heroDescription:
       trim(src.heroDescription, MAX_TEXT) || defaults.heroDescription,
+    showFormHeader: coerceBoolean(src.showFormHeader, defaults.showFormHeader),
     sectionLabel: trim(src.sectionLabel, MAX_SHORT) || defaults.sectionLabel,
     formHeading: trim(src.formHeading, MAX_TEXT) || defaults.formHeading,
     priceNote: trim(src.priceNote, MAX_SHORT) || defaults.priceNote,
     priceAmount: trim(src.priceAmount, MAX_SHORT) || defaults.priceAmount,
-    showRecentWork:
-      typeof src.showRecentWork === "boolean"
-        ? src.showRecentWork
-        : defaults.showRecentWork,
+    showRecentWork: coerceBoolean(src.showRecentWork, defaults.showRecentWork),
     recentWorkLabel:
       trim(src.recentWorkLabel, MAX_SHORT) || defaults.recentWorkLabel,
     recentWorkImages:
@@ -82,15 +85,14 @@ export function normalizeLeadFormConfig(
         : defaults.recentWorkImages,
     recentWorkCaption:
       trim(src.recentWorkCaption, MAX_TEXT) || defaults.recentWorkCaption,
+    showEventTypes: coerceBoolean(src.showEventTypes, defaults.showEventTypes),
     eventTypes:
       eventTypes.length > 0 ? eventTypes : defaults.eventTypes.map((t) => ({ ...t })),
+    showSubmitFooter: coerceBoolean(
+      src.showSubmitFooter,
+      defaults.showSubmitFooter,
+    ),
     submitLabel: trim(src.submitLabel, MAX_SHORT) || defaults.submitLabel,
     privacyNote: trim(src.privacyNote, MAX_TEXT) || defaults.privacyNote,
-    showPoweredBy:
-      typeof src.showPoweredBy === "boolean"
-        ? src.showPoweredBy
-        : defaults.showPoweredBy,
-    poweredByLabel:
-      trim(src.poweredByLabel, MAX_SHORT) || defaults.poweredByLabel,
   };
 }

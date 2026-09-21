@@ -2,6 +2,7 @@
 import { computed, nextTick, reactive, ref, toRef, watch } from "vue";
 import { ChevronLeft, ChevronRight } from "lucide-vue-next";
 import SiteChrome from "../portfolio/SiteChrome.vue";
+import LandingPageBootState from "../LandingPageBootState.vue";
 import { leadFormT, leadFormValidationMessages } from "./i18n";
 import LeadFormDateField from "./LeadFormDateField.vue";
 import LeadFormSelectField from "./LeadFormSelectField.vue";
@@ -14,7 +15,13 @@ import {
   type LeadFormFieldKey,
 } from "./validate";
 import type { LandingPageTheme, StudioLanguage } from "../types";
+import type { HomePreviewLayout } from "../home-marketing/useHomeLayout";
+import { useLeadFormLayout } from "./useLeadFormLayout";
 import { useLandingPageStyles } from "../useLandingPageStyles";
+import { tLandingPage } from "../i18n";
+
+const SESIFOTO_LOGO_SRC = "/brand/sesifoto.svg";
+const SESIFOTO_HOME_URL = "https://sesifoto.my";
 
 const props = withDefaults(
   defineProps<{
@@ -22,6 +29,7 @@ const props = withDefaults(
     styleConfig: LandingPageTheme;
     language?: StudioLanguage;
     mode?: "live" | "preview";
+    previewLayout?: HomePreviewLayout;
     loading?: boolean;
     loadError?: string | null;
     crmEnabled?: boolean;
@@ -30,6 +38,7 @@ const props = withDefaults(
   {
     language: "bm",
     mode: "preview",
+    previewLayout: null,
     loading: false,
     loadError: null,
     crmEnabled: true,
@@ -46,7 +55,9 @@ const emit = defineEmits<{
 }>();
 
 const styleRef = toRef(props, "styleConfig");
+const previewLayoutRef = toRef(props, "previewLayout");
 const { themeStyle, buttonRadiusClass } = useLandingPageStyles(styleRef);
+const layout = useLeadFormLayout(previewLayoutRef);
 
 const t = computed(() => leadFormT(props.language));
 
@@ -80,11 +91,6 @@ const eventTypeOptions = computed(() =>
     label: type.label,
   })),
 );
-
-const shellClass = computed(() => {
-  if (!props.leadForm.showHero) return "flex min-h-full flex-col";
-  return "flex min-h-full flex-col lg:grid lg:grid-cols-[2fr_3fr] lg:min-h-[calc(100vh-8rem)]";
-});
 
 const visibleRecentImages = computed(() => {
   const images = props.leadForm.recentWorkImages;
@@ -227,40 +233,32 @@ defineExpose({ markSubmitSuccess, markSubmitFailure });
   <div :class="['min-h-full', surfaceClass]">
     <component :is="'style'" v-html="themeStyle" />
 
-    <div
+    <LandingPageBootState
       v-if="loading"
-      class="flex min-h-[60vh] items-center justify-center py-24 text-[var(--text-muted)]"
-    >
-      Loading...
-    </div>
+      :theme="styleConfig"
+      label="Loading"
+    />
 
-    <div
+    <LandingPageBootState
       v-else-if="loadError"
-      class="flex min-h-[60vh] flex-col items-center justify-center gap-4 px-6 py-24 text-center"
-    >
-      <p class="text-[var(--text-muted)]">{{ loadError }}</p>
-      <button
-        type="button"
-        class="rounded-md border px-4 py-2 text-sm"
-        :class="buttonRadiusClass"
-        @click="emit('retryLoad')"
-      >
-        Try again
-      </button>
-    </div>
+      :theme="styleConfig"
+      :error="loadError"
+      @retry="emit('retryLoad')"
+    />
 
     <SiteChrome
       v-else
       :style-config="styleConfig"
       :language="language"
       :mode="mode"
+      :preview-layout="previewLayout"
       @navigate="emit('navigate', $event)"
       @language-change="emit('languageChange', $event)"
     >
-      <div :class="shellClass">
+      <div :class="layout.shellClass(leadForm.showHero)" data-lp-reveal>
         <aside
           v-if="leadForm.showHero"
-          class="relative min-h-[42vh] lg:min-h-full"
+          :class="layout.heroAsideClass"
         >
           <img
             :src="leadForm.heroImageUrl"
@@ -271,31 +269,47 @@ defineExpose({ markSubmitSuccess, markSubmitFailure });
           <div
             class="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-black/10"
           />
-          <div class="relative flex h-full flex-col justify-end p-6 md:p-10 text-white">
-            <p class="mb-3 text-[10px] font-medium tracking-[0.3em] opacity-90">
+          <div :class="layout.heroContentClass">
+            <p
+              class="lp-reveal-child mb-3 text-[10px] font-medium tracking-[0.3em] opacity-90"
+              style="--child-i: 0"
+            >
               {{ brandLabel }}
             </p>
-            <h1 class="mb-3 max-w-md text-3xl md:text-4xl leading-tight">
+            <h1
+              :class="layout.heroTitleClass"
+              style="--child-i: 1"
+            >
               {{ leadForm.heroHeading }}
             </h1>
-            <p class="mb-4 max-w-md text-sm italic font-title opacity-90">
+            <p
+              class="lp-reveal-child mb-4 max-w-md text-sm italic font-title opacity-90"
+              style="--child-i: 2"
+            >
               {{ leadForm.heroSubtitle }}
             </p>
-            <p class="max-w-md text-xs leading-relaxed opacity-80">
+            <p
+              class="lp-reveal-child max-w-md text-xs leading-relaxed opacity-80"
+              style="--child-i: 3"
+            >
               {{ leadForm.heroDescription }}
             </p>
           </div>
         </aside>
 
         <div class="bg-[var(--bg-main)] text-[var(--text-main)] min-h-full">
-          <div class="mx-auto max-w-xl px-5 py-8 md:px-10 md:py-10">
+          <div :class="layout.formPanelClass">
             <template v-if="leadForm.showFormHeader">
               <p
-                class="mb-2 text-[10px] font-semibold tracking-[0.25em] text-[var(--text-muted)]"
+                class="lp-reveal-child mb-2 text-[10px] font-semibold tracking-[0.25em] text-[var(--text-muted)]"
+                style="--child-i: 0"
               >
                 {{ leadForm.sectionLabel }}
               </p>
-              <h2 class="mb-2 text-3xl leading-tight text-[var(--text-main)]">
+              <h2
+                :class="layout.formHeadingClass"
+                style="--child-i: 1"
+              >
                 {{ leadForm.formHeading }}
               </h2>
               <p class="mb-8 text-sm text-[var(--text-muted)]">
@@ -412,8 +426,7 @@ defineExpose({ markSubmitSuccess, markSubmitFailure });
               </div>
 
               <div
-                class="grid gap-6"
-                :class="leadForm.showEventTypes ? 'sm:grid-cols-2' : ''"
+                :class="layout.dateTypeGridClass(leadForm.showEventTypes)"
               >
                 <div id="lead-field-eventDate">
                   <label
@@ -555,12 +568,20 @@ defineExpose({ markSubmitSuccess, markSubmitFailure });
               </template>
             </form>
 
-            <p
-              v-if="leadForm.showSubmitFooter && leadForm.showPoweredBy"
-              class="mt-10 text-center text-[10px] tracking-[0.2em] text-[var(--text-muted)]"
+            <a
+              v-if="leadForm.showSubmitFooter"
+              :href="SESIFOTO_HOME_URL"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="mt-10 inline-flex w-full flex-col items-center gap-2 text-center text-[10px] tracking-[0.15em] text-[var(--text-muted)] opacity-80 transition-opacity hover:opacity-100"
             >
-              {{ leadForm.poweredByLabel }}
-            </p>
+              <img
+                :src="SESIFOTO_LOGO_SRC"
+                alt="SesiFoto"
+                class="h-8 w-8 rounded-md object-contain"
+              />
+              <span>{{ tLandingPage(language, "poweredBy") }}</span>
+            </a>
           </div>
         </div>
       </div>

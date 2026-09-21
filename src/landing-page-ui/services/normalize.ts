@@ -1,3 +1,7 @@
+import {
+  isHomeCtaPresetId,
+  type HomeCtaPresetId,
+} from "../home-marketing/cta-presets";
 import { safeHttpUrl } from "../useLandingPageStyles";
 import { createDefaultServicesConfig } from "./presets";
 import type {
@@ -19,12 +23,42 @@ function trim(value: unknown, max: number): string {
   return value.trim().slice(0, max);
 }
 
+function coerceBoolean(value: unknown, fallback: boolean): boolean {
+  return typeof value === "boolean" ? value : fallback;
+}
+
 function safeNavUrl(value: unknown): string {
   if (typeof value !== "string") return "";
   const trimmed = value.trim().slice(0, 500);
   if (!trimmed) return "";
   if (trimmed.startsWith("/") || trimmed.startsWith("#")) return trimmed;
   return safeHttpUrl(trimmed) ?? "";
+}
+
+function normalizeCtaPreset(
+  value: unknown,
+  fallback: HomeCtaPresetId,
+): HomeCtaPresetId {
+  return isHomeCtaPresetId(value) ? value : fallback;
+}
+
+function legacyPrimaryPreset(src: Record<string, unknown>): HomeCtaPresetId {
+  const url = safeNavUrl(src.ctaPrimaryUrl);
+  if (url === "/check-booking") return "book_appointment";
+  if (url === "/services") return "view_packages";
+  if (url === "/lead-form") return "contact_us";
+  if (url === "/portfolio") return "view_portfolio";
+  return "book_appointment";
+}
+
+function legacySecondaryPreset(src: Record<string, unknown>): HomeCtaPresetId {
+  const url = safeNavUrl(src.ctaSecondaryUrl);
+  if (!url) return "none";
+  if (url === "/check-booking") return "book_appointment";
+  if (url === "/services") return "view_packages";
+  if (url === "/lead-form") return "contact_us";
+  if (url === "/portfolio") return "view_portfolio";
+  return "none";
 }
 
 function normalizePackages(input: unknown): ServicesPackage[] {
@@ -85,15 +119,26 @@ export function normalizeServicesConfig(
     ...defaults,
     ...raw,
     pageTemplate: "services",
+    showHero: coerceBoolean(raw.showHero, defaults.showHero),
     sectionLabel: trim(raw.sectionLabel, MAX_LABEL) || defaults.sectionLabel,
     title: trim(raw.title, MAX_TITLE) || defaults.title,
+    showPackages: coerceBoolean(raw.showPackages, defaults.showPackages),
     categories: categories.length > 0 ? categories : defaults.categories,
-    showCta: typeof raw.showCta === "boolean" ? raw.showCta : defaults.showCta,
+    showCta: coerceBoolean(raw.showCta, defaults.showCta),
     ctaImageUrl: safeHttpUrl(raw.ctaImageUrl) ?? defaults.ctaImageUrl,
     ctaHeading: trim(raw.ctaHeading, MAX_TEXT) || defaults.ctaHeading,
-    ctaPrimaryLabel:
-      trim(raw.ctaPrimaryLabel, MAX_LABEL) || defaults.ctaPrimaryLabel,
-    ctaPrimaryUrl: safeNavUrl(raw.ctaPrimaryUrl) || defaults.ctaPrimaryUrl,
+    ctaPrimaryPreset: normalizeCtaPreset(
+      raw.ctaPrimaryPreset,
+      raw.ctaPrimaryPreset
+        ? defaults.ctaPrimaryPreset
+        : legacyPrimaryPreset(raw),
+    ),
+    ctaSecondaryPreset: normalizeCtaPreset(
+      raw.ctaSecondaryPreset,
+      raw.ctaSecondaryPreset
+        ? defaults.ctaSecondaryPreset
+        : legacySecondaryPreset(raw),
+    ),
   };
 }
 

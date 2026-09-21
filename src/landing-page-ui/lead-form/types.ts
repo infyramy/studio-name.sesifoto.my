@@ -3,13 +3,22 @@ export type LeadFormEventType = {
   label: string;
 };
 
+export type LeadFormSectionKey =
+  | "hero"
+  | "form-header"
+  | "recent-work"
+  | "event-types"
+  | "submit-footer";
+
 export type LeadFormPageConfig = {
   pageTemplate: "lead-form";
+  showHero: boolean;
   heroImageUrl: string;
   brandLabel: string;
   heroHeading: string;
   heroSubtitle: string;
   heroDescription: string;
+  showFormHeader: boolean;
   sectionLabel: string;
   formHeading: string;
   priceNote: string;
@@ -18,11 +27,11 @@ export type LeadFormPageConfig = {
   recentWorkLabel: string;
   recentWorkImages: string[];
   recentWorkCaption: string;
+  showEventTypes: boolean;
   eventTypes: LeadFormEventType[];
+  showSubmitFooter: boolean;
   submitLabel: string;
   privacyNote: string;
-  showPoweredBy: boolean;
-  poweredByLabel: string;
 };
 
 export type LeadFormPageConfigInput = Partial<LeadFormPageConfig> &
@@ -36,4 +45,5 @@ export type LeadFormSubmitPayload = {
   serviceInterest: "photo" | "video" | "photo_video";
   venue?: string;
   notes?: string;
+  referralCode?: string;
 };

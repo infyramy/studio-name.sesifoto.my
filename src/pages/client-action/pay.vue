@@ -1,44 +1,40 @@
 <template>
-  <div class="action" :style="themeVars">
-    <div v-if="isLoading" class="action__state">
-      <div
-        class="action__spinner"
-        :style="{ borderColor: 'var(--p-accent)', borderTopColor: 'transparent' }"
-      />
-      <p class="action__state-label" :style="{ color: 'var(--p-muted)' }">
-        Loading payment
-      </p>
-    </div>
+  <div class="action portal-font" :style="themeVars">
+    <PortalLoadingState v-if="isLoading" label="Loading payment" />
 
-    <div v-else-if="error" class="action__state">
-      <p class="action__state-title">Payment unavailable</p>
-      <p class="action__state-copy" :style="{ color: 'var(--p-muted)' }">
-        {{ error }}
-      </p>
-      <a
-        v-if="termsUrl"
-        :href="termsUrl"
-        class="action__cta action__cta--inline"
-        :style="{ background: 'var(--p-text)', color: 'var(--p-shell)' }"
-      >
-        Open terms
-      </a>
-    </div>
+    <PortalErrorState
+      v-else-if="error"
+      title="Payment unavailable"
+      :message="error"
+      :action-label="termsUrl ? 'Open terms' : ''"
+      @action="openTerms"
+    />
 
     <main v-else-if="data" class="action__main portal-reveal">
       <header class="action__header">
-        <img
-          v-if="data.studio.logoUrl"
-          :src="data.studio.logoUrl"
-          :alt="data.studio.name"
-          class="action__logo"
-        />
-        <div class="min-w-0">
-          <p class="action__studio">{{ data.studio.name }}</p>
-          <p class="action__job" :style="{ color: 'var(--p-muted)' }">
-            {{ data.title }}
-          </p>
+        <div class="action__brand">
+          <img
+            v-if="data.studio.logoUrl"
+            :src="data.studio.logoUrl"
+            :alt="data.studio.name"
+            class="action__logo"
+          />
+          <div class="min-w-0">
+            <p class="action__studio">{{ data.studio.name }}</p>
+            <p class="action__job" :style="{ color: 'var(--p-muted)' }">
+              {{ data.title }}
+            </p>
+          </div>
         </div>
+        <button
+          type="button"
+          class="portal-icon-btn"
+          :aria-label="isDark ? 'Switch to light mode' : 'Switch to dark mode'"
+          @click="toggleDark"
+        >
+          <Sun v-if="isDark" class="h-4 w-4" />
+          <Moon v-else class="h-4 w-4" />
+        </button>
       </header>
 
       <section class="pay-grid">
@@ -166,8 +162,10 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
-import { Loader2 } from "lucide-vue-next";
+import { Loader2, Moon, Sun } from "lucide-vue-next";
 import { usePortalTheme } from "@/composables/usePortalTheme";
+import PortalErrorState from "@/components/portal/PortalErrorState.vue";
+import PortalLoadingState from "@/components/portal/PortalLoadingState.vue";
 import {
   ClientActionApiError,
   clientActionService,
@@ -176,7 +174,7 @@ import {
 
 const route = useRoute();
 const data = ref<ClientActionPayData | null>(null);
-const { themeVars, setAccent } = usePortalTheme({
+const { isDark, themeVars, setAccent, toggleDark } = usePortalTheme({
   accentOverride: () => data.value?.studio.brandColor,
 });
 
@@ -208,6 +206,10 @@ function formatDate(dateStr: string) {
   } catch {
     return dateStr;
   }
+}
+
+function openTerms() {
+  if (termsUrl.value) window.location.href = termsUrl.value;
 }
 
 async function load() {
@@ -271,8 +273,6 @@ onMounted(load);
 </script>
 
 <style scoped>
-@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap");
-
 .action {
   min-height: 100dvh;
   background: var(--p-shell);
@@ -307,7 +307,7 @@ onMounted(load);
   margin: 0;
   font-size: 0.7rem;
   letter-spacing: 0.2em;
-  text-transform: uppercase;
+ 
 }
 
 .action__state-title {
@@ -326,8 +326,16 @@ onMounted(load);
 .action__header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 0.85rem;
   margin-bottom: 2.5rem;
+}
+
+.action__brand {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  min-width: 0;
 }
 
 .action__logo {
@@ -374,7 +382,7 @@ onMounted(load);
   font-size: 0.78rem;
   font-weight: 600;
   letter-spacing: 0.1em;
-  text-transform: uppercase;
+ 
   text-decoration: none;
   cursor: pointer;
   transition: opacity 180ms ease, transform 180ms ease;
@@ -412,7 +420,7 @@ onMounted(load);
 .action__error {
   margin: 1.5rem 0 0;
   font-size: 0.85rem;
-  color: #e07070;
+  color: #c45c5c;
 }
 
 .pay-grid {
@@ -433,7 +441,7 @@ onMounted(load);
   font-size: 0.65rem;
   font-weight: 600;
   letter-spacing: 0.22em;
-  text-transform: uppercase;
+ 
 }
 
 .pay-amount {
@@ -475,7 +483,7 @@ onMounted(load);
 .pay-count {
   font-size: 0.65rem;
   letter-spacing: 0.18em;
-  text-transform: uppercase;
+ 
 }
 
 .pay-list {
@@ -533,7 +541,7 @@ onMounted(load);
   margin: 0;
   font-size: 0.65rem;
   letter-spacing: 0.16em;
-  text-transform: uppercase;
+ 
 }
 
 .pay-row-btn {
@@ -548,7 +556,7 @@ onMounted(load);
   font-size: 0.7rem;
   font-weight: 600;
   letter-spacing: 0.1em;
-  text-transform: uppercase;
+ 
   cursor: pointer;
 }
 

@@ -1,3 +1,5 @@
+import type { HomeCtaPresetId } from "../home-marketing/cta-presets";
+
 export type AboutValueProp = {
   id: string;
   title: string;
@@ -17,15 +19,27 @@ export type AboutTestimonial = {
   attribution: string;
 };
 
+export type AboutSectionKey =
+  | "hero"
+  | "mission"
+  | "values"
+  | "process"
+  | "testimonial"
+  | "cta";
+
 export type AboutPageConfig = {
   pageTemplate: "about-us";
+  showHero: boolean;
   sectionLabel: string;
   title: string;
   subtitle: string;
   heroImageUrl: string;
   teamImageUrl: string;
+  showMission: boolean;
   missionStatement: string;
+  showValues: boolean;
   values: AboutValueProp[];
+  showProcess: boolean;
   processLabel: string;
   processSteps: AboutProcessStep[];
   showTestimonial: boolean;
@@ -33,10 +47,8 @@ export type AboutPageConfig = {
   showCta: boolean;
   ctaImageUrl: string;
   ctaHeading: string;
-  ctaPrimaryLabel: string;
-  ctaPrimaryUrl: string;
-  ctaSecondaryLabel: string;
-  ctaSecondaryUrl: string;
+  ctaPrimaryPreset: HomeCtaPresetId;
+  ctaSecondaryPreset: HomeCtaPresetId;
 };
 
 export type AboutPageConfigInput = Partial<AboutPageConfig> &

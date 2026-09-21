@@ -1,9 +1,6 @@
 <template>
-  <div class="gate" :style="themeVars">
-    <div v-if="booting" class="gate__boot">
-      <div class="gate__spinner" />
-      <p>Loading portal…</p>
-    </div>
+  <div class="gate portal-font" :style="themeVars">
+    <PortalLoadingState v-if="booting" label="Loading portal" />
 
     <div v-else class="gate__split">
       <main class="gate__content">
@@ -27,7 +24,7 @@
             </div>
             <button
               type="button"
-              class="gate__theme-toggle"
+              class="portal-icon-btn"
               :aria-label="isDark ? 'Switch to light mode' : 'Switch to dark mode'"
               @click="toggleDark"
             >
@@ -38,20 +35,9 @@
 
           <div class="gate__body">
             <h1 class="gate__title">Sign in</h1>
-            <p class="gate__sub">Enter your email and passcode to access your jobs.</p>
+            <p class="gate__sub">Enter your passcode to access your bookings.</p>
 
             <div class="gate__fields">
-              <div class="gate__input-wrap">
-                <Mail class="gate__icon" />
-                <input
-                  v-model="email"
-                  type="email"
-                  autocomplete="email"
-                  required
-                  placeholder="Email address"
-                />
-              </div>
-
               <div class="gate__input-wrap">
                 <KeyRound class="gate__icon" />
                 <input
@@ -113,12 +99,12 @@ import {
   EyeOff,
   KeyRound,
   Loader2,
-  Mail,
   Moon,
   Sun,
 } from "lucide-vue-next";
 import sesifotoLogoDark from "@/assets/logo/full-dark.png";
 import sesifotoLogoLight from "@/assets/logo/full-light.png";
+import PortalLoadingState from "@/components/portal/PortalLoadingState.vue";
 import { usePortalTheme } from "@/composables/usePortalTheme";
 import { PortalApiError, portalService } from "@/services/portal.service";
 import { useStudioStore } from "@/stores/studio";
@@ -126,9 +112,7 @@ import { useStudioStore } from "@/stores/studio";
 const router = useRouter();
 const route = useRoute();
 const studioStore = useStudioStore();
-const { isDark, themeVars, setAccent, toggleDark } = usePortalTheme();
 
-const email = ref("");
 const passcode = ref("");
 const showPasscode = ref(false);
 const loading = ref(false);
@@ -137,6 +121,10 @@ const error = ref("");
 const gate = ref<Awaited<ReturnType<typeof portalService.getLoginGate>> | null>(
   null,
 );
+
+const { isDark, themeVars, setAccent, toggleDark } = usePortalTheme({
+  accentOverride: () => gate.value?.accentColor || gate.value?.brandColor,
+});
 
 const studioName = computed(() => studioStore.studio?.name || "Studio");
 const studioInitial = computed(
@@ -149,6 +137,11 @@ const sesifotoLogo = computed(() =>
 
 function nextJobId(): string {
   const value = route.query.nextJob;
+  return Array.isArray(value) ? String(value[0] || "") : String(value || "");
+}
+
+function clientIdFromQuery(): string {
+  const value = route.query.client;
   return Array.isArray(value) ? String(value[0] || "") : String(value || "");
 }
 
@@ -181,6 +174,7 @@ onMounted(async () => {
     if (slug) {
       gate.value = await portalService.getLoginGate(slug, {
         jobId: nextJobId() || undefined,
+        clientId: clientIdFromQuery() || undefined,
       });
       applyGateTheme(gate.value);
     }
@@ -205,17 +199,16 @@ async function submit() {
   try {
     const result = await portalService.login({
       studioSlug: slug,
-      email: email.value.trim(),
       passcode: passcode.value,
+      ...(clientIdFromQuery() ? { clientId: clientIdFromQuery() } : {}),
     });
-    setAccent(result.studio.brandColor);
-    if (gate.value?.accentColor) setAccent(gate.value.accentColor);
+    setAccent(result.accentColor || result.studio.brandColor);
     await goAfterAuth();
   } catch (caught: unknown) {
     if (caught instanceof PortalApiError) {
       error.value =
         caught.code === "PORTAL_PASSCODE_INCORRECT"
-          ? "Invalid email or passcode."
+          ? "Invalid passcode."
           : caught.message || "Unable to sign in.";
     } else {
       error.value = "Unable to sign in. Please try again.";
@@ -227,8 +220,6 @@ async function submit() {
 </script>
 
 <style scoped>
-@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap");
-
 .gate {
   font-family: "DM Sans", system-ui, sans-serif;
   color: var(--p-text);
@@ -246,7 +237,7 @@ async function submit() {
   color: var(--p-muted);
   font-size: 0.8rem;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
+ 
 }
 
 .gate__spinner {
@@ -386,8 +377,7 @@ async function submit() {
   font-size: 0.65rem;
   font-weight: 700;
   letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--p-muted);
+  color: var(--p-accent);
 }
 
 .gate__studio {
@@ -397,24 +387,6 @@ async function submit() {
   white-space: nowrap;
   font-size: 0.95rem;
   font-weight: 600;
-}
-
-.gate__theme-toggle {
-  display: inline-flex;
-  height: 2.25rem;
-  width: 2.25rem;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--p-border);
-  border-radius: 999px;
-  background: var(--p-card);
-  color: var(--p-muted);
-  cursor: pointer;
-  transition: background 150ms ease;
-}
-
-.gate__theme-toggle:hover {
-  background: var(--p-hover);
 }
 
 .gate__body {
@@ -493,7 +465,7 @@ async function submit() {
 .gate__error {
   margin: 1rem 0 0;
   font-size: 0.8rem;
-  color: #e07070;
+  color: #c45c5c;
 }
 
 .gate__submit {
@@ -505,11 +477,10 @@ async function submit() {
   justify-content: center;
   border: 0;
   border-radius: 2px;
-  background: var(--p-text);
-  color: var(--p-shell);
+  background: var(--p-accent);
+  color: var(--p-accent-text);
   font-size: 0.85rem;
   letter-spacing: 0.05em;
-  text-transform: uppercase;
   font-weight: 500;
   cursor: pointer;
   transition: opacity 200ms ease, transform 200ms ease;
@@ -543,7 +514,7 @@ async function submit() {
 .gate__footer-label {
   font-size: 0.65rem;
   letter-spacing: 0.14em;
-  text-transform: uppercase;
+ 
   color: var(--p-muted);
 }
 

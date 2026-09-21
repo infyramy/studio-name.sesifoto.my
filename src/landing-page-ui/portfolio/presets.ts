@@ -63,11 +63,13 @@ export const DEFAULT_PORTFOLIO_ITEMS: PortfolioItem[] = [
 export function createDefaultPortfolioConfig(): PortfolioPageConfig {
   return {
     pageTemplate: "portfolio",
+    showHero: true,
     sectionLabel: "PORTFOLIO",
     title: "Wedding Gallery",
     subtitle: "Here are our recent works from past client",
     featuredImageUrl:
       "https://images.unsplash.com/photo-1519741497674-611481863552?q=80&w=1600&auto=format&fit=crop",
+    showGallery: true,
     categories: DEFAULT_PORTFOLIO_CATEGORIES.map((c) => ({ ...c })),
     items: DEFAULT_PORTFOLIO_ITEMS.map((i) => ({ ...i })),
     showCta: true,
@@ -75,9 +77,7 @@ export function createDefaultPortfolioConfig(): PortfolioPageConfig {
       "https://images.unsplash.com/photo-1522673607200-164d1b6ce486?q=80&w=600&auto=format&fit=crop",
     ctaSectionLabel: "HUBUNGI KAMI",
     ctaHeading: "Ceritakan hari bahagia anda bersama kami",
-    ctaPrimaryLabel: "SEMAK KEKOSONGAN",
-    ctaPrimaryUrl: "/check-booking",
-    ctaSecondaryLabel: "LIHAT PAKEJ",
-    ctaSecondaryUrl: "/services",
+    ctaPrimaryPreset: "book_appointment",
+    ctaSecondaryPreset: "view_packages",
   };
 }

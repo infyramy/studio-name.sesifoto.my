@@ -1,3 +1,7 @@
+import {
+  isHomeCtaPresetId,
+  type HomeCtaPresetId,
+} from "../home-marketing/cta-presets";
 import { safeHttpUrl } from "../useLandingPageStyles";
 import { createDefaultAboutConfig } from "./presets";
 import type {
@@ -17,12 +21,42 @@ function trim(value: unknown, max: number): string {
   return value.trim().slice(0, max);
 }
 
+function coerceBoolean(value: unknown, fallback: boolean): boolean {
+  return typeof value === "boolean" ? value : fallback;
+}
+
 function safeNavUrl(value: unknown): string {
   if (typeof value !== "string") return "";
   const trimmed = value.trim().slice(0, 500);
   if (!trimmed) return "";
   if (trimmed.startsWith("/") || trimmed.startsWith("#")) return trimmed;
   return safeHttpUrl(trimmed) ?? "";
+}
+
+function normalizeCtaPreset(
+  value: unknown,
+  fallback: HomeCtaPresetId,
+): HomeCtaPresetId {
+  return isHomeCtaPresetId(value) ? value : fallback;
+}
+
+function legacyPrimaryPreset(src: Record<string, unknown>): HomeCtaPresetId {
+  const url = safeNavUrl(src.ctaPrimaryUrl);
+  if (url === "/check-booking") return "book_appointment";
+  if (url === "/services") return "view_packages";
+  if (url === "/lead-form") return "contact_us";
+  if (url === "/portfolio") return "view_portfolio";
+  return "contact_us";
+}
+
+function legacySecondaryPreset(src: Record<string, unknown>): HomeCtaPresetId {
+  const url = safeNavUrl(src.ctaSecondaryUrl);
+  if (!url) return "none";
+  if (url === "/check-booking") return "book_appointment";
+  if (url === "/services") return "view_packages";
+  if (url === "/lead-form") return "contact_us";
+  if (url === "/portfolio") return "view_portfolio";
+  return "view_packages";
 }
 
 function normalizeValues(input: unknown): AboutValueProp[] {
@@ -98,33 +132,39 @@ export function normalizeAboutConfig(
 
   return {
     pageTemplate: "about-us",
+    showHero: coerceBoolean(src.showHero, defaults.showHero),
     sectionLabel: trim(src.sectionLabel, MAX_SHORT) || defaults.sectionLabel,
     title: trim(src.title, MAX_TEXT) || defaults.title,
     subtitle: trim(src.subtitle, MAX_TEXT) || defaults.subtitle,
     heroImageUrl: safeHttpUrl(src.heroImageUrl) ?? defaults.heroImageUrl,
     teamImageUrl: safeHttpUrl(src.teamImageUrl) ?? defaults.teamImageUrl,
+    showMission: coerceBoolean(src.showMission, defaults.showMission),
     missionStatement:
       trim(src.missionStatement, MAX_TEXT) || defaults.missionStatement,
+    showValues: coerceBoolean(src.showValues, defaults.showValues),
     values: values.length > 0 ? values : defaults.values.map((v) => ({ ...v })),
+    showProcess: coerceBoolean(src.showProcess, defaults.showProcess),
     processLabel: trim(src.processLabel, MAX_LABEL) || defaults.processLabel,
     processSteps:
       processSteps.length > 0
         ? processSteps
         : defaults.processSteps.map((s) => ({ ...s })),
-    showTestimonial:
-      typeof src.showTestimonial === "boolean"
-        ? src.showTestimonial
-        : defaults.showTestimonial,
+    showTestimonial: coerceBoolean(src.showTestimonial, defaults.showTestimonial),
     testimonial: normalizeTestimonial(src.testimonial),
-    showCta: typeof src.showCta === "boolean" ? src.showCta : defaults.showCta,
+    showCta: coerceBoolean(src.showCta, defaults.showCta),
     ctaImageUrl: safeHttpUrl(src.ctaImageUrl) ?? defaults.ctaImageUrl,
     ctaHeading: trim(src.ctaHeading, MAX_TEXT) || defaults.ctaHeading,
-    ctaPrimaryLabel:
-      trim(src.ctaPrimaryLabel, MAX_SHORT) || defaults.ctaPrimaryLabel,
-    ctaPrimaryUrl: safeNavUrl(src.ctaPrimaryUrl) || defaults.ctaPrimaryUrl,
-    ctaSecondaryLabel:
-      trim(src.ctaSecondaryLabel, MAX_SHORT) || defaults.ctaSecondaryLabel,
-    ctaSecondaryUrl:
-      safeNavUrl(src.ctaSecondaryUrl) || defaults.ctaSecondaryUrl,
+    ctaPrimaryPreset: normalizeCtaPreset(
+      src.ctaPrimaryPreset,
+      src.ctaPrimaryPreset
+        ? defaults.ctaPrimaryPreset
+        : legacyPrimaryPreset(src),
+    ),
+    ctaSecondaryPreset: normalizeCtaPreset(
+      src.ctaSecondaryPreset,
+      src.ctaSecondaryPreset
+        ? defaults.ctaSecondaryPreset
+        : legacySecondaryPreset(src),
+    ),
   };
 }

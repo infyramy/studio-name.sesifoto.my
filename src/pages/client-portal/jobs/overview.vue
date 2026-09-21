@@ -12,7 +12,7 @@
       <div class="absolute inset-0 bg-black/30" />
       <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
       <div class="relative mx-auto flex h-full max-w-4xl flex-col justify-end px-5 py-12 text-white sm:px-6">
-        <p class="mb-3 text-[10px] font-semibold uppercase tracking-[0.25em] text-white/80">
+        <p class="mb-3 text-[11px] font-medium tracking-wide text-white/80">
           {{ portalData.title }}
         </p>
         <h1 class="font-medium tracking-tight" style="font-family: 'Cormorant Garamond', serif; font-size: 4rem; line-height: 1.05;">
@@ -65,7 +65,7 @@
                   : "Your event is on track"
               }}
             </p>
-            <p class="mt-1.5 text-xs tracking-wider uppercase" :style="{ color: 'var(--p-muted)' }">
+            <p class="mt-1.5 text-xs tracking-wide capitalize" :style="{ color: 'var(--p-muted)' }">
               Status: {{ portalData.statusLabel || portalData.status.replace(/_/g, " ") }}
             </p>
           </div>
@@ -77,7 +77,7 @@
               : 'client-portal-job-overview',
             params: { jobId: currentJobId },
           }"
-          class="inline-flex items-center justify-center gap-3 px-6 py-3 text-[11px] font-semibold tracking-[0.1em] uppercase transition hover:opacity-80"
+          class="inline-flex items-center justify-center gap-3 px-6 py-3 text-[11px] font-semibold tracking-wide transition hover:opacity-80"
           :style="{ background: 'var(--p-text)', color: 'var(--p-shell)' }"
         >
           {{ portalData.billing.balanceDue > 0 ? "Review payment" : "View progress" }}
@@ -90,7 +90,7 @@
           <div>
             <h2 class="font-medium" style="font-family: 'Cormorant Garamond', serif; font-size: 2rem;">Event progress</h2>
           </div>
-          <span class="text-[10px] font-semibold uppercase tracking-[0.2em]" :style="{ color: 'var(--p-accent)' }">
+          <span class="text-[11px] font-medium tracking-wide" :style="{ color: 'var(--p-accent)' }">
             {{ jobSteps.filter((step) => step.done).length }} / {{ jobSteps.length }} complete
           </span>
         </div>
@@ -115,7 +115,7 @@
           <div>
             <h2 class="font-medium" style="font-family: 'Cormorant Garamond', serif; font-size: 2rem;">Sessions</h2>
           </div>
-          <span class="text-[10px] uppercase tracking-[0.2em]" :style="{ color: 'var(--p-muted)' }">
+          <span class="text-[11px] tracking-wide" :style="{ color: 'var(--p-muted)' }">
             {{ portalData.sessions.length }} total
           </span>
         </div>
@@ -130,7 +130,7 @@
           >
             <div>
               <p class="text-sm font-semibold capitalize tracking-wide">{{ session.type.replace(/_/g, " ") }}</p>
-              <p class="mt-2 text-[10px] uppercase tracking-[0.2em]" :style="{ color: 'var(--p-accent)' }">
+              <p class="mt-2 text-[11px] tracking-wide" :style="{ color: 'var(--p-accent)' }">
                 {{ session.status }}
               </p>
             </div>
@@ -140,12 +140,55 @@
                 {{ formatDate(session.date) }}
                 <span class="mx-2 opacity-30">|</span>
                 <Clock class="h-4 w-4" />
-                {{ session.startTime || "TBC" }}
+                {{ formatTimeRange(session.startTime, session.endTime) }}
               </p>
               <p class="flex items-start gap-3">
                 <MapPin class="h-4 w-4 mt-0.5 shrink-0" />
                 {{ session.venue || "Venue pending" }}
               </p>
+              <div class="flex items-start gap-3 pt-1">
+                <Users class="mt-0.5 h-4 w-4 shrink-0" />
+                <div v-if="session.crew?.length" class="min-w-0 flex-1">
+                  <p class="text-[11px] font-semibold tracking-wide" :style="{ color: 'var(--p-text)' }">
+                    Crew
+                  </p>
+                  <ul class="mt-2 flex flex-wrap gap-x-5 gap-y-3">
+                    <li
+                      v-for="(member, index) in session.crew"
+                      :key="`${session.type}-${member.name}-${index}`"
+                      class="flex min-w-0 items-center gap-2.5"
+                    >
+                      <img
+                        v-if="member.avatar"
+                        :src="member.avatar"
+                        :alt="member.name"
+                        class="h-7 w-7 rounded-full object-cover"
+                      />
+                      <span
+                        v-else
+                        class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold"
+                        :style="{ background: 'var(--p-accent-bg)', color: 'var(--p-accent)' }"
+                      >
+                        {{ crewInitials(member.name) }}
+                      </span>
+                      <span class="min-w-0">
+                        <span class="block truncate text-sm font-medium" :style="{ color: 'var(--p-text)' }">
+                          {{ member.name }}
+                        </span>
+                        <span
+                          v-if="member.role"
+                          class="block truncate text-[11px] capitalize tracking-wide"
+                        >
+                          {{ member.role.replace(/_/g, " ") }}
+                        </span>
+                      </span>
+                    </li>
+                  </ul>
+                </div>
+                <p v-else class="text-sm tracking-wide">
+                  Crew to be assigned
+                </p>
+              </div>
             </div>
           </article>
         </div>
@@ -156,7 +199,7 @@
           <div>
             <h2 class="font-medium" style="font-family: 'Cormorant Garamond', serif; font-size: 2rem;">Inspiration</h2>
           </div>
-          <span class="text-[10px] uppercase tracking-[0.2em]" :style="{ color: 'var(--p-muted)' }">
+          <span class="text-[11px] tracking-wide" :style="{ color: 'var(--p-muted)' }">
             {{ portalData.inspirationImages.length }} images
           </span>
         </div>
@@ -181,7 +224,7 @@
             />
             <figcaption
               v-if="image.label"
-              class="mt-3 text-[11px] uppercase tracking-[0.1em]"
+              class="mt-3 text-[11px] tracking-wide"
               :style="{ color: 'var(--p-muted)' }"
             >
               {{ image.label }}
@@ -202,6 +245,7 @@ import {
   Mail,
   MapPin,
   Phone,
+  Users,
 } from "lucide-vue-next";
 import { useClientPortalJob } from "@/composables/useClientPortalJob";
 
@@ -212,8 +256,16 @@ const {
   jobSteps,
   currentJobId,
   formatDate,
+  formatTimeRange,
   formatMoney,
 } = useClientPortalJob();
+
+function crewInitials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "?";
+  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
+  return `${parts[0]![0] ?? ""}${parts[parts.length - 1]![0] ?? ""}`.toUpperCase();
+}
 </script>
 
 <style scoped>

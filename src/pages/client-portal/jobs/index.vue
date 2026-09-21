@@ -1,15 +1,15 @@
 <template>
-  <div class="jobs" :style="themeVars">
+  <div class="jobs portal-font" :style="themeVars">
     <header class="jobs__header">
       <div>
         <p class="jobs__eyebrow">Client portal</p>
-        <h1 class="jobs__title">Your jobs</h1>
-        <p class="jobs__sub">Choose a job to open its portal.</p>
+        <h1 class="jobs__title portal-display">Your bookings</h1>
+        <p class="jobs__sub">Choose a booking to open its portal.</p>
       </div>
       <div class="jobs__actions">
         <button
           type="button"
-          class="jobs__icon-btn"
+          class="portal-icon-btn"
           :aria-label="isDark ? 'Switch to light mode' : 'Switch to dark mode'"
           @click="toggleDark"
         >
@@ -22,18 +22,19 @@
       </div>
     </header>
 
-    <div v-if="loading" class="jobs__state">
-      <div class="jobs__spinner" />
-      <p>Loading jobs…</p>
-    </div>
+    <PortalLoadingState v-if="loading" :fullscreen="false" label="Loading bookings" />
 
-    <div v-else-if="error" class="jobs__state">
-      <p class="jobs__error">{{ error }}</p>
-      <button type="button" class="jobs__retry" @click="load">Try again</button>
-    </div>
+    <PortalErrorState
+      v-else-if="error"
+      :fullscreen="false"
+      title="Unable to load bookings"
+      :message="error"
+      action-label="Try again"
+      @action="load"
+    />
 
     <div v-else-if="!items.length" class="jobs__state">
-      <p>No jobs linked to this account yet.</p>
+      <p>No bookings linked to this account yet.</p>
       <p class="jobs__hint">Ask your studio if something looks missing.</p>
     </div>
 
@@ -49,7 +50,7 @@
             "
           />
           <div class="jobs__meta">
-            <p class="jobs__name">{{ job.title }}</p>
+            <p class="jobs__name portal-display">{{ job.title }}</p>
             <p class="jobs__row">
               <span>{{ job.statusLabel || formatStatus(job.status) }}</span>
               <span v-if="job.eventDate"> · {{ formatDate(job.eventDate) }}</span>
@@ -73,6 +74,8 @@
 import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { Moon, Sun } from "lucide-vue-next";
+import PortalErrorState from "@/components/portal/PortalErrorState.vue";
+import PortalLoadingState from "@/components/portal/PortalLoadingState.vue";
 import { usePortalTheme } from "@/composables/usePortalTheme";
 import {
   PortalApiError,
@@ -129,16 +132,9 @@ async function load() {
   error.value = "";
   setAccent(studioStore.brandColor);
   try {
-    const slug = studioStore.studio?.slug;
-    if (slug) {
-      const gate = await portalService.getLoginGate(slug);
-      setAccent(gate.accentColor || gate.brandColor);
-    }
-  } catch {
-    // keep studio brand
-  }
-  try {
-    items.value = await portalService.listMyJobs();
+    const data = await portalService.listMyJobs();
+    items.value = data.jobs;
+    setAccent(data.accentColor || data.brandColor || studioStore.brandColor);
   } catch (caught: unknown) {
     if (caught instanceof PortalApiError && caught.status === 401) {
       await router.replace({ name: "client-portal-access" });
@@ -147,7 +143,7 @@ async function load() {
     error.value =
       caught instanceof PortalApiError
         ? caught.message
-        : "Unable to load jobs.";
+        : "Unable to load bookings.";
   } finally {
     loading.value = false;
   }
@@ -175,14 +171,11 @@ onMounted(() => {
 </script>
 
 <style scoped>
-@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap");
-
 .jobs {
   min-height: 100dvh;
   padding: 3rem 2rem 4rem;
   background: var(--p-shell);
   color: var(--p-text);
-  font-family: "DM Sans", system-ui, sans-serif;
   transition: background 200ms ease, color 200ms ease;
 }
 
@@ -197,16 +190,14 @@ onMounted(() => {
 
 .jobs__eyebrow {
   margin: 0;
-  font-size: 0.65rem;
-  font-weight: 700;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
   color: var(--p-muted);
 }
 
 .jobs__title {
   margin: 0.5rem 0 0;
-  font-family: "Cormorant Garamond", "Times New Roman", serif;
   font-size: 3.2rem;
   font-weight: 500;
   line-height: 1.1;
@@ -225,34 +216,20 @@ onMounted(() => {
   gap: 0.75rem;
 }
 
-.jobs__icon-btn,
 .jobs__logout {
   border: 0;
   background: transparent;
   color: var(--p-muted);
   cursor: pointer;
   transition: color 150ms ease;
+  padding: 0.45rem 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
-.jobs__icon-btn:hover,
 .jobs__logout:hover {
   color: var(--p-text);
-}
-
-.jobs__icon-btn {
-  display: inline-flex;
-  height: 2.25rem;
-  width: 2.25rem;
-  align-items: center;
-  justify-content: center;
-}
-
-.jobs__logout {
-  padding: 0.45rem 0.5rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
 }
 
 .jobs__state {
@@ -260,34 +237,6 @@ onMounted(() => {
   margin: 4rem auto;
   text-align: center;
   color: var(--p-muted);
-}
-
-.jobs__spinner {
-  margin: 0 auto 1rem;
-  height: 2rem;
-  width: 2rem;
-  border-radius: 999px;
-  border: 2px solid var(--p-accent);
-  border-top-color: transparent;
-  animation: spin 0.8s linear infinite;
-}
-
-.jobs__error {
-  color: #e07070;
-}
-
-.jobs__retry {
-  margin-top: 1rem;
-  border: 0;
-  border-radius: 2px;
-  background: var(--p-text);
-  color: var(--p-shell);
-  padding: 0.65rem 1.25rem;
-  font-size: 0.8rem;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  cursor: pointer;
 }
 
 .jobs__hint {
@@ -338,9 +287,12 @@ onMounted(() => {
   background-position: center;
 }
 
+.jobs__meta {
+  min-width: 0;
+}
+
 .jobs__name {
   margin: 0;
-  font-family: "Cormorant Garamond", "Times New Roman", serif;
   font-size: 1.85rem;
   font-weight: 500;
   letter-spacing: -0.01em;
@@ -359,11 +311,5 @@ onMounted(() => {
   color: var(--p-accent);
   font-weight: 600;
   margin-top: 0.75rem;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 </style>

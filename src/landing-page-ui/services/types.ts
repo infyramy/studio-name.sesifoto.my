@@ -1,3 +1,5 @@
+import type { HomeCtaPresetId } from "../home-marketing/cta-presets";
+
 export type ServicesPackage = {
   id: string;
   imageUrl: string;
@@ -14,16 +16,20 @@ export type ServicesCategory = {
   packages: ServicesPackage[];
 };
 
+export type ServicesSectionKey = "hero" | "packages" | "cta";
+
 export type ServicesPageConfig = {
   pageTemplate: "services";
+  showHero: boolean;
   sectionLabel: string;
   title: string;
+  showPackages: boolean;
   categories: ServicesCategory[];
   showCta: boolean;
   ctaImageUrl: string;
   ctaHeading: string;
-  ctaPrimaryLabel: string;
-  ctaPrimaryUrl: string;
+  ctaPrimaryPreset: HomeCtaPresetId;
+  ctaSecondaryPreset: HomeCtaPresetId;
 };
 
 export type ServicesPageConfigInput = Partial<ServicesPageConfig> &

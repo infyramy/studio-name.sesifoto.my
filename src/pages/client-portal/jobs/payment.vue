@@ -25,7 +25,7 @@
         <a
           v-if="portalData.agreement.termsUrl"
           :href="portalData.agreement.termsUrl"
-          class="mt-4 inline-flex h-11 items-center justify-center px-5 text-xs font-semibold tracking-[0.08em] transition hover:opacity-80"
+          class="mt-4 inline-flex h-11 items-center justify-center px-5 text-xs font-semibold tracking-wide transition hover:opacity-80"
           :style="{ background: 'var(--p-text)', color: 'var(--p-shell)' }"
         >
           Open terms
@@ -34,7 +34,7 @@
 
       <div class="grid gap-12 lg:grid-cols-[1fr_2fr] items-start">
         <div class="relative pt-2">
-          <p class="text-[10px] font-semibold tracking-[0.25em]" :style="{ color: 'var(--p-muted)' }">
+          <p class="text-[10px] font-semibold tracking-wide" :style="{ color: 'var(--p-muted)' }">
             Balance due
           </p>
           <p class="mt-4 font-medium tabular-nums" style="font-family: 'Cormorant Garamond', serif; font-size: 3.5rem; line-height: 1;">
@@ -64,7 +64,7 @@
           <button
             v-if="portalData.billing.canPayAll"
             type="button"
-            class="mt-10 inline-flex h-12 w-full items-center justify-center px-6 text-xs font-semibold tracking-[0.1em] transition hover:opacity-80 disabled:pointer-events-none disabled:opacity-50"
+            class="mt-10 inline-flex h-12 w-full items-center justify-center px-6 text-xs font-semibold tracking-wide transition hover:opacity-80 disabled:pointer-events-none disabled:opacity-50"
             :style="{ background: 'var(--p-text)', color: 'var(--p-shell)' }"
             :disabled="activeCheckout !== null || termsGateActive"
             @click="startCheckout({ scope: 'all' })"
@@ -78,7 +78,7 @@
         <div>
           <div class="mb-6 flex items-end justify-between border-b pb-3" :style="{ borderColor: 'color-mix(in srgb, var(--p-border) 40%, transparent)' }">
             <h3 class="font-medium" style="font-family: 'Cormorant Garamond', serif; font-size: 1.8rem;">Invoices</h3>
-            <span class="text-[10px] tracking-[0.2em]" :style="{ color: 'var(--p-muted)' }">
+            <span class="text-[10px] tracking-wide" :style="{ color: 'var(--p-muted)' }">
               {{ portalData.invoices.length }} files
             </span>
           </div>
@@ -100,7 +100,7 @@
                 </span>
                 <div>
                   <p class="text-base font-semibold tracking-wide">{{ invoice.title }}</p>
-                  <p class="mt-1.5 text-xs tracking-wider" :style="{ color: 'var(--p-muted)' }">
+                  <p class="mt-1.5 text-xs tracking-wide" :style="{ color: 'var(--p-muted)' }">
                     {{ invoice.number }}
                     <span v-if="invoice.dueDate" class="opacity-50 mx-1">|</span>
                     <span v-if="invoice.dueDate">Due {{ formatDate(invoice.dueDate) }}</span>
@@ -112,7 +112,7 @@
                   <p class="text-sm font-semibold tabular-nums tracking-wide">
                     {{ formatMoney(invoice.total, invoice.currency) }}
                   </p>
-                  <p class="mt-1 text-[10px] tracking-[0.2em]" :style="{ color: 'var(--p-accent)' }">
+                  <p class="mt-1 text-[10px] tracking-wide" :style="{ color: 'var(--p-accent)' }">
                     {{ invoice.status }}
                   </p>
                 </div>
@@ -131,7 +131,7 @@
                   <button
                     v-if="invoice.balanceDue > 0"
                     type="button"
-                    class="inline-flex h-9 items-center justify-center px-4 text-xs font-semibold tracking-[0.1em] transition hover:opacity-80 disabled:pointer-events-none disabled:opacity-50"
+                    class="inline-flex h-9 items-center justify-center px-4 text-xs font-semibold tracking-wide transition hover:opacity-80 disabled:pointer-events-none disabled:opacity-50"
                     :style="{ background: 'var(--p-text)', color: 'var(--p-shell)' }"
                     :disabled="activeCheckout !== null || termsGateActive"
                     @click="startCheckout({ scope: 'invoice', invoiceId: invoice.id })"

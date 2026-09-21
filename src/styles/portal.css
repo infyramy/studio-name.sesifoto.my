@@ -1,0 +1,87 @@
+/* Shared client-portal fonts and primitives */
+@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap");
+
+.portal-font {
+  font-family: "DM Sans", system-ui, sans-serif;
+}
+
+.portal-display {
+  font-family: "Cormorant Garamond", Georgia, serif;
+}
+
+.portal-spinner {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 9999px;
+  border: 2px solid var(--p-accent, #16d69b);
+  border-top-color: transparent;
+  animation: portal-spin 0.75s linear infinite;
+}
+
+.portal-btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  padding: 0.75rem 1.25rem;
+  border-radius: 2px;
+  border: none;
+  background: var(--p-text);
+  color: var(--p-shell);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  transition: opacity 0.15s ease;
+}
+
+.portal-btn-primary:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.portal-btn-primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.portal-btn-text {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--p-accent);
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.portal-btn-text:hover {
+  opacity: 0.85;
+}
+
+.portal-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: none;
+  background: transparent;
+  color: var(--p-muted);
+  transition: color 0.15s ease, opacity 0.15s ease;
+  cursor: pointer;
+}
+
+.portal-icon-btn:hover {
+  color: var(--p-text);
+}
+
+.portal-error-text {
+  color: #c45c5c;
+  font-size: 0.8125rem;
+}
+
+@keyframes portal-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

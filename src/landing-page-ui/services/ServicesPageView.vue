@@ -1,8 +1,12 @@
 <script setup lang="ts">
-import { toRef } from "vue";
+import { computed, toRef } from "vue";
 import SiteChrome from "../portfolio/SiteChrome.vue";
+import LandingPageBootState from "../LandingPageBootState.vue";
 import type { ServicesPageConfig } from "./types";
 import type { LandingPageTheme, StudioLanguage } from "../types";
+import type { HomePreviewLayout } from "../home-marketing/useHomeLayout";
+import { resolveHomeCtaPreset } from "../home-marketing/cta-presets";
+import { useServicesLayout } from "./useServicesLayout";
 import { useLandingPageStyles } from "../useLandingPageStyles";
 
 const props = withDefaults(
@@ -11,6 +15,7 @@ const props = withDefaults(
     styleConfig: LandingPageTheme;
     language?: StudioLanguage;
     mode?: "live" | "preview";
+    previewLayout?: HomePreviewLayout;
     loading?: boolean;
     loadError?: string | null;
     surfaceClass?: string;
@@ -18,6 +23,7 @@ const props = withDefaults(
   {
     language: "en",
     mode: "preview",
+    previewLayout: null,
     loading: false,
     loadError: null,
     surfaceClass: "landing-surface",
@@ -31,21 +37,28 @@ const emit = defineEmits<{
 }>();
 
 const styleRef = toRef(props, "styleConfig");
+const previewLayoutRef = toRef(props, "previewLayout");
 const { themeStyle, buttonRadiusClass } = useLandingPageStyles(styleRef);
+const layout = useServicesLayout(previewLayoutRef);
 
-function gridClass(columns: 2 | 3) {
-  return columns === 2
-    ? "grid-cols-1 sm:grid-cols-2"
-    : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3";
-}
+const primaryCta = computed(() =>
+  resolveHomeCtaPreset(props.services.ctaPrimaryPreset, props.language),
+);
+
+const secondaryCta = computed(() =>
+  resolveHomeCtaPreset(props.services.ctaSecondaryPreset, props.language),
+);
 
 function packageClass(
   columns: 2 | 3,
   index: number,
   total: number,
 ): string {
+  if (props.previewLayout === "mobile" || props.previewLayout === "tablet") {
+    return "";
+  }
   if (columns !== 3 || total % 3 !== 1 || index !== total - 1) return "";
-  return "lg:col-span-3 lg:max-w-xs lg:mx-auto";
+  return "col-span-full max-w-xs mx-auto";
 }
 
 function onDetailClick(url: string) {
@@ -57,45 +70,40 @@ function onDetailClick(url: string) {
   <div :class="['min-h-full', surfaceClass]">
     <component :is="'style'" v-html="themeStyle" />
 
-    <div
+    <LandingPageBootState
       v-if="loading"
-      class="flex min-h-[60vh] items-center justify-center py-24 text-[var(--text-muted)]"
-    >
-      Loading...
-    </div>
+      :theme="styleConfig"
+      label="Loading"
+    />
 
-    <div
+    <LandingPageBootState
       v-else-if="loadError"
-      class="flex min-h-[60vh] flex-col items-center justify-center gap-4 px-6 py-24 text-center"
-    >
-      <p class="text-[var(--text-muted)]">{{ loadError }}</p>
-      <button
-        type="button"
-        class="rounded-md border px-4 py-2 text-sm"
-        :class="buttonRadiusClass"
-        @click="emit('retryLoad')"
-      >
-        Try again
-      </button>
-    </div>
+      :theme="styleConfig"
+      :error="loadError"
+      @retry="emit('retryLoad')"
+    />
 
     <SiteChrome
       v-else
       :style-config="styleConfig"
       :language="language"
       :mode="mode"
+      :preview-layout="previewLayout"
       @navigate="emit('navigate', $event)"
       @language-change="emit('languageChange', $event)"
     >
       <!-- Hero -->
-      <section class="mx-auto max-w-6xl px-4 pt-12 pb-10 md:px-6 md:pt-16 text-center">
+      <section :class="layout.heroClass">
         <p
-          class="mb-4 text-xs font-medium uppercase tracking-[0.25em] text-[var(--text-muted)]"
+          class="lp-reveal-child mb-4 text-xs font-medium tracking-[0.25em] text-[var(--text-muted)]"
+          style="--child-i: 0"
         >
           {{ services.sectionLabel }}
         </p>
         <h1
-          class="text-4xl md:text-5xl lg:text-6xl font-normal tracking-tight text-[var(--text-main)]"
+          class="lp-reveal-child"
+          :class="layout.heroTitleClass"
+          style="--child-i: 1"
         >
           {{ services.title }}
         </h1>
@@ -105,16 +113,16 @@ function onDetailClick(url: string) {
       <section
         v-for="category in services.categories"
         :key="category.id"
-        class="mx-auto max-w-6xl px-4 md:px-6 pb-14 md:pb-16"
+        :class="layout.categorySectionClass"
       >
         <h2
-          class="mb-4 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--text-main)]"
+          class="mb-4 text-xs font-semibold tracking-[0.2em] text-[var(--text-main)]"
         >
           {{ category.label }}
         </h2>
         <div class="mb-8 border-t border-[var(--border-color)]" />
 
-        <div class="grid gap-8 md:gap-10" :class="gridClass(category.columns)">
+        <div :class="layout.packageGridClass(category.columns)">
           <article
             v-for="(pkg, index) in category.packages"
             :key="pkg.id"
@@ -137,7 +145,7 @@ function onDetailClick(url: string) {
             </p>
             <button
               type="button"
-              class="mt-3 text-xs font-medium uppercase tracking-wide underline underline-offset-4 text-[var(--text-main)] hover:opacity-70 transition-opacity"
+              class="mt-3 text-xs font-medium tracking-wide underline underline-offset-4 text-[var(--text-main)] hover:opacity-70 transition-opacity"
               @click="onDetailClick(pkg.detailUrl)"
             >
               {{ pkg.detailLabel }}
@@ -149,7 +157,7 @@ function onDetailClick(url: string) {
       <!-- CTA -->
       <section
         v-if="services.showCta"
-        class="mx-auto max-w-3xl px-4 md:px-6 pb-20 text-center"
+        :class="layout.ctaSectionClass"
       >
         <img
           v-if="services.ctaImageUrl"
@@ -159,22 +167,39 @@ function onDetailClick(url: string) {
           referrerpolicy="no-referrer"
         />
         <h2
-          class="mb-8 text-2xl md:text-3xl font-normal leading-snug text-[var(--text-main)] max-w-lg mx-auto"
+          class="max-w-lg mx-auto"
+          :class="layout.ctaHeadingClass"
         >
           {{ services.ctaHeading }}
         </h2>
-        <button
-          type="button"
-          class="min-w-[220px] px-8 py-3.5 text-xs font-semibold uppercase tracking-wider"
-          :class="buttonRadiusClass"
-          :style="{
-            backgroundColor: styleConfig.primaryColor,
-            color: styleConfig.primaryTextColor,
-          }"
-          @click="onDetailClick(services.ctaPrimaryUrl)"
-        >
-          {{ services.ctaPrimaryLabel }}
-        </button>
+        <div :class="layout.ctaButtonsClass">
+          <button
+            v-if="primaryCta"
+            type="button"
+            :class="[layout.ctaButtonClass, buttonRadiusClass]"
+            :style="{
+              backgroundColor: styleConfig.primaryColor,
+              color: styleConfig.primaryTextColor,
+            }"
+            @click="onDetailClick(primaryCta.url)"
+          >
+            {{ primaryCta.label }}
+          </button>
+          <button
+            v-if="secondaryCta"
+            type="button"
+            class="border"
+            :class="[layout.ctaButtonClass, buttonRadiusClass]"
+            :style="{
+              borderColor: 'var(--border-color)',
+              color: 'var(--text-main)',
+              backgroundColor: 'transparent',
+            }"
+            @click="onDetailClick(secondaryCta.url)"
+          >
+            {{ secondaryCta.label }}
+          </button>
+        </div>
       </section>
     </SiteChrome>
   </div>

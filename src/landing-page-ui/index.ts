@@ -1,4 +1,4 @@
-// Keep in sync with public/src/landing-page-ui
+export * from "./designs";
 export * from "./types";
 export * from "./presets";
 export * from "./i18n";
@@ -26,7 +26,11 @@ export * from "./home-marketing/section-order";
 export * from "./about/types";
 export * from "./about/presets";
 export * from "./about/normalize";
+export * from "./templates/editorial";
+export * from "./templates/atelier";
+export * from "./templates/billboard";
 export { default as LandingPageView } from "./LandingPageView.vue";
+export { default as LandingPageBootState } from "./LandingPageBootState.vue";
 export { default as MarketingHomePageView } from "./home-marketing/MarketingHomePageView.vue";
 export { default as PortfolioPageView } from "./portfolio/PortfolioPageView.vue";
 export { default as ServicesPageView } from "./services/ServicesPageView.vue";
