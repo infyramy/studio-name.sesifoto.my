@@ -74,7 +74,7 @@ function normalizePackages(input: unknown): HomeFeaturedPackage[] {
         title,
         price: trim(item.price, MAX_PRICE),
         detailLabel: "Pilih",
-        detailUrl: "/services",
+        detailUrl: "/lead-form",
       };
     })
     .filter((p): p is HomeFeaturedPackage => p !== null)
@@ -149,7 +149,7 @@ export function normalizeHomeMarketingContent(
     aboutSnippetCtaLabel:
       trim(src.aboutSnippetCtaLabel, MAX_LABEL) ||
       defaults.aboutSnippetCtaLabel,
-    aboutSnippetCtaUrl: "/about-us",
+    aboutSnippetCtaUrl: "/portfolio",
     showHomeCta: coerceBoolean(src.showHomeCta, defaults.showHomeCta),
     homeCtaImageUrl:
       safeHttpUrl(src.homeCtaImageUrl) ?? defaults.homeCtaImageUrl,

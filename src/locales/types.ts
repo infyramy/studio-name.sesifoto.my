@@ -313,6 +313,7 @@ export type TranslationKey =
   | "checkBackLater"
   | "studioNotFound"
   | "pageNotFound"
+  | "pageNotFoundMessage"
   | "somethingWentWrong"
   | "tryAgain"
   | "visitSesifoto"

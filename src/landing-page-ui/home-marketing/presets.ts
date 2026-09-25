@@ -34,7 +34,7 @@ export const DEFAULT_HOME_PACKAGES: HomeFeaturedPackage[] = [
     title: "WCC Essential",
     price: "RM 1,500",
     detailLabel: "Pilih",
-    detailUrl: "/services",
+    detailUrl: "/lead-form",
   },
   {
     id: "p-2",
@@ -42,7 +42,7 @@ export const DEFAULT_HOME_PACKAGES: HomeFeaturedPackage[] = [
     title: "WCC Essential PLUS",
     price: "RM 2,200",
     detailLabel: "Pilih",
-    detailUrl: "/services",
+    detailUrl: "/lead-form",
   },
   {
     id: "p-3",
@@ -50,7 +50,7 @@ export const DEFAULT_HOME_PACKAGES: HomeFeaturedPackage[] = [
     title: "Engagement/Nikah/Sanding Videography",
     price: "RM 850",
     detailLabel: "Pilih",
-    detailUrl: "/services",
+    detailUrl: "/lead-form",
   },
 ];
 
@@ -72,7 +72,7 @@ export function createDefaultHomeMarketingContent(): HomeMarketingContent {
     aboutSnippetText:
       "Tulipsfilm consist of passionate photographer and videographer in which their goals is to capture every moment for yours truly to relive the memories since 2019.",
     aboutSnippetCtaLabel: "READ MORE ABOUT US",
-    aboutSnippetCtaUrl: "/about-us",
+    aboutSnippetCtaUrl: "/portfolio",
     showHomeCta: true,
     homeCtaImageUrl: IMG_CTA,
     homeCtaHeading: "Ceritakan hari bahagia anda bersama kami",

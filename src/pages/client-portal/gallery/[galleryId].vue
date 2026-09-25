@@ -211,13 +211,15 @@
             Clear
           </button>
           <button
+            v-if="gallery.allowDownload"
             type="button"
-            class="flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold text-white transition hover:brightness-110"
+            class="flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold text-white transition hover:brightness-110 disabled:opacity-50"
             :style="{ backgroundColor: accentColor }"
-            @click="downloadAll"
+            :disabled="isDownloading"
+            @click="downloadSelected"
           >
             <Download class="h-3.5 w-3.5" />
-            Download
+            {{ isDownloading ? "Preparing…" : "Download" }}
           </button>
         </div>
       </div>
@@ -285,6 +287,7 @@ const isLoading = ref(true);
 const loadError = ref("");
 const notice = ref("");
 let noticeTimer = 0;
+const isDownloading = ref(false);
 
 const accentColor = computed(
   () => gallery.value?.accentColor || resolvedAccent.value,
@@ -624,9 +627,31 @@ function handleViewerKeydown(event: KeyboardEvent) {
   }
 }
 
-function downloadAll() {
-  if (!gallery.value?.allowDownload) return;
+async function runZipDownload(mediaIds?: string[]) {
+  if (!gallery.value?.allowDownload || isDownloading.value) return;
+  isDownloading.value = true;
   showNotice("Preparing download…");
+  try {
+    await galleryService.downloadZip(gallery.value.id, mediaIds);
+    showNotice("Download started");
+  } catch (error: unknown) {
+    const message =
+      error instanceof Error && error.message
+        ? error.message
+        : "Download failed. Try again.";
+    showNotice(message);
+  } finally {
+    isDownloading.value = false;
+  }
+}
+
+function downloadAll() {
+  void runZipDownload();
+}
+
+function downloadSelected() {
+  if (!selectedIds.value.length) return;
+  void runZipDownload([...selectedIds.value]);
 }
 
 function shareGallery() {

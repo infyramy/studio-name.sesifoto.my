@@ -277,9 +277,20 @@ function restItems(section: GalleryLayoutSection) {
     class="border-t py-12 transition-colors duration-300"
     :style="{ borderColor: 'color-mix(in srgb, var(--p-border) 40%, transparent)', background: 'var(--p-shell)' }"
   >
-    <div class="flex items-center justify-center gap-2 text-[10px] tracking-wide" :style="{ color: 'var(--p-muted)' }">
+    <a
+      href="https://sesifoto.my"
+      target="_blank"
+      rel="noopener noreferrer"
+      class="mx-auto flex w-fit flex-col items-center gap-2 text-center text-[10px] tracking-wide transition-opacity hover:opacity-80"
+      :style="{ color: 'var(--p-muted)' }"
+    >
       <span>Powered by</span>
+      <img
+        src="/brand/sesifoto.svg"
+        alt=""
+        class="h-8 w-8 rounded-md object-contain"
+      />
       <span class="font-semibold" :style="{ color: 'var(--p-text)' }">Sesifoto</span>
-    </div>
+    </a>
   </footer>
 </template>

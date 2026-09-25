@@ -21,30 +21,12 @@ const routes: RouteRecordRaw[] = [
     },
   },
   {
-    path: "/services",
-    name: "services",
-    component: () => import("@/pages/landing/PageView.vue"),
-    meta: {
-      title: "Services",
-      pageSlug: "services",
-    },
-  },
-  {
     path: "/lead-form",
     name: "lead-form",
     component: () => import("@/pages/landing/PageView.vue"),
     meta: {
       title: "Lead form",
       pageSlug: "lead-form",
-    },
-  },
-  {
-    path: "/about-us",
-    name: "about-us",
-    component: () => import("@/pages/landing/PageView.vue"),
-    meta: {
-      title: "About us",
-      pageSlug: "about-us",
     },
   },
   {
@@ -236,7 +218,8 @@ router.beforeEach(async (to, _from, next) => {
     }
   }
 
-  if (to.name === "studio-not-found" || to.name === "not-found") {
+  // Platform-only page — no studio context required
+  if (to.name === "studio-not-found") {
     document.title = (to.meta.title as string) || "SESIFOTO";
     next();
     return;
@@ -266,9 +249,14 @@ router.beforeEach(async (to, _from, next) => {
   }
 
   const defaultTitle = studioStore.studio?.name || "SESIFOTO";
-  document.title = to.meta.title
-    ? `${to.meta.title} | ${defaultTitle}`
-    : defaultTitle;
+  // Catch-all not-found keeps its own meta title (no " | Studio" suffix)
+  if (to.name === "not-found") {
+    document.title = (to.meta.title as string) || defaultTitle;
+  } else {
+    document.title = to.meta.title
+      ? `${to.meta.title} | ${defaultTitle}`
+      : defaultTitle;
+  }
 
   next();
 });

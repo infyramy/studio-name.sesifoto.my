@@ -164,18 +164,14 @@ export function createDefaultSiteNav(): {
   return {
     siteNavLeft: [
       { id: "nav-home", label: "Home", url: "/" },
-      { id: "nav-about", label: "About us", url: "/about-us" },
       { id: "nav-portfolio", label: "Portfolio", url: "/portfolio" },
     ],
     siteNavRight: [
-      { id: "nav-services", label: "Services", url: "/services" },
       { id: "nav-lead-form", label: "Lead form", url: "/lead-form" },
     ],
     footerNav: [
       { id: "footer-home", label: "Home", url: "/" },
-      { id: "footer-about", label: "About us", url: "/about-us" },
       { id: "footer-portfolio", label: "Portfolio", url: "/portfolio" },
-      { id: "footer-services", label: "Services", url: "/services" },
       { id: "footer-lead-form", label: "Lead form", url: "/lead-form" },
     ],
   };

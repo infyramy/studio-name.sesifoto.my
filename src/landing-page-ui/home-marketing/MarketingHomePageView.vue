@@ -256,7 +256,7 @@ function onCtaClick(url: string) {
               borderColor: 'var(--border-color)',
               color: 'var(--text-main)',
             }"
-            @click="onCtaClick('/services')"
+            @click="onCtaClick('/lead-form')"
           >
             {{ tLandingPage(language, 'homePackagesViewAll') }}
           </button>
@@ -293,7 +293,7 @@ function onCtaClick(url: string) {
               <button
                 type="button"
                 class="text-xs font-semibold uppercase tracking-wider text-[var(--text-main)] hover:opacity-70"
-                @click="onCtaClick('/about-us')"
+                @click="onCtaClick('/portfolio')"
               >
                 {{ config.aboutSnippetCtaLabel }} →
               </button>

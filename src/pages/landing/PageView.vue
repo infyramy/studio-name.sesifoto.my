@@ -4,38 +4,26 @@ import { useRoute, useRouter } from "vue-router";
 import {
   MarketingHomePageView,
   PortfolioPageView,
-  ServicesPageView,
   LeadFormPageView,
-  AboutPageView,
   EditorialHomePageView,
   EditorialPortfolioPageView,
-  EditorialServicesPageView,
-  EditorialAboutPageView,
   EditorialLeadFormPageView,
   AtelierHomePageView,
   AtelierPortfolioPageView,
-  AtelierServicesPageView,
-  AtelierAboutPageView,
   AtelierLeadFormPageView,
   BillboardHomePageView,
   BillboardPortfolioPageView,
-  BillboardServicesPageView,
-  BillboardAboutPageView,
   BillboardLeadFormPageView,
   LandingPageBootState,
   normalizeLandingPageConfig,
   normalizePortfolioConfig,
-  normalizeServicesConfig,
   normalizeLeadFormConfig,
-  normalizeAboutConfig,
   isEditorialDesign,
   isAtelierDesign,
   isBillboardDesign,
   type LandingPageTheme,
   type PortfolioPageConfig,
-  type ServicesPageConfig,
   type LeadFormPageConfig,
-  type AboutPageConfig,
   type LeadFormSubmitPayload,
   type ProductEntitlements,
   type StudioLanguage,
@@ -52,15 +40,9 @@ const studioStore = useStudioStore();
 
 const pageSlug = computed(() => (route.meta.pageSlug as string | undefined) ?? undefined);
 const isPortfolio = computed(() => pageSlug.value === "portfolio");
-const isServices = computed(() => pageSlug.value === "services");
 const isLeadForm = computed(() => pageSlug.value === "lead-form");
-const isAboutUs = computed(() => pageSlug.value === "about-us");
 const isTemplatePage = computed(
-  () =>
-    isPortfolio.value ||
-    isServices.value ||
-    isLeadForm.value ||
-    isAboutUs.value,
+  () => isPortfolio.value || isLeadForm.value,
 );
 
 const pageLoading = ref(true);
@@ -71,9 +53,7 @@ const productEntitlements = ref<ProductEntitlements>({
 });
 const theme = ref<LandingPageTheme | null>(null);
 const portfolioConfig = ref<PortfolioPageConfig | null>(null);
-const servicesConfig = ref<ServicesPageConfig | null>(null);
 const leadFormConfig = ref<LeadFormPageConfig | null>(null);
-const aboutConfig = ref<AboutPageConfig | null>(null);
 const siteStyle = ref<LandingPageTheme | null>(null);
 
 const leadFormViewRef = ref<{
@@ -201,16 +181,12 @@ const isInitialLoading = computed(
     !studioStore.studio ||
     (!isTemplatePage.value && !theme.value) ||
     (isPortfolio.value && (!portfolioConfig.value || !siteStyle.value)) ||
-    (isServices.value && (!servicesConfig.value || !siteStyle.value)) ||
-    (isLeadForm.value && (!leadFormConfig.value || !siteStyle.value)) ||
-    (isAboutUs.value && (!aboutConfig.value || !siteStyle.value)),
+    (isLeadForm.value && (!leadFormConfig.value || !siteStyle.value)),
 );
 
 const hasReadyPage = computed(() => {
   if (isPortfolio.value) return !!(portfolioConfig.value && siteStyle.value);
-  if (isServices.value) return !!(servicesConfig.value && siteStyle.value);
   if (isLeadForm.value) return !!(leadFormConfig.value && siteStyle.value);
-  if (isAboutUs.value) return !!(aboutConfig.value && siteStyle.value);
   return !!theme.value;
 });
 
@@ -228,9 +204,7 @@ const bootTheme = computed(
 
 function clearPageConfigs() {
   portfolioConfig.value = null;
-  servicesConfig.value = null;
   leadFormConfig.value = null;
-  aboutConfig.value = null;
   // Keep theme/siteStyle for themed boot until new page data arrives.
 }
 
@@ -268,26 +242,8 @@ async function loadPage() {
       );
       theme.value = siteStyle.value;
       rememberSiteTheme(siteStyle.value);
-    } else if (isServices.value) {
-      servicesConfig.value = normalizeServicesConfig(data.config);
-      siteStyle.value = normalizeLandingPageConfig(
-        data.siteStyle ?? {},
-        studioDefaults.value,
-        { products: data.products },
-      );
-      theme.value = siteStyle.value;
-      rememberSiteTheme(siteStyle.value);
     } else if (isLeadForm.value) {
       leadFormConfig.value = normalizeLeadFormConfig(data.config);
-      siteStyle.value = normalizeLandingPageConfig(
-        data.siteStyle ?? {},
-        studioDefaults.value,
-        { products: data.products },
-      );
-      theme.value = siteStyle.value;
-      rememberSiteTheme(siteStyle.value);
-    } else if (isAboutUs.value) {
-      aboutConfig.value = normalizeAboutConfig(data.config);
       siteStyle.value = normalizeLandingPageConfig(
         data.siteStyle ?? {},
         studioDefaults.value,
@@ -373,16 +329,6 @@ function onLeadGallery(index: number) {
         @language-change="onLanguageChange"
         @retry-load="retryLoad"
       />
-      <EditorialServicesPageView
-        v-else-if="isServices && servicesConfig && siteStyle"
-        :services="servicesConfig"
-        :style-config="siteStyle"
-        :language="language"
-        mode="live"
-        @navigate="onNavigate"
-        @language-change="onLanguageChange"
-        @retry-load="retryLoad"
-      />
       <EditorialLeadFormPageView
         v-else-if="isLeadForm && leadFormConfig && siteStyle"
         ref="leadFormViewRef"
@@ -395,16 +341,6 @@ function onLeadGallery(index: number) {
         @navigate="onNavigate"
         @submit="onLeadSubmit"
         @open-gallery="onLeadGallery"
-        @retry-load="retryLoad"
-      />
-      <EditorialAboutPageView
-        v-else-if="isAboutUs && aboutConfig && siteStyle"
-        :about="aboutConfig"
-        :style-config="siteStyle"
-        :language="language"
-        mode="live"
-        @navigate="onNavigate"
-        @language-change="onLanguageChange"
         @retry-load="retryLoad"
       />
       <EditorialHomePageView
@@ -428,16 +364,6 @@ function onLeadGallery(index: number) {
         @language-change="onLanguageChange"
         @retry-load="retryLoad"
       />
-      <AtelierServicesPageView
-        v-else-if="isServices && servicesConfig && siteStyle"
-        :services="servicesConfig"
-        :style-config="siteStyle"
-        :language="language"
-        mode="live"
-        @navigate="onNavigate"
-        @language-change="onLanguageChange"
-        @retry-load="retryLoad"
-      />
       <AtelierLeadFormPageView
         v-else-if="isLeadForm && leadFormConfig && siteStyle"
         ref="leadFormViewRef"
@@ -450,16 +376,6 @@ function onLeadGallery(index: number) {
         @navigate="onNavigate"
         @submit="onLeadSubmit"
         @open-gallery="onLeadGallery"
-        @retry-load="retryLoad"
-      />
-      <AtelierAboutPageView
-        v-else-if="isAboutUs && aboutConfig && siteStyle"
-        :about="aboutConfig"
-        :style-config="siteStyle"
-        :language="language"
-        mode="live"
-        @navigate="onNavigate"
-        @language-change="onLanguageChange"
         @retry-load="retryLoad"
       />
       <AtelierHomePageView
@@ -483,16 +399,6 @@ function onLeadGallery(index: number) {
         @language-change="onLanguageChange"
         @retry-load="retryLoad"
       />
-      <BillboardServicesPageView
-        v-else-if="isServices && servicesConfig && siteStyle"
-        :services="servicesConfig"
-        :style-config="siteStyle"
-        :language="language"
-        mode="live"
-        @navigate="onNavigate"
-        @language-change="onLanguageChange"
-        @retry-load="retryLoad"
-      />
       <BillboardLeadFormPageView
         v-else-if="isLeadForm && leadFormConfig && siteStyle"
         ref="leadFormViewRef"
@@ -505,16 +411,6 @@ function onLeadGallery(index: number) {
         @navigate="onNavigate"
         @submit="onLeadSubmit"
         @open-gallery="onLeadGallery"
-        @retry-load="retryLoad"
-      />
-      <BillboardAboutPageView
-        v-else-if="isAboutUs && aboutConfig && siteStyle"
-        :about="aboutConfig"
-        :style-config="siteStyle"
-        :language="language"
-        mode="live"
-        @navigate="onNavigate"
-        @language-change="onLanguageChange"
         @retry-load="retryLoad"
       />
       <BillboardHomePageView
@@ -538,16 +434,6 @@ function onLeadGallery(index: number) {
         @language-change="onLanguageChange"
         @retry-load="retryLoad"
       />
-      <ServicesPageView
-        v-else-if="isServices && servicesConfig && siteStyle"
-        :services="servicesConfig"
-        :style-config="siteStyle"
-        :language="language"
-        mode="live"
-        @navigate="onNavigate"
-        @language-change="onLanguageChange"
-        @retry-load="retryLoad"
-      />
       <LeadFormPageView
         v-else-if="isLeadForm && leadFormConfig && siteStyle"
         ref="leadFormViewRef"
@@ -560,16 +446,6 @@ function onLeadGallery(index: number) {
         @navigate="onNavigate"
         @submit="onLeadSubmit"
         @open-gallery="onLeadGallery"
-        @retry-load="retryLoad"
-      />
-      <AboutPageView
-        v-else-if="isAboutUs && aboutConfig && siteStyle"
-        :about="aboutConfig"
-        :style-config="siteStyle"
-        :language="language"
-        mode="live"
-        @navigate="onNavigate"
-        @language-change="onLanguageChange"
         @retry-load="retryLoad"
       />
       <MarketingHomePageView

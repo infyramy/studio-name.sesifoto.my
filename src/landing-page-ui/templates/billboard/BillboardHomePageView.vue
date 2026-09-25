@@ -224,7 +224,7 @@ function onCtaClick(url: string) {
             <button
               type="button"
               class="border-2 border-[var(--text-main)] px-4 py-2 text-xs font-semibold tracking-[0.08em] text-[var(--text-main)]"
-              @click="onCtaClick('/services')"
+              @click="onCtaClick('/lead-form')"
             >
               {{ tLandingPage(language, "homePackagesViewAll") }}
             </button>
@@ -302,7 +302,7 @@ function onCtaClick(url: string) {
             <button
               type="button"
               class="w-fit border-2 border-[var(--text-main)] px-4 py-2 text-xs font-semibold tracking-[0.08em] text-[var(--text-main)]"
-              @click="onCtaClick('/about-us')"
+              @click="onCtaClick('/portfolio')"
             >
               {{ config.aboutSnippetCtaLabel }}
             </button>

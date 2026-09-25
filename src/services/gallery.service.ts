@@ -48,4 +48,30 @@ export const galleryService = {
       method: "GET",
     });
   },
+
+  /**
+   * Download gallery media as ZIP.
+   * Pass mediaIds to limit to selection; omit for entire gallery.
+   */
+  async downloadZip(id: string, mediaIds?: string[]): Promise<void> {
+    const qs =
+      mediaIds?.length
+        ? `?ids=${mediaIds.map((mid) => encodeURIComponent(mid)).join(",")}`
+        : "";
+    const blob = await api<Blob>(
+      `/gallery/${encodeURIComponent(id)}/download${qs}`,
+      {
+        method: "GET",
+        responseType: "blob",
+      },
+    );
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "gallery.zip";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  },
 };

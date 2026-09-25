@@ -22,7 +22,7 @@ export const HOME_CTA_PRESETS: HomeCtaPreset[] = [
   },
   {
     id: "view_packages",
-    url: "/services",
+    url: "/lead-form",
     labelKey: "homeCtaViewPackages",
   },
   {

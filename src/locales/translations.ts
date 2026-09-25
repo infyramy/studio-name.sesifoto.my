@@ -325,6 +325,8 @@ export const translationsBM: Translations = {
   checkBackLater: "Semak Semula Nanti",
   studioNotFound: "Studio Tidak Dijumpai",
   pageNotFound: "Halaman Tidak Dijumpai",
+  pageNotFoundMessage:
+    "Maaf, halaman yang anda cari tidak wujud atau telah dipindahkan.",
   somethingWentWrong: "Sesuatu Tidak Kena",
   tryAgain: "Cuba Lagi",
   visitSesifoto: "Kunjungi Sesifoto",
@@ -792,6 +794,8 @@ export const translationsEN: Translations = {
   checkBackLater: "Check Back Later",
   studioNotFound: "Studio Not Found",
   pageNotFound: "Page Not Found",
+  pageNotFoundMessage:
+    "Sorry, the page you're looking for doesn't exist or has been moved.",
   somethingWentWrong: "Something Went Wrong",
   tryAgain: "Try Again",
   visitSesifoto: "Visit Sesifoto",
