@@ -86,10 +86,13 @@
             No invoices available.
           </p>
           <div v-else class="grid gap-8">
-            <div
+            <RouterLink
               v-for="invoice in portalData.invoices"
               :key="invoice.id"
-              class="flex flex-col gap-4 py-2 sm:flex-row sm:items-center sm:justify-between"
+              :to="invoiceRoute(invoice.id)"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="group flex w-full flex-col gap-4 py-2 text-left transition hover:opacity-80 sm:flex-row sm:items-center sm:justify-between"
             >
               <div class="flex items-center gap-4">
                 <span
@@ -110,43 +113,21 @@
               <div class="flex flex-row items-center justify-between gap-6 sm:flex-col sm:items-end sm:gap-2">
                 <div class="text-left sm:text-right">
                   <p class="text-sm font-semibold tabular-nums tracking-wide">
-                    {{ formatMoney(invoice.total, invoice.currency) }}
+                    {{ formatMoney(invoice.balanceDue > 0 ? invoice.balanceDue : invoice.total, invoice.currency) }}
                   </p>
-                  <p class="mt-1 text-[10px] tracking-wide" :style="{ color: 'var(--p-accent)' }">
-                    {{ invoice.status }}
+                  <p class="mt-1 text-[10px] tracking-wide capitalize" :style="{ color: 'var(--p-accent)' }">
+                    {{ invoiceStatusLabel(invoice) }}
                   </p>
                 </div>
-                <div class="flex items-center gap-3">
-                  <button
-                    type="button"
-                    class="inline-flex h-9 items-center justify-center border-b px-2 text-xs font-semibold tracking-wider transition hover:opacity-70"
-                    :style="{
-                      borderColor: 'color-mix(in srgb, var(--p-border) 40%, transparent)',
-                      color: 'var(--p-text)',
-                    }"
-                    @click="openInvoicePdf(invoice)"
-                  >
-                    View PDF
-                  </button>
-                  <button
-                    v-if="invoice.balanceDue > 0"
-                    type="button"
-                    class="inline-flex h-9 items-center justify-center px-4 text-xs font-semibold tracking-wide transition hover:opacity-80 disabled:pointer-events-none disabled:opacity-50"
-                    :style="{ background: 'var(--p-text)', color: 'var(--p-shell)' }"
-                    :disabled="activeCheckout !== null || termsGateActive"
-                    @click="startCheckout({ scope: 'invoice', invoiceId: invoice.id })"
-                  >
-                    <Loader2
-                      v-if="activeCheckout === `invoice:${invoice.id}`"
-                      class="mr-2 h-3.5 w-3.5 animate-spin"
-                    />
-                    {{
-                      activeCheckout === `invoice:${invoice.id}` ? "Wait..." : "Pay"
-                    }}
-                  </button>
-                </div>
+                <span
+                  class="inline-flex h-9 items-center justify-center gap-1.5 px-4 text-xs font-semibold tracking-wide"
+                  :style="{ background: 'var(--p-text)', color: 'var(--p-shell)' }"
+                >
+                  {{ invoice.balanceDue > 0 ? "View & pay" : "View" }}
+                  <ExternalLink class="h-3.5 w-3.5" />
+                </span>
               </div>
-            </div>
+            </RouterLink>
           </div>
         </div>
       </div>
@@ -156,8 +137,9 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
-import { CreditCard, FileText, Loader2 } from "lucide-vue-next";
+import { CreditCard, ExternalLink, FileText, Loader2 } from "lucide-vue-next";
 import { useClientPortalJob } from "@/composables/useClientPortalJob";
+import type { PortalInvoice } from "@/services/portal.service";
 
 const {
   portalData,
@@ -165,14 +147,21 @@ const {
   activeCheckout,
   formatDate,
   formatMoney,
-  openInvoicePdf,
   startCheckout,
+  invoiceRoute,
 } = useClientPortalJob();
 
 const termsGateActive = computed(() => {
   const agreement = portalData.value?.agreement;
   return !!agreement?.requireTerms && !agreement.complete;
 });
+
+function invoiceStatusLabel(invoice: PortalInvoice) {
+  if (invoice.balanceDue <= 0 || invoice.status === "paid") return "Paid";
+  if (invoice.paidAmount > 0) return "Partially paid";
+  if (invoice.status === "overdue") return "Overdue";
+  return "Unpaid";
+}
 </script>
 
 <style scoped>

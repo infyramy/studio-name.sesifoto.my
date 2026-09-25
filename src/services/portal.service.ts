@@ -15,6 +15,23 @@ export interface PortalSession {
   }>;
 }
 
+export interface PortalInvoiceItem {
+  id: string;
+  description: string;
+  detail: string | null;
+  quantity: number;
+  unitPrice: number;
+  discount: number;
+  amount: number;
+}
+
+export interface PortalInvoicePayment {
+  id: string;
+  amount: number;
+  paidAt: string;
+  method: string;
+}
+
 export interface PortalInvoice {
   id: string;
   number: string;
@@ -24,7 +41,16 @@ export interface PortalInvoice {
   balanceDue: number;
   currency: string;
   status: "sent" | "overdue" | "paid";
+  issueDate: string;
   dueDate: string | null;
+  clientName: string | null;
+  notes: string | null;
+  subtotal: number;
+  discount: number;
+  tax: number;
+  rounding: number;
+  items: PortalInvoiceItem[];
+  payments: PortalInvoicePayment[];
 }
 
 export interface PortalDeliveryLink {
@@ -196,8 +222,15 @@ export type PortalPaymentIntentStatus =
   | "expired";
 
 export type CreatePortalCheckoutRequest =
-  | { scope: "all" }
-  | { scope: "invoice"; invoiceId: string };
+  | {
+      scope: "all";
+      returnTo?: "portal_entry" | "portal_payment";
+    }
+  | {
+      scope: "invoice";
+      invoiceId: string;
+      returnTo?: "portal_entry" | "portal_payment" | "portal_invoice";
+    };
 
 export interface PortalPaymentIntent {
   intentId: string;

@@ -170,6 +170,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: "Payment" },
   },
   {
+    path: "/client-action/invoice",
+    name: "client-action-invoice",
+    component: () => import("@/pages/client-action/invoice.vue"),
+    meta: { title: "Invoice" },
+  },
+  {
     path: "/client-portal/:jobId/start",
     name: "client-portal-start",
     component: () => import("@/pages/client-portal/[id].vue"),
@@ -180,6 +186,12 @@ const routes: RouteRecordRaw[] = [
     name: "client-portal-gallery",
     component: () => import("@/pages/client-portal/gallery/[galleryId].vue"),
     meta: { title: "Gallery" },
+  },
+  {
+    path: "/client-portal/:jobId/invoice/:invoiceId",
+    name: "client-portal-invoice",
+    component: () => import("@/pages/client-portal/invoice/[invoiceId].vue"),
+    meta: { title: "Invoice" },
   },
   {
     path: "/client-portal/:jobId",

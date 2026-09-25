@@ -1,5 +1,5 @@
 <template>
-  <div class="h-dvh overflow-y-auto scroll-smooth portal-font" :style="themeVars">
+  <div class="h-dvh overflow-y-auto scroll-smooth portal-font portal-scroll" :style="themeVars">
     <div
       v-if="notice"
       class="fixed bottom-20 left-1/2 z-[60] max-w-sm -translate-x-1/2 rounded-md border px-4 py-2 text-center text-xs shadow-lg"

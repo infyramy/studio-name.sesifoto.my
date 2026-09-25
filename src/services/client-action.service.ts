@@ -27,9 +27,44 @@ export interface ClientActionTermsData {
   complete: boolean;
 }
 
+export interface ClientActionPayInvoice {
+  id: string;
+  number: string;
+  title: string;
+  total: number;
+  paidAmount: number;
+  balanceDue: number;
+  currency: string;
+  status: string;
+  issueDate: string;
+  dueDate: string | null;
+  clientName: string | null;
+  notes: string | null;
+  subtotal: number;
+  discount: number;
+  tax: number;
+  rounding: number;
+  items: Array<{
+    id: string;
+    description: string;
+    detail: string | null;
+    quantity: number;
+    unitPrice: number;
+    discount: number;
+    amount: number;
+  }>;
+  payments: Array<{
+    id: string;
+    amount: number;
+    paidAt: string;
+    method: string;
+  }>;
+}
+
 export interface ClientActionPayData {
   jobId: string;
   title: string;
+  portalHeroUrl: string | null;
   studio: ClientActionStudio;
   clientName: string | null;
   billing: {
@@ -37,17 +72,7 @@ export interface ClientActionPayData {
     currency: string | null;
     canPay: boolean;
   };
-  invoices: Array<{
-    id: string;
-    number: string;
-    title: string;
-    total: number;
-    paidAmount: number;
-    balanceDue: number;
-    currency: string;
-    status: string;
-    dueDate: string | null;
-  }>;
+  invoices: ClientActionPayInvoice[];
   termsComplete: boolean;
   portalUrl: string | null;
 }
@@ -164,5 +189,50 @@ export const clientActionService = {
         body: payload,
       }),
     );
+  },
+
+  getPaymentIntent(
+    token: string,
+    intentId: string,
+    options: { signal?: AbortSignal } = {},
+  ): Promise<{
+    intentId: string;
+    status: "pending" | "succeeded" | "failed" | "cancelled" | "expired";
+  }> {
+    return request(
+      api(`/client-action/pay/payment-intents/${encodeURIComponent(intentId)}`, {
+        query: { t: token },
+        signal: options.signal,
+      }),
+    );
+  },
+
+  async getInvoicePdf(token: string, invoiceId: string): Promise<Blob> {
+    try {
+      return await api<Blob>(
+        `/client-action/pay/invoices/${invoiceId}/pdf`,
+        {
+          query: { t: token },
+          responseType: "blob",
+        },
+      );
+    } catch (caught: unknown) {
+      const response = (
+        caught as {
+          response?: {
+            status?: number;
+            _data?: { message?: string; code?: string; termsUrl?: string };
+          };
+        }
+      ).response;
+      throw new ClientActionApiError(
+        response?.status ?? 0,
+        response?._data?.code ?? null,
+        typeof response?._data?.message === "string"
+          ? response._data.message
+          : "Failed to download invoice PDF.",
+        response?._data?.termsUrl ?? null,
+      );
+    }
   },
 };

@@ -1,5 +1,18 @@
 <template>
-  <div class="action portal-font" :style="themeVars">
+  <div class="action portal-font portal-scroll" :style="themeVars">
+    <div
+      v-if="notice"
+      class="fixed bottom-6 left-1/2 z-[60] max-w-sm -translate-x-1/2 rounded-md border px-4 py-2 text-center text-xs shadow-lg"
+      :style="{
+        background: 'var(--p-card, #111)',
+        borderColor: 'var(--p-border, rgba(255,255,255,0.12))',
+        color: 'var(--p-text, #f2f5f3)',
+      }"
+      role="status"
+    >
+      {{ notice }}
+    </div>
+
     <PortalLoadingState v-if="isLoading" label="Loading payment" />
 
     <PortalErrorState
@@ -99,10 +112,13 @@
           </p>
 
           <div v-else class="pay-list">
-            <div
+            <a
               v-for="invoice in data.invoices"
               :key="invoice.id"
-              class="pay-row"
+              :href="invoiceHref(invoice.id)"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="pay-row pay-row--link"
             >
               <div class="min-w-0">
                 <p class="pay-row-title">{{ invoice.title }}</p>
@@ -115,32 +131,29 @@
               </div>
               <div class="pay-row-right">
                 <p class="pay-row-amount tabular-nums">
-                  {{ formatMoney(invoice.balanceDue, invoice.currency) }}
+                  {{
+                    formatMoney(
+                      invoice.balanceDue > 0
+                        ? invoice.balanceDue
+                        : invoice.total,
+                      invoice.currency,
+                    )
+                  }}
                 </p>
                 <p
                   class="pay-row-status"
                   :style="{ color: 'var(--p-accent)' }"
                 >
-                  {{ invoice.status }}
+                  {{ invoiceStatusLabel(invoice) }}
                 </p>
-                <button
-                  v-if="invoice.balanceDue > 0"
-                  type="button"
+                <span
                   class="pay-row-btn"
                   :style="{ background: 'var(--p-text)', color: 'var(--p-shell)' }"
-                  :disabled="!!activeCheckout"
-                  @click="payInvoice(invoice.id)"
                 >
-                  <Loader2
-                    v-if="activeCheckout === invoice.id"
-                    class="mr-1.5 h-3.5 w-3.5 animate-spin"
-                  />
-                  {{
-                    activeCheckout === invoice.id ? "Wait..." : "Pay"
-                  }}
-                </button>
+                  {{ invoice.balanceDue > 0 ? "View & pay" : "View" }}
+                </span>
               </div>
-            </div>
+            </a>
           </div>
         </div>
       </section>
@@ -160,9 +173,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { Loader2, Moon, Sun } from "lucide-vue-next";
+import {
+  useClientActionInvoicePaymentReturn,
+  useInvoicePageChrome,
+} from "@/composables/useInvoicePage";
 import { usePortalTheme } from "@/composables/usePortalTheme";
 import PortalErrorState from "@/components/portal/PortalErrorState.vue";
 import PortalLoadingState from "@/components/portal/PortalLoadingState.vue";
@@ -184,6 +201,11 @@ const error = ref("");
 const termsUrl = ref<string | null>(null);
 const activeCheckout = ref<string | null>(null);
 const checkoutError = ref("");
+const { notice, showNotice } = useInvoicePageChrome();
+
+const pageReady = computed(
+  () => !isLoading.value && !error.value && !!data.value,
+);
 
 function formatMoney(value: number, currency: string | null) {
   try {
@@ -212,18 +234,39 @@ function openTerms() {
   if (termsUrl.value) window.location.href = termsUrl.value;
 }
 
-async function load() {
+function invoiceHref(invoiceId: string) {
+  const params = new URLSearchParams();
+  if (token.value) params.set("t", token.value);
+  params.set("invoiceId", invoiceId);
+  return `/client-action/invoice?${params.toString()}`;
+}
+
+function invoiceStatusLabel(invoice: {
+  balanceDue: number;
+  paidAmount: number;
+  status: string;
+}) {
+  if (invoice.balanceDue <= 0 || invoice.status === "paid") return "Paid";
+  if (invoice.paidAmount > 0) return "Partially paid";
+  if (invoice.status === "overdue") return "Overdue";
+  return "Unpaid";
+}
+
+async function load(options: { quiet?: boolean } = {}) {
   if (!token.value) {
     error.value = "This link is missing or invalid.";
     isLoading.value = false;
     return;
   }
-  isLoading.value = true;
-  error.value = "";
-  termsUrl.value = null;
+  if (!options.quiet) {
+    isLoading.value = true;
+    error.value = "";
+    termsUrl.value = null;
+  }
   try {
     data.value = await clientActionService.getPay(token.value);
     setAccent(data.value.studio.brandColor);
+    if (!options.quiet) error.value = "";
   } catch (caught: unknown) {
     if (caught instanceof ClientActionApiError) {
       error.value = caught.message;
@@ -232,9 +275,16 @@ async function load() {
       error.value = "Unable to load payment.";
     }
   } finally {
-    isLoading.value = false;
+    if (!options.quiet) isLoading.value = false;
   }
 }
+
+const { handleReturn } = useClientActionInvoicePaymentReturn({
+  token,
+  enabled: pageReady,
+  onRefresh: () => load({ quiet: true }),
+  showNotice,
+});
 
 async function startCheckout(
   payload: { scope: "all" } | { scope: "invoice"; invoiceId: string },
@@ -265,11 +315,22 @@ function payAll() {
   return startCheckout({ scope: "all" }, "all");
 }
 
-function payInvoice(invoiceId: string) {
-  return startCheckout({ scope: "invoice", invoiceId }, invoiceId);
-}
+onMounted(async () => {
+  await load();
+  if (pageReady.value) await handleReturn();
+});
 
-onMounted(load);
+watch(
+  () => [token.value, route.query.intentId] as const,
+  async ([nextToken], previous) => {
+    if (!previous) return;
+    const [prevToken] = previous;
+    if (nextToken !== prevToken) await load();
+    if (pageReady.value && route.query.intentId) {
+      await handleReturn();
+    }
+  },
+);
 </script>
 
 <style scoped>
@@ -495,6 +556,16 @@ onMounted(load);
   display: flex;
   flex-direction: column;
   gap: 1rem;
+}
+
+.pay-row--link {
+  text-decoration: none;
+  color: inherit;
+  transition: opacity 0.15s ease;
+}
+
+.pay-row--link:hover {
+  opacity: 0.8;
 }
 
 @media (min-width: 640px) {

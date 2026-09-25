@@ -60,6 +60,11 @@ export interface ClientPortalJobContext {
     params: { jobId: string; galleryId: string };
     query: import("vue-router").LocationQuery;
   };
+  invoiceRoute: (invoiceId: string) => {
+    name: string;
+    params: { jobId: string; invoiceId: string };
+    query: import("vue-router").LocationQuery;
+  };
   showNotice: (message: string) => void;
   runPortalAction: (action: () => void | Promise<void>) => void;
   openInvoicePdf: (invoice: PortalInvoice) => void;
@@ -200,6 +205,21 @@ export function useClientPortalJobProvide(): ClientPortalJobContext {
     return {
       name: "client-portal-gallery",
       params: { jobId: currentJobId.value, galleryId },
+      query,
+    };
+  };
+  const invoiceRoute = (invoiceId: string) => {
+    const query = { ...route.query };
+    const studioFromQuery = Array.isArray(query.studio)
+      ? query.studio[0]
+      : query.studio;
+    const slug = studioFromQuery || studioStore.studio?.slug;
+    if (slug && !studioFromQuery) {
+      query.studio = slug;
+    }
+    return {
+      name: "client-portal-invoice",
+      params: { jobId: currentJobId.value, invoiceId },
       query,
     };
   };
@@ -629,7 +649,18 @@ export function useClientPortalJobProvide(): ClientPortalJobContext {
     activeCheckout.value = actionKey;
 
     try {
-      const intent = await portalService.createCheckout(jobId, payload, {
+      const checkoutPayload: CreatePortalCheckoutRequest =
+        payload.scope === "all"
+          ? {
+              scope: "all",
+              returnTo: payload.returnTo ?? "portal_payment",
+            }
+          : {
+              scope: "invoice",
+              invoiceId: payload.invoiceId,
+              returnTo: payload.returnTo ?? "portal_invoice",
+            };
+      const intent = await portalService.createCheckout(jobId, checkoutPayload, {
         signal: controller.signal,
       });
       if (
@@ -954,6 +985,7 @@ export function useClientPortalJobProvide(): ClientPortalJobContext {
     formatTimeRange,
     formatMoney,
     galleryRoute,
+    invoiceRoute,
     showNotice,
     runPortalAction,
     openInvoicePdf,
