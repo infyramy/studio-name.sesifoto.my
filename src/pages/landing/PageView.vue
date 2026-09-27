@@ -14,6 +14,9 @@ import {
   BillboardHomePageView,
   BillboardPortfolioPageView,
   BillboardLeadFormPageView,
+  LookbookHomePageView,
+  LookbookPortfolioPageView,
+  LookbookLeadFormPageView,
   LandingPageBootState,
   normalizeLandingPageConfig,
   normalizePortfolioConfig,
@@ -21,6 +24,7 @@ import {
   isEditorialDesign,
   isAtelierDesign,
   isBillboardDesign,
+  isLookbookDesign,
   type LandingPageTheme,
   type PortfolioPageConfig,
   type LeadFormPageConfig,
@@ -80,6 +84,11 @@ const isAtelier = computed(() =>
 );
 const isBillboard = computed(() =>
   isBillboardDesign(
+    (isTemplatePage.value ? siteStyle.value : theme.value)?.designId,
+  ),
+);
+const isLookbook = computed(() =>
+  isLookbookDesign(
     (isTemplatePage.value ? siteStyle.value : theme.value)?.designId,
   ),
 );
@@ -414,6 +423,41 @@ function onLeadGallery(index: number) {
         @retry-load="retryLoad"
       />
       <BillboardHomePageView
+        v-else-if="theme"
+        :config="theme"
+        :language="language"
+        mode="live"
+        @navigate="onNavigate"
+        @language-change="onLanguageChange"
+        @retry-load="retryLoad"
+      />
+    </template>
+    <template v-else-if="isLookbook">
+      <LookbookPortfolioPageView
+        v-if="isPortfolio && portfolioConfig && siteStyle"
+        :portfolio="portfolioConfig"
+        :style-config="siteStyle"
+        :language="language"
+        mode="live"
+        @navigate="onNavigate"
+        @language-change="onLanguageChange"
+        @retry-load="retryLoad"
+      />
+      <LookbookLeadFormPageView
+        v-else-if="isLeadForm && leadFormConfig && siteStyle"
+        ref="leadFormViewRef"
+        :lead-form="leadFormConfig"
+        :style-config="siteStyle"
+        :language="language"
+        mode="live"
+        :crm-enabled="productEntitlements.crm"
+        @language-change="onLanguageChange"
+        @navigate="onNavigate"
+        @submit="onLeadSubmit"
+        @open-gallery="onLeadGallery"
+        @retry-load="retryLoad"
+      />
+      <LookbookHomePageView
         v-else-if="theme"
         :config="theme"
         :language="language"

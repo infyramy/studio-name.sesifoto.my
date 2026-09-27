@@ -52,7 +52,7 @@ const headerNavRight = computed(() =>
   })),
 );
 
-const mobileNavLinks = computed(() => [
+const allNavLinks = computed(() => [
   ...headerNavLeft.value,
   ...headerNavRight.value,
 ]);
@@ -102,13 +102,8 @@ const forceMobileChrome = computed(
     props.previewLayout === "mobile" || props.previewLayout === "tablet",
 );
 
-/** Display utility must live in one class — do not pair `hidden` with bare `flex`. */
 const desktopNavClass = computed(() =>
   forceMobileChrome.value ? "hidden" : "hidden md:flex",
-);
-
-const desktopOnlyClass = computed(() =>
-  forceMobileChrome.value ? "hidden" : "hidden md:block",
 );
 
 const mobileMenuButtonClass = computed(() =>
@@ -124,19 +119,19 @@ const mobileMenuShellClass = computed(() =>
 const mobileMenuSurfaceStyle = computed(() => {
   const t = props.styleConfig;
   const isDark = (t.mode || "dark") !== "light";
-  const bg = t.secondaryColor || (isDark ? "#050505" : "#f7f7f5");
-  const fg = t.secondaryTextColor || (isDark ? "#ffffff" : "#111111");
+  const bg = isDark ? "#0a0a0a" : "#faf9f7";
+  const fg = isDark ? "#fafafa" : "#111111";
   return {
     backgroundColor: bg,
     color: fg,
     ["--bg-main" as string]: bg,
     ["--text-main" as string]: fg,
     ["--text-muted" as string]: isDark
-      ? "rgba(255,255,255,0.65)"
-      : "rgba(0,0,0,0.55)",
+      ? "rgba(255,255,255,0.55)"
+      : "rgba(0,0,0,0.5)",
     ["--border-color" as string]: isDark
       ? "rgba(255,255,255,0.12)"
-      : "rgba(0,0,0,0.1)",
+      : "rgba(0,0,0,0.08)",
   };
 });
 
@@ -194,14 +189,16 @@ function setLanguage(lang: StudioLanguage) {
       animateEnter ? 'lp-chrome--animate' : '',
     ]"
   >
-    <header class="lp-reveal-header sticky top-0 z-40 w-full shrink-0 bg-[var(--bg-main)]">
-      <div class="mx-auto max-w-5xl px-4 pt-5 md:px-8 md:pt-7">
-        <div class="relative flex items-center justify-center">
+    <header
+      class="lp-reveal-header sticky top-0 z-40 w-full shrink-0 border-b border-[var(--border-color)] bg-[var(--bg-main)]/90 backdrop-blur-md"
+    >
+      <div class="grid grid-cols-[1fr_auto_1fr] items-center gap-3 px-4 py-4 md:px-8 md:py-5">
+        <div class="flex items-center gap-3">
           <button
             type="button"
             :class="[
               mobileMenuButtonClass,
-              'absolute left-0 h-9 w-9 items-center justify-center text-[var(--text-main)]',
+              'h-9 w-9 shrink-0 items-center justify-center text-[var(--text-main)]',
             ]"
             :aria-expanded="mobileMenuOpen"
             :aria-label="mobileMenuOpen ? 'Close menu' : 'Open menu'"
@@ -211,72 +208,86 @@ function setLanguage(lang: StudioLanguage) {
             <X v-else class="h-5 w-5" />
           </button>
 
-          <a
-            href="/"
-            class="flex min-w-0 flex-col items-center gap-1 transition-opacity hover:opacity-70"
-            :aria-label="styleConfig.studioName || 'Home'"
-            @click="goHome"
+          <nav
+            :class="[
+              desktopNavClass,
+              'items-center gap-6 text-[10px] font-medium uppercase tracking-[0.22em] text-[var(--text-muted)]',
+            ]"
           >
-            <SiteLogo
-              v-if="styleConfig.logoUrl"
-              :src="styleConfig.logoUrl"
-              :alt="styleConfig.studioName || 'Home'"
-              :logo-style="styleConfig.logoStyle"
-              variant="header"
-            />
-            <span
-              v-else-if="styleConfig.studioName"
-              class="truncate text-center font-title text-2xl tracking-[0.08em] text-[var(--text-main)] md:text-3xl"
+            <a
+              v-for="link in headerNavLeft"
+              :key="link.id"
+              :href="link.url"
+              class="transition-colors hover:text-[var(--text-main)]"
+              @click="onNavClick(link.url, $event)"
             >
-              {{ styleConfig.studioName }}
-            </span>
-          </a>
+              {{ link.label }}
+            </a>
+          </nav>
+        </div>
+
+        <a
+          href="/"
+          class="min-w-0 justify-self-center truncate text-center font-title text-base tracking-[0.18em] text-[var(--text-main)] md:text-lg"
+          :aria-label="styleConfig.studioName || 'Home'"
+          @click="goHome"
+        >
+          <SiteLogo
+            v-if="styleConfig.logoUrl"
+            :src="styleConfig.logoUrl"
+            :alt="styleConfig.studioName || 'Home'"
+            :logo-style="styleConfig.logoStyle"
+            variant="header"
+          />
+          <template v-else>
+            {{ styleConfig.studioName }}
+          </template>
+        </a>
+
+        <div class="flex items-center justify-end gap-5">
+          <nav
+            :class="[
+              desktopNavClass,
+              'items-center gap-6 text-[10px] font-medium uppercase tracking-[0.22em] text-[var(--text-muted)]',
+            ]"
+          >
+            <a
+              v-for="link in headerNavRight"
+              :key="link.id"
+              :href="link.url"
+              class="transition-colors hover:text-[var(--text-main)]"
+              @click="onNavClick(link.url, $event)"
+            >
+              {{ link.label }}
+            </a>
+          </nav>
 
           <div
             v-if="styleConfig.showLanguageSwitcher"
             :class="[
-              desktopOnlyClass,
-              'absolute right-0 text-[10px] font-medium tracking-[0.2em]',
+              forceMobileChrome ? 'hidden' : 'hidden md:flex',
+              'items-center gap-1 text-[10px] tracking-[0.16em] text-[var(--text-muted)]',
             ]"
           >
             <button
               type="button"
-              class="transition-opacity"
-              :class="language === 'bm' ? 'text-[var(--text-main)]' : 'text-[var(--text-muted)]'"
+              class="transition-colors"
+              :class="language === 'bm' ? 'text-[var(--text-main)]' : ''"
               @click="setLanguage('bm')"
             >
-              BM
+              Bm
             </button>
-            <span class="mx-1 text-[var(--text-muted)]">/</span>
+            <span>/</span>
             <button
               type="button"
-              class="transition-opacity"
-              :class="language === 'en' ? 'text-[var(--text-main)]' : 'text-[var(--text-muted)]'"
+              class="transition-colors"
+              :class="language === 'en' ? 'text-[var(--text-main)]' : ''"
               @click="setLanguage('en')"
             >
-              EN
+              En
             </button>
           </div>
         </div>
-
-        <div class="mt-4 border-t border-[var(--border-color)]" />
-
-        <nav
-          :class="[
-            desktopNavClass,
-            'items-center justify-center gap-8 py-3 text-[11px] font-medium tracking-[0.22em] text-[var(--text-muted)]',
-          ]"
-        >
-          <a
-            v-for="link in [...headerNavLeft, ...headerNavRight]"
-            :key="link.id"
-            :href="link.url"
-            class="transition-colors hover:text-[var(--text-main)]"
-            @click="onNavClick(link.url, $event)"
-          >
-            {{ link.label }}
-          </a>
-        </nav>
       </div>
     </header>
 
@@ -308,7 +319,7 @@ function setLanguage(lang: StudioLanguage) {
               >
                 <span
                   v-if="styleConfig.studioName"
-                  class="font-title text-xl tracking-[0.08em]"
+                  class="font-title text-xl tracking-[0.14em]"
                 >
                   {{ styleConfig.studioName }}
                 </span>
@@ -318,10 +329,10 @@ function setLanguage(lang: StudioLanguage) {
 
             <nav class="lp-mobile-menu__nav">
               <a
-                v-for="(link, index) in mobileNavLinks"
+                v-for="(link, index) in allNavLinks"
                 :key="link.id"
                 :href="link.url"
-                class="lp-mobile-menu__link tracking-[0.18em]"
+                class="lp-mobile-menu__link uppercase tracking-[0.18em]"
                 :style="{ '--menu-i': index }"
                 @click="onNavClick(link.url, $event)"
               >
@@ -339,7 +350,7 @@ function setLanguage(lang: StudioLanguage) {
                 :class="language === 'bm' ? 'text-[var(--text-main)]' : 'text-[var(--text-muted)]'"
                 @click="setLanguage('bm')"
               >
-                BM
+                Bm
               </button>
               <span class="text-[var(--text-muted)]">/</span>
               <button
@@ -348,7 +359,7 @@ function setLanguage(lang: StudioLanguage) {
                 :class="language === 'en' ? 'text-[var(--text-main)]' : 'text-[var(--text-muted)]'"
                 @click="setLanguage('en')"
               >
-                EN
+                En
               </button>
             </div>
           </div>
@@ -360,17 +371,19 @@ function setLanguage(lang: StudioLanguage) {
       <slot />
     </main>
 
-    <footer class="lp-reveal-footer w-full shrink-0 border-t border-[var(--border-color)] bg-[var(--bg-main)]">
-      <div class="mx-auto max-w-5xl px-4 py-10 text-center md:px-8 md:py-12">
+    <footer
+      class="lp-reveal-footer w-full shrink-0 border-t border-[var(--border-color)] bg-[var(--bg-main)]"
+    >
+      <div class="px-4 py-14 md:px-8 md:py-20">
         <p
           v-if="styleConfig.studioName"
-          class="mb-5 font-title text-xl tracking-[0.12em] text-[var(--text-main)]"
+          class="mb-10 max-w-4xl font-title text-4xl leading-[0.95] tracking-tight text-[var(--text-main)] md:text-6xl lg:text-7xl"
         >
           {{ styleConfig.studioName }}
         </p>
 
-        <nav
-          class="mb-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-[10px] tracking-[0.2em] text-[var(--text-muted)]"
+        <div
+          class="mb-8 flex flex-wrap gap-x-6 gap-y-2 text-[10px] uppercase tracking-[0.2em] text-[var(--text-muted)]"
         >
           <a
             v-for="link in footerNav"
@@ -381,11 +394,9 @@ function setLanguage(lang: StudioLanguage) {
           >
             {{ link.label }}
           </a>
-        </nav>
+        </div>
 
-        <div
-          class="mb-5 space-y-1 text-xs leading-relaxed text-[var(--text-muted)]"
-        >
+        <div class="space-y-1 text-xs text-[var(--text-muted)]">
           <p v-if="styleConfig.mapAddress">{{ styleConfig.mapAddress }}</p>
           <p v-if="styleConfig.contactEmail">{{ styleConfig.contactEmail }}</p>
           <p v-if="footerPhone && whatsappHref">
@@ -406,24 +417,25 @@ function setLanguage(lang: StudioLanguage) {
           </p>
         </div>
 
-        <p class="mb-4 text-[10px] tracking-[0.14em] text-[var(--text-muted)]">
-          {{ styleConfig.footerCopyright }}
-        </p>
-
         <div
-          v-if="styleConfig.showSocials && socialLinks.length"
-          class="flex items-center justify-center gap-5 text-[10px] tracking-[0.2em] text-[var(--text-muted)]"
+          class="mt-10 flex flex-wrap items-center justify-between gap-3 border-t border-[var(--border-color)] pt-6 text-[10px] tracking-[0.12em] text-[var(--text-muted)]"
         >
-          <a
-            v-for="link in socialLinks"
-            :key="link.href"
-            :href="link.href"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="hover:text-[var(--text-main)]"
+          <p>{{ styleConfig.footerCopyright }}</p>
+          <div
+            v-if="styleConfig.showSocials && socialLinks.length"
+            class="flex gap-5 uppercase tracking-[0.18em]"
           >
-            {{ link.label }}
-          </a>
+            <a
+              v-for="link in socialLinks"
+              :key="link.href"
+              :href="link.href"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="hover:text-[var(--text-main)]"
+            >
+              {{ link.label }}
+            </a>
+          </div>
         </div>
       </div>
     </footer>

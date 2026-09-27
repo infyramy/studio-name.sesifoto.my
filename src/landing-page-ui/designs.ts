@@ -11,6 +11,7 @@ export const LANDING_PAGE_DESIGNS: LandingPageDesignOption[] = [
   { id: "editorial", label: "Editorial" },
   { id: "atelier", label: "Atelier" },
   { id: "billboard", label: "Billboard" },
+  { id: "lookbook", label: "Lookbook" },
 ];
 
 export function resolveLandingPageDesignId(
@@ -29,4 +30,8 @@ export function isAtelierDesign(value: unknown): boolean {
 
 export function isBillboardDesign(value: unknown): boolean {
   return resolveLandingPageDesignId(value) === "billboard";
+}
+
+export function isLookbookDesign(value: unknown): boolean {
+  return resolveLandingPageDesignId(value) === "lookbook";
 }

@@ -6,6 +6,7 @@ import LandingPageBootState from "../LandingPageBootState.vue";
 import { leadFormT, leadFormValidationMessages } from "./i18n";
 import LeadFormDateField from "./LeadFormDateField.vue";
 import LeadFormSelectField from "./LeadFormSelectField.vue";
+import LeadFormSuccessState from "./LeadFormSuccessState.vue";
 import type { LeadFormPageConfig, LeadFormSubmitPayload } from "./types";
 import {
   firstFieldError,
@@ -79,6 +80,7 @@ const serviceInterest = ref<"photo" | "video" | "photo_video">("photo_video");
 const venue = ref("");
 const notes = ref("");
 const submitting = ref(false);
+const submitSucceeded = ref(false);
 const submitMessage = ref<string | null>(null);
 const submitError = ref<string | null>(null);
 const fieldErrors = reactive<LeadFormFieldErrors>({});
@@ -162,6 +164,7 @@ function nextRecentWork() {
 async function onSubmit() {
   submitMessage.value = null;
   submitError.value = null;
+  submitSucceeded.value = false;
 
   if (!runValidation()) {
     await focusFirstError();
@@ -192,7 +195,9 @@ async function onSubmit() {
 
 function markSubmitSuccess() {
   submitting.value = false;
-  submitMessage.value = t.value.submitSuccess;
+  submitError.value = null;
+  submitMessage.value = null;
+  submitSucceeded.value = true;
   contactName.value = "";
   contactPhone.value = "";
   eventDate.value = "";
@@ -202,6 +207,12 @@ function markSubmitSuccess() {
   (Object.keys(fieldErrors) as LeadFormFieldKey[]).forEach((key) => {
     delete fieldErrors[key];
   });
+}
+
+function resetSubmitSuccess() {
+  submitSucceeded.value = false;
+  submitMessage.value = null;
+  submitError.value = null;
 }
 
 function markSubmitFailure(message?: string) {
@@ -299,6 +310,19 @@ defineExpose({ markSubmitSuccess, markSubmitFailure });
 
         <div class="bg-[var(--bg-main)] text-[var(--text-main)] min-h-full">
           <div :class="layout.formPanelClass">
+            <LeadFormSuccessState
+              v-if="submitSucceeded"
+              :title="t.submitSuccessTitle"
+              :body="t.submitSuccess"
+              :again-label="t.submitSuccessAgain"
+              :primary-color="styleConfig.primaryColor"
+              :primary-text-color="styleConfig.primaryTextColor"
+              :button-radius-class="buttonRadiusClass"
+              @again="resetSubmitSuccess"
+            />
+
+            <template v-else>
+
             <template v-if="leadForm.showFormHeader">
               <p
                 class="lp-reveal-child mb-2 text-[10px] font-semibold tracking-[0.25em] text-[var(--text-muted)]"
@@ -546,7 +570,7 @@ defineExpose({ markSubmitSuccess, markSubmitFailure });
               </div>
 
               <p v-if="submitError" class="text-sm text-red-600">{{ submitError }}</p>
-              <p v-if="submitMessage" class="text-sm text-green-700">{{ submitMessage }}</p>
+              <p v-if="submitMessage && !submitSucceeded" class="text-sm text-green-700">{{ submitMessage }}</p>
 
               <template v-if="leadForm.showSubmitFooter">
                 <button
@@ -567,9 +591,10 @@ defineExpose({ markSubmitSuccess, markSubmitFailure });
                 </p>
               </template>
             </form>
+            </template>
 
             <a
-              v-if="leadForm.showSubmitFooter"
+              v-if="leadForm.showSubmitFooter && !submitSucceeded"
               :href="SESIFOTO_HOME_URL"
               target="_blank"
               rel="noopener noreferrer"

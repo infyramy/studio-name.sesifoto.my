@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, reactive, ref, toRef, watch } from "vue";
 import { ChevronLeft, ChevronRight } from "lucide-vue-next";
-import EditorialSiteChrome from "./EditorialSiteChrome.vue";
+import LookbookSiteChrome from "./LookbookSiteChrome.vue";
 import LandingPageBootState from "../../LandingPageBootState.vue";
 import { leadFormT, leadFormValidationMessages } from "../../lead-form/i18n";
 import LeadFormDateField from "../../lead-form/LeadFormDateField.vue";
@@ -257,7 +257,7 @@ defineExpose({ markSubmitSuccess, markSubmitFailure });
       @retry="emit('retryLoad')"
     />
 
-    <EditorialSiteChrome
+    <LookbookSiteChrome
       v-else
       :style-config="styleConfig"
       :language="language"
@@ -614,6 +614,6 @@ defineExpose({ markSubmitSuccess, markSubmitFailure });
           </div>
         </div>
       </div>
-    </EditorialSiteChrome>
+    </LookbookSiteChrome>
   </div>
 </template>

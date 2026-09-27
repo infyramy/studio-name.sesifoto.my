@@ -29,6 +29,7 @@ export * from "./about/normalize";
 export * from "./templates/editorial";
 export * from "./templates/atelier";
 export * from "./templates/billboard";
+export * from "./templates/lookbook";
 export { default as LandingPageView } from "./LandingPageView.vue";
 export { default as LandingPageBootState } from "./LandingPageBootState.vue";
 export { default as MarketingHomePageView } from "./home-marketing/MarketingHomePageView.vue";

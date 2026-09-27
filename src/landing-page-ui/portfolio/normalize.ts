@@ -2,6 +2,7 @@ import {
   isHomeCtaPresetId,
   type HomeCtaPresetId,
 } from "../home-marketing/cta-presets";
+import { normalizeIdList } from "../home-marketing/resolve-client-gallery-media";
 import { safeHttpUrl } from "../useLandingPageStyles";
 import { createDefaultPortfolioConfig } from "./presets";
 import type {
@@ -13,6 +14,7 @@ import type {
 
 const MAX_CATEGORIES = 12;
 const MAX_ITEMS = 48;
+const MAX_CLIENT_GALLERIES = 12;
 const MAX_LABEL = 80;
 const MAX_TITLE = 120;
 const MAX_SUBTITLE = 120;
@@ -91,9 +93,9 @@ function normalizeItems(
     .map((row): PortfolioItem | null => {
       if (!row || typeof row !== "object") return null;
       const item = row as Record<string, unknown>;
-      const title = trim(item.title, MAX_TITLE);
       const imageUrl = safeHttpUrl(item.imageUrl) ?? "";
-      if (!title || !imageUrl) return null;
+      if (!imageUrl) return null;
+      const title = trim(item.title, MAX_TITLE) || "Photo";
       const categoryId =
         typeof item.categoryId === "string" && validCategoryIds.has(item.categoryId)
           ? item.categoryId
@@ -108,6 +110,7 @@ function normalizeItems(
         title,
         subtitle: trim(item.subtitle, MAX_SUBTITLE),
         categoryId,
+        url: safeNavUrl(item.url),
       };
     })
     .filter((i): i is PortfolioItem => i !== null)
@@ -121,6 +124,7 @@ export function normalizePortfolioConfig(
   const raw = saved && typeof saved === "object" ? saved : {};
 
   const categories = normalizeCategories(raw.categories);
+  const clientGalleryIds = normalizeIdList(raw.clientGalleryIds, MAX_CLIENT_GALLERIES);
   const merged: PortfolioPageConfig = {
     ...defaults,
     ...raw,
@@ -132,7 +136,11 @@ export function normalizePortfolioConfig(
     featuredImageUrl:
       safeHttpUrl(raw.featuredImageUrl) ?? defaults.featuredImageUrl,
     showGallery: coerceBoolean(raw.showGallery, defaults.showGallery),
-    categories: categories.length > 0 ? categories : defaults.categories,
+    clientGalleryIds,
+    categories:
+      categories.length > 0
+        ? categories
+        : [{ id: "all", label: "ALL" }],
     items: [],
     showCta: coerceBoolean(raw.showCta, defaults.showCta),
     ctaImageUrl: safeHttpUrl(raw.ctaImageUrl) ?? defaults.ctaImageUrl,
@@ -153,8 +161,7 @@ export function normalizePortfolioConfig(
     ),
   };
 
-  const items = normalizeItems(raw.items, merged.categories);
-  merged.items = items.length > 0 ? items : defaults.items;
+  merged.items = normalizeItems(raw.items, merged.categories);
 
   return merged;
 }

@@ -206,6 +206,11 @@ export function normalizeLandingPageConfig(
     defaults.showLanguageSwitcher,
   );
 
+  const logoStyles = ["transparent", "circle", "square"] as const;
+  if (!logoStyles.includes(theme.logoStyle as (typeof logoStyles)[number])) {
+    theme.logoStyle = defaults.logoStyle;
+  }
+
   theme.designId = normalizeLandingPageDesignId(theme.designId);
 
   Object.assign(theme, normalizeHomeMarketingContent(raw));

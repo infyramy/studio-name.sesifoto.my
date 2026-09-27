@@ -54,6 +54,11 @@ const secondaryCta = computed(() =>
 function onCtaClick(url: string) {
   emit("navigate", url);
 }
+
+function openGalleryLink(url: string) {
+  if (!url) return;
+  window.open(url, "_blank", "noopener,noreferrer");
+}
 </script>
 
 <template>
@@ -127,7 +132,11 @@ function onCtaClick(url: string) {
 
         <!-- Gallery: contact-sheet wall -->
         <section
-          v-else-if="sectionKey === 'gallery' && config.showHomeGallery"
+          v-else-if="
+            sectionKey === 'gallery' &&
+            config.showHomeGallery &&
+            (config.galleryItems.length > 0 || mode === 'preview')
+          "
           class="px-3 py-10 md:px-4 md:py-14"
         >
           <div class="mb-4 flex items-center justify-between gap-3 px-1">
@@ -148,16 +157,28 @@ function onCtaClick(url: string) {
             </button>
           </div>
 
-          <div class="grid grid-cols-2 gap-1 sm:grid-cols-3 md:grid-cols-4 md:gap-1.5">
+          
+          <div
+            v-if="mode === 'preview' && config.galleryItems.length === 0"
+            class="mt-8 rounded-lg border border-dashed border-[var(--border-color)] px-6 py-16 text-center"
+          >
+            <p class="text-sm text-[var(--text-muted)]">
+              Galleries will appear here once selected from Client Gallery.
+            </p>
+          </div>
+          <template v-else>
+<div class="grid grid-cols-2 gap-1 sm:grid-cols-3 md:grid-cols-4 md:gap-1.5">
             <article
               v-for="(item, index) in config.galleryItems"
               :key="item.id"
               class="group relative overflow-hidden bg-[var(--icon-bg)]"
-              :class="
+              :class="[
                 index === 0
                   ? 'col-span-2 aspect-[16/10] sm:col-span-2 sm:row-span-2 sm:aspect-auto sm:min-h-[22rem]'
-                  : 'aspect-square'
-              "
+                  : 'aspect-square',
+                item.url ? 'cursor-pointer' : '',
+              ]"
+              @click="item.url && openGalleryLink(item.url)"
             >
               <img
                 :src="item.imageUrl"
@@ -175,6 +196,8 @@ function onCtaClick(url: string) {
               </div>
             </article>
           </div>
+        
+          </template>
         </section>
 
         <!-- Quote: film slate strip -->
@@ -201,7 +224,11 @@ function onCtaClick(url: string) {
 
         <!-- Packages: horizontal film strip -->
         <section
-          v-else-if="sectionKey === 'packages' && config.showHomePackages"
+          v-else-if="
+            sectionKey === 'packages' &&
+            config.showHomePackages &&
+            (config.featuredPackages.length > 0 || mode === 'preview')
+          "
           class="py-12 md:py-16"
         >
           <div class="mb-6 flex items-end justify-between gap-3 px-4 md:px-8">
@@ -214,6 +241,7 @@ function onCtaClick(url: string) {
               </h2>
             </div>
             <button
+              v-if="config.featuredPackages.length > 0"
               type="button"
               class="text-[11px] tracking-[0.1em] text-[var(--text-main)] underline-offset-4 hover:underline"
               @click="onCtaClick('/lead-form')"
@@ -223,6 +251,15 @@ function onCtaClick(url: string) {
           </div>
 
           <div
+            v-if="mode === 'preview' && config.featuredPackages.length === 0"
+            class="mx-4 rounded-lg border border-dashed border-[var(--border-color)] px-6 py-16 text-center md:mx-8"
+          >
+            <p class="text-sm text-[var(--text-muted)]">
+              Packages will appear here once selected.
+            </p>
+          </div>
+          <div
+            v-else
             class="flex gap-3 overflow-x-auto px-4 pb-2 scrollbar-none md:gap-4 md:px-8"
           >
             <article
@@ -232,6 +269,7 @@ function onCtaClick(url: string) {
             >
               <div class="relative aspect-[4/5] overflow-hidden bg-[var(--icon-bg)]">
                 <img
+                  v-if="pkg.imageUrl"
                   :src="pkg.imageUrl"
                   :alt="pkg.title"
                   class="h-full w-full object-cover"

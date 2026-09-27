@@ -5,13 +5,19 @@ export type EmergencyMethods = "both" | "whatsapp" | "call";
 export type EmergencyPhoneType = "system" | "custom";
 export type LogoStyle = "transparent" | "circle" | "square";
 export type StudioLanguage = "en" | "bm";
-export type LandingPageDesignId = "classic" | "editorial" | "atelier" | "billboard";
+export type LandingPageDesignId =
+  | "classic"
+  | "editorial"
+  | "atelier"
+  | "billboard"
+  | "lookbook";
 
 export const LANDING_PAGE_DESIGN_IDS = [
   "classic",
   "editorial",
   "atelier",
   "billboard",
+  "lookbook",
 ] as const;
 
 export function isLandingPageDesignId(

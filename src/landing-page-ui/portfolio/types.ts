@@ -11,6 +11,8 @@ export type PortfolioItem = {
   title: string;
   subtitle: string;
   categoryId: string;
+  /** Client gallery public path, e.g. `/client-portal/{jobId}/gallery/{id}` */
+  url: string;
 };
 
 export type PortfolioSectionKey = "hero" | "gallery" | "cta";
@@ -23,7 +25,10 @@ export type PortfolioPageConfig = {
   subtitle: string;
   featuredImageUrl: string;
   showGallery: boolean;
+  /** Selected CRM client gallery IDs (live-linked). Each becomes one cover card. */
+  clientGalleryIds: string[];
   categories: PortfolioCategory[];
+  /** Resolved gallery cards. Not the source of truth. */
   items: PortfolioItem[];
   showCta: boolean;
   ctaImageUrl: string;

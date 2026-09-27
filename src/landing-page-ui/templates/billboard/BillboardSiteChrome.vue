@@ -11,6 +11,7 @@ import {
 import type { HomePreviewLayout } from "../../home-marketing/useHomeLayout";
 import type { LandingPageTheme, StudioLanguage } from "../../types";
 import { normalizePhone, safeHttpUrl } from "../../useLandingPageStyles";
+import SiteLogo from "../../portfolio/SiteLogo.vue";
 
 const props = withDefaults(
   defineProps<{
@@ -211,12 +212,12 @@ function setLanguage(lang: StudioLanguage) {
           :aria-label="styleConfig.studioName || 'Home'"
           @click="goHome"
         >
-          <img
+          <SiteLogo
             v-if="styleConfig.logoUrl"
             :src="styleConfig.logoUrl"
             :alt="styleConfig.studioName || 'Home'"
-            class="h-8 w-auto max-w-[150px] object-contain"
-            referrerpolicy="no-referrer"
+            :logo-style="styleConfig.logoStyle"
+            variant="header"
           />
           <template v-else>
             {{ styleConfig.studioName }}

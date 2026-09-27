@@ -58,6 +58,11 @@ const secondaryCta = computed(() =>
 function onCtaClick(url: string) {
   emit("navigate", url);
 }
+
+function openGalleryLink(url: string) {
+  if (!url) return;
+  window.open(url, "_blank", "noopener,noreferrer");
+}
 </script>
 
 <template>
@@ -130,7 +135,26 @@ function onCtaClick(url: string) {
         </div>
       </section>
 
-      <section class="px-4 py-5 md:px-6">
+            <template
+        v-if="
+          portfolio.showGallery &&
+          (portfolio.items.length > 0 || mode === 'preview')
+        "
+      >
+        <section
+          v-if="mode === 'preview' && portfolio.items.length === 0"
+          class="mx-auto max-w-5xl px-4 py-16 md:px-8"
+        >
+          <div
+            class="rounded-lg border border-dashed border-[var(--border-color)] px-6 py-16 text-center"
+          >
+            <p class="text-sm text-[var(--text-muted)]">
+              Galleries will appear here once selected from Client Gallery.
+            </p>
+          </div>
+        </section>
+        <template v-else>
+<section class="px-4 py-5 md:px-6">
         <div class="flex flex-wrap gap-2">
           <button
             v-for="cat in portfolio.categories"
@@ -163,7 +187,11 @@ function onCtaClick(url: string) {
             v-for="(item, index) in filteredItems"
             :key="item.id"
             class="group"
-            :class="index % 3 === 1 ? 'lg:mt-8' : ''"
+            :class="[
+              index % 3 === 1 ? 'lg:mt-8' : '',
+              item.url ? 'cursor-pointer' : '',
+            ]"
+            @click="item.url && openGalleryLink(item.url)"
           >
             <div class="overflow-hidden border-4 border-[var(--text-main)] bg-[var(--icon-bg)]">
               <div class="aspect-[3/4]">
@@ -188,6 +216,9 @@ function onCtaClick(url: string) {
           </article>
         </div>
       </section>
+        </template>
+      </template>
+
 
       <section
         v-if="portfolio.showCta"

@@ -61,6 +61,11 @@ const secondaryCta = computed(() =>
 function onCtaClick(url: string) {
   emit("navigate", url);
 }
+
+function openGalleryLink(url: string) {
+  if (!url) return;
+  window.open(url, "_blank", "noopener,noreferrer");
+}
 </script>
 
 <template>
@@ -123,47 +128,75 @@ function onCtaClick(url: string) {
         />
       </section>
 
-      <!-- Gallery filters -->
-      <section :class="layout.filtersClass">
-        <div class="flex flex-wrap items-center justify-center gap-2">
-          <button
-            v-for="cat in portfolio.categories"
-            :key="cat.id"
-            type="button"
-            class="px-3 py-1.5 text-xs font-medium tracking-wide transition-colors"
-            :class="
-              activeCategoryId === cat.id
-                ? 'text-[var(--text-main)] border-b-2 border-[var(--text-main)]'
-                : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
-            "
-            @click="activeCategoryId = cat.id"
+      <!-- Gallery -->
+      <template
+        v-if="
+          portfolio.showGallery &&
+          (portfolio.items.length > 0 || mode === 'preview')
+        "
+      >
+        <section
+          v-if="mode === 'preview' && portfolio.items.length === 0"
+          :class="layout.gallerySectionClass"
+        >
+          <div
+            class="rounded-lg border border-dashed border-[var(--border-color)] px-6 py-16 text-center"
           >
-            {{ cat.label }}
-          </button>
-        </div>
-      </section>
-
-      <!-- Gallery grid -->
-      <section :class="layout.gallerySectionClass">
-        <div :class="layout.galleryGridClass">
-          <article v-for="item in filteredItems" :key="item.id" class="group">
-            <div class="overflow-hidden mb-3 aspect-[3/4] bg-[var(--icon-bg)]">
-              <img
-                :src="item.imageUrl"
-                :alt="item.title"
-                class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
-                referrerpolicy="no-referrer"
-              />
-            </div>
-            <h3 class="text-sm font-bold tracking-wide text-[var(--text-main)]">
-              {{ item.title }}
-            </h3>
-            <p class="mt-1 text-xs text-[var(--text-muted)] tracking-wide">
-              {{ item.subtitle }}
+            <p class="text-sm text-[var(--text-muted)]">
+              Galleries will appear here once selected from Client Gallery.
             </p>
-          </article>
-        </div>
-      </section>
+          </div>
+        </section>
+        <template v-else>
+          <!-- Gallery filters -->
+          <section :class="layout.filtersClass">
+            <div class="flex flex-wrap items-center justify-center gap-2">
+              <button
+                v-for="cat in portfolio.categories"
+                :key="cat.id"
+                type="button"
+                class="px-3 py-1.5 text-xs font-medium tracking-wide transition-colors"
+                :class="
+                  activeCategoryId === cat.id
+                    ? 'text-[var(--text-main)] border-b-2 border-[var(--text-main)]'
+                    : 'text-[var(--text-muted)] hover:text-[var(--text-main)]'
+                "
+                @click="activeCategoryId = cat.id"
+              >
+                {{ cat.label }}
+              </button>
+            </div>
+          </section>
+
+          <!-- Gallery grid -->
+          <section :class="layout.gallerySectionClass">
+            <div :class="layout.galleryGridClass">
+              <article
+                v-for="item in filteredItems"
+                :key="item.id"
+                :class="['group', item.url ? 'cursor-pointer' : '']"
+                @click="item.url && openGalleryLink(item.url)"
+              >
+                <div class="overflow-hidden mb-3 aspect-[3/4] bg-[var(--icon-bg)]">
+                  <img
+                    v-if="item.imageUrl"
+                    :src="item.imageUrl"
+                    :alt="item.title"
+                    class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
+                    referrerpolicy="no-referrer"
+                  />
+                </div>
+                <h3 class="text-sm font-bold tracking-wide text-[var(--text-main)]">
+                  {{ item.title }}
+                </h3>
+                <p class="mt-1 text-xs text-[var(--text-muted)] tracking-wide">
+                  {{ item.subtitle }}
+                </p>
+              </article>
+            </div>
+          </section>
+        </template>
+      </template>
 
       <!-- CTA -->
       <section

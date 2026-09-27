@@ -59,6 +59,11 @@ const secondaryCta = computed(() =>
 function onCtaClick(url: string) {
   emit("navigate", url);
 }
+
+function openGalleryLink(url: string) {
+  if (!url) return;
+  window.open(url, "_blank", "noopener,noreferrer");
+}
 </script>
 
 <template>
@@ -145,7 +150,11 @@ function onCtaClick(url: string) {
 
         <!-- Gallery -->
         <section
-          v-else-if="sectionKey === 'gallery' && config.showHomeGallery"
+          v-else-if="
+            sectionKey === 'gallery' &&
+            config.showHomeGallery &&
+            (config.galleryItems.length > 0 || mode === 'preview')
+          "
           :class="layout.sectionPaddingClass"
         >
           <p
@@ -156,39 +165,55 @@ function onCtaClick(url: string) {
           <h2 :class="layout.sectionHeadingClass">
             {{ tLandingPage(language, 'homeGalleryTitle') }}
           </h2>
-          <div :class="layout.galleryGridClass">
-            <article
-              v-for="item in config.galleryItems"
-              :key="item.id"
-              :class="['group', layout.galleryItemClass]"
-            >
-              <div class="mb-3 aspect-[3/4] overflow-hidden bg-[var(--icon-bg)]">
-                <img
-                  :src="item.imageUrl"
-                  :alt="item.caption"
-                  class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
-                  referrerpolicy="no-referrer"
-                />
-              </div>
-              <p
-                class="break-words text-xs uppercase tracking-wide text-[var(--text-muted)]"
-              >
-                {{ item.caption }}
-              </p>
-            </article>
-          </div>
-          <button
-            type="button"
-            class="mt-8 px-6 py-3 text-xs font-semibold uppercase tracking-wider border sm:mt-10 sm:px-8"
-            :class="buttonRadiusClass"
-            :style="{
-              borderColor: 'var(--border-color)',
-              color: 'var(--text-main)',
-            }"
-            @click="onCtaClick('/portfolio')"
+          <div
+            v-if="mode === 'preview' && config.galleryItems.length === 0"
+            class="mt-8 rounded-lg border border-dashed border-[var(--border-color)] px-6 py-16 text-center"
           >
-            {{ tLandingPage(language, 'homeGalleryViewAll') }}
-          </button>
+            <p class="text-sm text-[var(--text-muted)]">
+              Galleries will appear here once selected from Client Gallery.
+            </p>
+          </div>
+          <template v-else>
+            <div :class="layout.galleryGridClass">
+              <article
+                v-for="item in config.galleryItems"
+                :key="item.id"
+                :class="[
+                  'group',
+                  layout.galleryItemClass,
+                  item.url ? 'cursor-pointer' : '',
+                ]"
+                @click="item.url && openGalleryLink(item.url)"
+              >
+                <div class="mb-3 aspect-[3/4] overflow-hidden bg-[var(--icon-bg)]">
+                  <img
+                    v-if="item.imageUrl"
+                    :src="item.imageUrl"
+                    :alt="item.caption"
+                    class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
+                    referrerpolicy="no-referrer"
+                  />
+                </div>
+                <p
+                  class="break-words text-xs uppercase tracking-wide text-[var(--text-muted)]"
+                >
+                  {{ item.caption }}
+                </p>
+              </article>
+            </div>
+            <button
+              type="button"
+              class="mt-8 px-6 py-3 text-xs font-semibold uppercase tracking-wider border sm:mt-10 sm:px-8"
+              :class="buttonRadiusClass"
+              :style="{
+                borderColor: 'var(--border-color)',
+                color: 'var(--text-main)',
+              }"
+              @click="onCtaClick('/portfolio')"
+            >
+              {{ tLandingPage(language, 'homeGalleryViewAll') }}
+            </button>
+          </template>
         </section>
 
         <!-- Quote -->
@@ -203,7 +228,11 @@ function onCtaClick(url: string) {
 
         <!-- Packages -->
         <section
-          v-else-if="sectionKey === 'packages' && config.showHomePackages"
+          v-else-if="
+            sectionKey === 'packages' &&
+            config.showHomePackages &&
+            (config.featuredPackages.length > 0 || mode === 'preview')
+          "
           :class="layout.sectionPaddingClass"
         >
           <p
@@ -214,52 +243,63 @@ function onCtaClick(url: string) {
           <h2 :class="layout.sectionHeadingClass">
             {{ tLandingPage(language, 'homePackagesTitle') }}
           </h2>
-          <div :class="layout.packagesGridClass">
-            <article
-              v-for="pkg in config.featuredPackages"
-              :key="pkg.id"
-              :class="layout.packagesItemClass"
-            >
-              <div class="mb-4 aspect-[4/5] overflow-hidden bg-[var(--icon-bg)]">
-                <img
-                  :src="pkg.imageUrl"
-                  :alt="pkg.title"
-                  class="h-full w-full object-cover"
-                  referrerpolicy="no-referrer"
-                />
-              </div>
-              <h3
-                class="break-words text-sm font-bold uppercase tracking-wide text-[var(--text-main)]"
-              >
-                {{ pkg.title }}
-              </h3>
-              <p class="mt-1 mb-4 text-sm text-[var(--text-muted)]">{{ pkg.price }}</p>
-              <button
-                type="button"
-                class="px-5 py-2 text-xs font-semibold uppercase tracking-wider border"
-                :class="buttonRadiusClass"
-                :style="{
-                  borderColor: 'var(--border-color)',
-                  color: 'var(--text-main)',
-                }"
-                @click="onCtaClick(pkg.detailUrl)"
-              >
-                {{ tLandingPage(language, 'homePackageChoose') }}
-              </button>
-            </article>
-          </div>
-          <button
-            type="button"
-            class="mt-8 px-6 py-3 text-xs font-semibold uppercase tracking-wider border sm:mt-10 sm:px-8"
-            :class="buttonRadiusClass"
-            :style="{
-              borderColor: 'var(--border-color)',
-              color: 'var(--text-main)',
-            }"
-            @click="onCtaClick('/lead-form')"
+          <div
+            v-if="mode === 'preview' && config.featuredPackages.length === 0"
+            class="mt-8 rounded-lg border border-dashed border-[var(--border-color)] px-6 py-16 text-center"
           >
-            {{ tLandingPage(language, 'homePackagesViewAll') }}
-          </button>
+            <p class="text-sm text-[var(--text-muted)]">
+              Packages will appear here once selected.
+            </p>
+          </div>
+          <template v-else>
+            <div :class="layout.packagesGridClass">
+              <article
+                v-for="pkg in config.featuredPackages"
+                :key="pkg.id"
+                :class="layout.packagesItemClass"
+              >
+                <div class="mb-4 aspect-[4/5] overflow-hidden bg-[var(--icon-bg)]">
+                  <img
+                    v-if="pkg.imageUrl"
+                    :src="pkg.imageUrl"
+                    :alt="pkg.title"
+                    class="h-full w-full object-cover"
+                    referrerpolicy="no-referrer"
+                  />
+                </div>
+                <h3
+                  class="break-words text-sm font-bold uppercase tracking-wide text-[var(--text-main)]"
+                >
+                  {{ pkg.title }}
+                </h3>
+                <p class="mt-1 mb-4 text-sm text-[var(--text-muted)]">{{ pkg.price }}</p>
+                <button
+                  type="button"
+                  class="px-5 py-2 text-xs font-semibold uppercase tracking-wider border"
+                  :class="buttonRadiusClass"
+                  :style="{
+                    borderColor: 'var(--border-color)',
+                    color: 'var(--text-main)',
+                  }"
+                  @click="onCtaClick(pkg.detailUrl)"
+                >
+                  {{ tLandingPage(language, 'homePackageChoose') }}
+                </button>
+              </article>
+            </div>
+            <button
+              type="button"
+              class="mt-8 px-6 py-3 text-xs font-semibold uppercase tracking-wider border sm:mt-10 sm:px-8"
+              :class="buttonRadiusClass"
+              :style="{
+                borderColor: 'var(--border-color)',
+                color: 'var(--text-main)',
+              }"
+              @click="onCtaClick('/lead-form')"
+            >
+              {{ tLandingPage(language, 'homePackagesViewAll') }}
+            </button>
+          </template>
         </section>
 
         <!-- About snippet -->

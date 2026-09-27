@@ -21,10 +21,10 @@
       action-label="Try again"
       @action="loadGallery"
     />
-    <template v-else-if="gallery">
+    <template v-else-if="galleryForView">
     <ClassicGalleryView
       v-if="activeDesignId === 'classic'"
-      :gallery="gallery"
+      :gallery="galleryForView"
       :cover-url="coverUrl"
       :client-name="clientName"
       :accent-color="accentColor"
@@ -52,7 +52,7 @@
     />
     <MagazineGalleryView
       v-else-if="activeDesignId === 'magazine'"
-      :gallery="gallery"
+      :gallery="galleryForView"
       :cover-url="coverUrl"
       :client-name="clientName"
       :accent-color="accentColor"
@@ -78,7 +78,7 @@
     />
     <FilmStripGalleryView
       v-else
-      :gallery="gallery"
+      :gallery="galleryForView"
       :cover-url="coverUrl"
       :client-name="clientName"
       :accent-color="accentColor"
@@ -211,7 +211,7 @@
             Clear
           </button>
           <button
-            v-if="gallery.allowDownload"
+            v-if="canDownload"
             type="button"
             class="flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold text-white transition hover:brightness-110 disabled:opacity-50"
             :style="{ backgroundColor: accentColor }"
@@ -288,6 +288,23 @@ const loadError = ref("");
 const notice = ref("");
 let noticeTimer = 0;
 const isDownloading = ref(false);
+
+/** Landing-page / marketing entry — hide download so casual visitors cannot ZIP. */
+const fromPublicSite = computed(() => {
+  const raw = route.query.from;
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  return value === "site";
+});
+
+const galleryForView = computed(() => {
+  if (!gallery.value) return null;
+  if (!fromPublicSite.value) return gallery.value;
+  return { ...gallery.value, allowDownload: false };
+});
+
+const canDownload = computed(
+  () => !!gallery.value?.allowDownload && !fromPublicSite.value,
+);
 
 const accentColor = computed(
   () => gallery.value?.accentColor || resolvedAccent.value,
@@ -628,7 +645,7 @@ function handleViewerKeydown(event: KeyboardEvent) {
 }
 
 async function runZipDownload(mediaIds?: string[]) {
-  if (!gallery.value?.allowDownload || isDownloading.value) return;
+  if (!canDownload.value || !gallery.value || isDownloading.value) return;
   isDownloading.value = true;
   showNotice("Preparing download…");
   try {

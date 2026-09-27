@@ -1,3 +1,4 @@
+import { normalizeIdList } from "./resolve-client-gallery-media";
 import { safeHttpUrl } from "../useLandingPageStyles";
 import { isHomeCtaPresetId } from "./cta-presets";
 import { createDefaultHomeMarketingContent } from "./presets";
@@ -12,6 +13,10 @@ import type {
 const MAX_TEXT = 500;
 const MAX_LABEL = 120;
 const MAX_PRICE = 40;
+const MAX_FEATURED_PACKAGES = 6;
+const MAX_GALLERY_ITEMS = 24;
+/** Home page features up to 6 CRM client galleries. */
+const MAX_FEATURED_CLIENT_GALLERIES = 6;
 
 function trim(value: unknown, max: number): string {
   if (typeof value !== "string") return "";
@@ -49,12 +54,29 @@ function normalizeGallery(input: unknown): HomeGalleryItem[] {
         id,
         imageUrl,
         caption: trim(item.caption, MAX_LABEL),
+        url: safeNavUrl(item.url),
       };
     })
     .filter((g): g is HomeGalleryItem => g !== null)
-    .slice(0, 8);
+    .slice(0, MAX_GALLERY_ITEMS);
 }
 
+function normalizePackageIds(input: unknown): string[] {
+  if (!Array.isArray(input)) return [];
+  const seen = new Set<string>();
+  const ids: string[] = [];
+  for (const row of input) {
+    if (typeof row !== "string") continue;
+    const id = row.trim().slice(0, 36);
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    ids.push(id);
+    if (ids.length >= MAX_FEATURED_PACKAGES) break;
+  }
+  return ids;
+}
+
+/** Keep resolved display cards from API / preview resolve. Title required; image optional. */
 function normalizePackages(input: unknown): HomeFeaturedPackage[] {
   if (!Array.isArray(input)) return [];
   return input
@@ -62,15 +84,14 @@ function normalizePackages(input: unknown): HomeFeaturedPackage[] {
       if (!row || typeof row !== "object") return null;
       const item = row as Record<string, unknown>;
       const title = trim(item.title, MAX_LABEL);
-      const imageUrl = safeHttpUrl(item.imageUrl) ?? "";
-      if (!title || !imageUrl) return null;
+      if (!title) return null;
       const id =
         typeof item.id === "string" && item.id.trim()
           ? item.id.trim()
           : `p-${Math.random().toString(36).slice(2, 9)}`;
       return {
         id,
-        imageUrl,
+        imageUrl: safeHttpUrl(item.imageUrl) ?? "",
         title,
         price: trim(item.price, MAX_PRICE),
         detailLabel: "Pilih",
@@ -78,7 +99,7 @@ function normalizePackages(input: unknown): HomeFeaturedPackage[] {
       };
     })
     .filter((p): p is HomeFeaturedPackage => p !== null)
-    .slice(0, 6);
+    .slice(0, MAX_FEATURED_PACKAGES);
 }
 
 function normalizeCtaPreset(
@@ -114,6 +135,11 @@ export function normalizeHomeMarketingContent(
   const defaults = createDefaultHomeMarketingContent();
   const src = input ?? {};
   const galleryItems = normalizeGallery(src.galleryItems);
+  const featuredClientGalleryIds = normalizeIdList(
+    src.featuredClientGalleryIds,
+    MAX_FEATURED_CLIENT_GALLERIES,
+  );
+  const featuredPackageIds = normalizePackageIds(src.featuredPackageIds);
   const featuredPackages = normalizePackages(src.featuredPackages);
 
   return {
@@ -121,20 +147,16 @@ export function normalizeHomeMarketingContent(
     heroSubtitle: trim(src.heroSubtitle, MAX_TEXT) || defaults.heroSubtitle,
     homeSectionOrder: normalizeHomeSectionOrder(src.homeSectionOrder),
     showHomeGallery: coerceBoolean(src.showHomeGallery, defaults.showHomeGallery),
-    galleryItems:
-      galleryItems.length > 0
-        ? galleryItems
-        : defaults.galleryItems.map((i) => ({ ...i })),
+    featuredClientGalleryIds,
+    galleryItems,
     showHomeQuote: coerceBoolean(src.showHomeQuote, defaults.showHomeQuote),
     quoteText: trim(src.quoteText, MAX_TEXT) || defaults.quoteText,
     showHomePackages: coerceBoolean(
       src.showHomePackages,
       defaults.showHomePackages,
     ),
-    featuredPackages:
-      featuredPackages.length > 0
-        ? featuredPackages
-        : defaults.featuredPackages.map((p) => ({ ...p })),
+    featuredPackageIds,
+    featuredPackages,
     showHomeAbout: coerceBoolean(src.showHomeAbout, defaults.showHomeAbout),
     showHomeFaq: coerceBoolean(
       src.showHomeFaq ?? src.showFaq,

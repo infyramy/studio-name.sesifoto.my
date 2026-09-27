@@ -54,6 +54,11 @@ const secondaryCta = computed(() =>
 function onCtaClick(url: string) {
   emit("navigate", url);
 }
+
+function openGalleryLink(url: string) {
+  if (!url) return;
+  window.open(url, "_blank", "noopener,noreferrer");
+}
 </script>
 
 <template>
@@ -139,7 +144,11 @@ function onCtaClick(url: string) {
 
         <!-- Gallery: poster wall with offset cards -->
         <section
-          v-else-if="sectionKey === 'gallery' && config.showHomeGallery"
+          v-else-if="
+            sectionKey === 'gallery' &&
+            config.showHomeGallery &&
+            (config.galleryItems.length > 0 || mode === 'preview')
+          "
           class="border-b border-[var(--border-color)] px-4 py-12 md:px-6 md:py-16"
         >
           <div class="mb-8 flex flex-wrap items-end justify-between gap-4">
@@ -160,12 +169,26 @@ function onCtaClick(url: string) {
             </button>
           </div>
 
-          <div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          
+          <div
+            v-if="mode === 'preview' && config.galleryItems.length === 0"
+            class="mt-8 rounded-lg border border-dashed border-[var(--border-color)] px-6 py-16 text-center"
+          >
+            <p class="text-sm text-[var(--text-muted)]">
+              Galleries will appear here once selected from Client Gallery.
+            </p>
+          </div>
+          <template v-else>
+<div class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
             <article
               v-for="(item, index) in config.galleryItems"
               :key="item.id"
               class="group"
-              :class="index % 3 === 1 ? 'lg:mt-10' : index % 3 === 2 ? 'lg:mt-4' : ''"
+              :class="[
+                index % 3 === 1 ? 'lg:mt-10' : index % 3 === 2 ? 'lg:mt-4' : '',
+                item.url ? 'cursor-pointer' : '',
+              ]"
+              @click="item.url && openGalleryLink(item.url)"
             >
               <div class="overflow-hidden border-4 border-[var(--text-main)] bg-[var(--icon-bg)]">
                 <div class="aspect-[3/4]">
@@ -191,6 +214,8 @@ function onCtaClick(url: string) {
               </div>
             </article>
           </div>
+        
+          </template>
         </section>
 
         <!-- Quote: solid color poster block -->
@@ -209,7 +234,11 @@ function onCtaClick(url: string) {
 
         <!-- Packages: stacked poster rows -->
         <section
-          v-else-if="sectionKey === 'packages' && config.showHomePackages"
+          v-else-if="
+            sectionKey === 'packages' &&
+            config.showHomePackages &&
+            (config.featuredPackages.length > 0 || mode === 'preview')
+          "
           class="border-b border-[var(--border-color)] px-4 py-12 md:px-6 md:py-16"
         >
           <div class="mb-8 flex flex-wrap items-end justify-between gap-4">
@@ -222,6 +251,7 @@ function onCtaClick(url: string) {
               </h2>
             </div>
             <button
+              v-if="config.featuredPackages.length > 0"
               type="button"
               class="border-2 border-[var(--text-main)] px-4 py-2 text-xs font-semibold tracking-[0.08em] text-[var(--text-main)]"
               @click="onCtaClick('/lead-form')"
@@ -230,7 +260,15 @@ function onCtaClick(url: string) {
             </button>
           </div>
 
-          <div class="space-y-4">
+          <div
+            v-if="mode === 'preview' && config.featuredPackages.length === 0"
+            class="rounded-lg border border-dashed border-[var(--border-color)] px-6 py-16 text-center"
+          >
+            <p class="text-sm text-[var(--text-muted)]">
+              Packages will appear here once selected.
+            </p>
+          </div>
+          <div v-else class="space-y-4">
             <article
               v-for="(pkg, index) in config.featuredPackages"
               :key="pkg.id"
@@ -238,6 +276,7 @@ function onCtaClick(url: string) {
             >
               <div class="aspect-[4/5] bg-[var(--icon-bg)] md:aspect-auto md:h-full">
                 <img
+                  v-if="pkg.imageUrl"
                   :src="pkg.imageUrl"
                   :alt="pkg.title"
                   class="h-full w-full object-cover"
