@@ -392,12 +392,16 @@ export const api = {
     studioId: string,
     themeId: string,
     date: string,
+    sessionId?: string,
   ): Promise<TimeSlot[]> {
     const slug = getStudioSlug();
     const data = await apiFetch(
       `/public/studio/${slug}/themes/${themeId}/slots`,
       {
-        query: { date },
+        query: {
+          date,
+          ...(sessionId ? { sessionId } : {}),
+        },
       },
     );
     return data.map(transformTimeSlot);
@@ -654,6 +658,72 @@ export const api = {
     }
   },
 
+  async getBookingsBatch(ids: string[]): Promise<Booking[]> {
+    const cleaned = ids.map((id) => id.trim()).filter(Boolean);
+    if (cleaned.length === 0) return [];
+    const data = await apiFetch(`/public/bookings/batch`, {
+      query: { ids: cleaned.join(",") },
+    });
+    if (!Array.isArray(data)) return [];
+    return data.map((row: any) => ({
+      id: row.id,
+      studio_id: "",
+      booking_number: row.bookingNumber,
+      theme_id: "",
+      theme: {
+        id: "",
+        studio_id: "",
+        name: row.themeName,
+        description_short: "",
+        description_long: "",
+        images: row.themeImage ? [row.themeImage] : [],
+        base_price: row.basePrice || 0,
+        base_pax: row.basePax || 0,
+        extra_pax_price: 0,
+        duration_minutes: 0,
+        buffer_minutes: null,
+        strict_max_people: false,
+        max_total_people: 0,
+        status: "active",
+        sort_order: 0,
+        created_at: "",
+        updated_at: "",
+      },
+      booking_date: row.bookingDate,
+      start_time: row.startTime,
+      end_time: row.endTime,
+      pax_count: row.paxCount || 0,
+      customer_name: row.customerName,
+      customer_phone: row.customerPhone,
+      customer_email: "",
+      customer_notes: "",
+      consent_tc: true,
+      consent_marketing: false,
+      base_price: row.basePrice || 0,
+      extra_pax_fee: row.extraPaxFee || 0,
+      addons_total: row.addonsTotal || 0,
+      special_pricing_applied: row.specialPricingApplied || 0,
+      special_pricing_label: row.specialPricingLabel || null,
+      coupon_code: row.couponCode || null,
+      discount_amount: row.discountAmount || 0,
+      total_amount: row.totalAmount,
+      deposit_amount: row.depositAmount,
+      balance_amount: row.balanceAmount,
+      chip_fee_paid: row.chipFeePaid,
+      payment_status: row.paymentStatus as any,
+      booking_status: row.bookingStatus as any,
+      cart_hold_expires_at: row.cartHoldExpiresAt || null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      addons:
+        row.addons?.map((a: any) => ({
+          addon: { name: a.name, price: a.price / a.quantity },
+          quantity: a.quantity,
+          price_at_booking: a.price,
+        })) || [],
+    }));
+  },
+
   // Lookup booking by booking number and phone (for check booking page)
   async lookupBooking(
     bookingNumber: string,
@@ -880,9 +950,8 @@ export const getAvailableTimeSlots = (
   studioId: string,
   themeId: string,
   date: string,
-) => api.getAvailableTimeSlots(studioId, themeId, date);
-export const createBooking = (request: BookingRequest) =>
-  api.createBooking(request);
+  sessionId?: string,
+) => api.getAvailableTimeSlots(studioId, themeId, date, sessionId);
 export const getBookingById = async (
   bookingNumber: string,
 ): Promise<Booking> => {

@@ -1,22 +1,26 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, watch, nextTick } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import { useStudioStore } from "@/stores/studio";
 import { useTranslation } from "@/composables/useTranslation";
-import { getBookingById } from "@/services/api";
+import { api } from "@/services/api";
 import { format } from "date-fns";
 import type { Booking } from "@/types";
+import confetti from "canvas-confetti";
 import {
   CheckCircle2,
+  Loader2,
   Calendar,
   Clock,
   Users,
   Home,
   MessageCircle,
-  ArrowRight,
   CreditCard,
   Receipt,
   ChevronDown,
+  Copy,
+  Check,
+  Camera,
 } from "lucide-vue-next";
 
 const router = useRouter();
@@ -24,71 +28,90 @@ const route = useRoute();
 const studioStore = useStudioStore();
 const { t } = useTranslation();
 
-// Support multiple booking IDs (comma-separated for cart mode)
 const bookingIdParam = route.params.bookingId as string;
 const bookingIds = bookingIdParam.split(",").filter((id) => id.trim());
 const bookings = ref<Booking[]>([]);
 const isLoading = ref(true);
 const error = ref<string | null>(null);
-
-// Accordion Expand State (for multiple bookings)
 const expandedIndex = ref<number | null>(0);
+const copiedId = ref(false);
+const confettiFired = ref(false);
 
 const toggleAccordion = (index: number) => {
-  if (expandedIndex.value === index) {
-    expandedIndex.value = null;
-  } else {
-    expandedIndex.value = index;
-  }
+  expandedIndex.value = expandedIndex.value === index ? null : index;
 };
 
-// For backward compatibility - primary booking is the first one
 const booking = computed(() => bookings.value[0] || null);
 const isMultipleBookings = computed(() => bookings.value.length > 1);
 
-// Helper to check if any booking needs status update
 const hasAnyPendingPayment = (bookingList: Booking[]) => {
   return bookingList.some((b) => b.payment_status === "pending");
 };
 
-// Fetch booking data with retry for webhook race condition
+const isCelebratoryPayment = (b: Booking | null) => {
+  if (!b) return false;
+  return b.payment_status === "paid" || b.payment_status === "partially_paid";
+};
+
 const fetchBookingsWithRetry = async (
   ids: string[],
   maxRetries: number = 5,
-  delayMs: number = 1500
+  delayMs: number = 1500,
 ): Promise<Booking[]> => {
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    const fetchedBookings = await Promise.all(
-      ids.map((id) => getBookingById(id.trim()))
-    );
-    const validBookings = fetchedBookings.filter(
-      (b) => b !== null
-    ) as Booking[];
+    const validBookings = await api.getBookingsBatch(ids);
 
-    // If only 1 booking or no pending payments, we're done
     if (validBookings.length <= 1 || !hasAnyPendingPayment(validBookings)) {
       return validBookings;
     }
 
-    // If there are pending payments and retries remaining, wait and retry
     if (attempt < maxRetries) {
-      console.log(
-        `[Success] Some bookings still pending, retrying in ${delayMs}ms (attempt ${
-          attempt + 1
-        }/${maxRetries})`
-      );
       await new Promise((resolve) => setTimeout(resolve, delayMs));
+    } else {
+      return validBookings;
     }
   }
 
-  // Return whatever we have after max retries
-  console.log("[Success] Max retries reached, showing current status");
-  return await Promise.all(ids.map((id) => getBookingById(id.trim()))).then(
-    (results) => results.filter((b) => b !== null) as Booking[]
-  );
+  return await api.getBookingsBatch(ids);
 };
 
-// Fetch all booking data
+function fireConfetti() {
+  if (confettiFired.value) return;
+  if (typeof window === "undefined") return;
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+  confettiFired.value = true;
+  const colors = ["#000000", "#3a3a3c", "#34c759", "#f2f2f7", "#ffffff"];
+
+  confetti({
+    particleCount: 80,
+    spread: 65,
+    startVelocity: 34,
+    origin: { x: 0.5, y: 0.12 },
+    colors,
+    disableForReducedMotion: true,
+  });
+
+  window.setTimeout(() => {
+    confetti({
+      particleCount: 36,
+      angle: 60,
+      spread: 50,
+      origin: { x: 0, y: 0.7 },
+      colors,
+      disableForReducedMotion: true,
+    });
+    confetti({
+      particleCount: 36,
+      angle: 120,
+      spread: 50,
+      origin: { x: 1, y: 0.7 },
+      colors,
+      disableForReducedMotion: true,
+    });
+  }, 200);
+}
+
 onMounted(async () => {
   try {
     bookings.value = await fetchBookingsWithRetry(bookingIds);
@@ -102,19 +125,26 @@ onMounted(async () => {
   }
 });
 
-// Format amount from sen to RM
+watch(
+  () => [isLoading.value, booking.value?.payment_status] as const,
+  async ([loading, status]) => {
+    if (loading || !status) return;
+    if (!isCelebratoryPayment(booking.value)) return;
+    await nextTick();
+    fireConfetti();
+  },
+);
+
 const formatAmount = (amountInSen: number | undefined): string => {
   if (!amountInSen) return "RM 0.00";
-  const amountInRM = amountInSen / 100;
-  return `RM ${amountInRM.toFixed(2)}`;
+  return `RM ${(amountInSen / 100).toFixed(2)}`;
 };
 
-// Helper functions for formatting (usable in v-for loop)
 const getFormattedDate = (b: Booking) => {
   const dateStr = b.booking_date;
   if (!dateStr) return "";
   try {
-    return format(new Date(dateStr), "d MMMM yyyy");
+    return format(new Date(dateStr), "d MMM yyyy");
   } catch {
     return dateStr;
   }
@@ -129,16 +159,7 @@ const getFormattedTime = (b: Booking) => {
     const hour12 = h % 12 || 12;
     return `${hour12}:${minutes || "00"} ${ampm}`;
   };
-  return `${formatTime(b.start_time)} - ${formatTime(b.end_time)}`;
-};
-
-const getFormattedCreatedDate = (b: Booking) => {
-  if (!b.created_at) return "";
-  try {
-    return format(new Date(b.created_at), "d MMM yyyy, h:mm a");
-  } catch {
-    return "";
-  }
+  return `${formatTime(b.start_time)} – ${formatTime(b.end_time)}`;
 };
 
 const getPaymentStatusLabel = (b: Booking | null) => {
@@ -171,6 +192,18 @@ const getPaymentStatusColor = (b: Booking | null) => {
 
 const goHome = () => router.push("/");
 
+const copyBookingNumber = async (value: string) => {
+  try {
+    await navigator.clipboard.writeText(value);
+    copiedId.value = true;
+    window.setTimeout(() => {
+      copiedId.value = false;
+    }, 1800);
+  } catch {
+    // ignore
+  }
+};
+
 const getWhatsAppUrl = computed(() => {
   if (!studioStore.studio?.whatsapp || !booking.value) return "";
   const phone = studioStore.studio.whatsapp.replace(/[^0-9]/g, "");
@@ -178,161 +211,143 @@ const getWhatsAppUrl = computed(() => {
     `Hi, saya ingin mendapatkan butiran tempahan saya.\n\n` +
       `ID Tempahan: ${booking.value.booking_number}\n` +
       `Nama: ${booking.value.customer_name}\n` +
-      `Telefon: ${booking.value.customer_phone}`
+      `Telefon: ${booking.value.customer_phone}`,
   );
   return `https://wa.me/${phone}?text=${message}`;
 });
 </script>
 
 <template>
-  <div
-    class="min-h-screen relative text-gray-900 pb-20 flex flex-col justify-center"
-    style="font-family: 'Bricolage Grotesque', sans-serif"
-  >
-    <!-- Content Wrapper -->
-    <div class="relative z-20 max-w-2xl mx-auto w-full px-5">
-      <!-- Loading State -->
+  <div class="bk-page bk-page--sticky-cta">
+    <div class="bk-shell flex flex-1 flex-col pt-6 sm:pt-10">
       <div
         v-if="isLoading"
-        class="flex flex-col items-center justify-center space-y-4 py-12"
+        class="flex flex-col items-center justify-center gap-3 py-20"
+        role="status"
+        aria-live="polite"
       >
-        <div class="flex flex-col items-center space-y-4">
-          <div
-            class="w-14 h-14 sm:w-16 sm:h-16 border-4 border-gray-100 border-t-gray-900 rounded-full animate-spin"
-          ></div>
-          <p class="text-sm sm:text-base text-gray-500">
-            {{ t("loading") }}
-          </p>
-        </div>
+        <Loader2 class="h-8 w-8 animate-spin text-gray-900" />
+        <p class="text-sm text-gray-500">{{ t("loading") }}</p>
       </div>
 
-      <!-- Error State -->
-      <div v-else-if="error" class="text-center space-y-6 py-12">
-        <div class="space-y-4">
-          <h1 class="text-xl sm:text-2xl font-bold text-gray-900">
-            {{ t("error") }}
-          </h1>
-          <p class="text-sm sm:text-base text-gray-500">{{ error }}</p>
-          <button
-            @click="goHome"
-            class="w-full bg-gray-900 text-white font-bold uppercase tracking-widest text-[10px] sm:text-xs py-3 sm:py-4 rounded-xl hover:bg-black transition-all duration-300 flex items-center justify-center gap-2"
-          >
-            <Home class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            <span>{{ t("backToHome") }}</span>
-          </button>
-        </div>
+      <div v-else-if="error" class="space-y-5 py-10 text-center">
+        <h1 class="text-xl font-semibold text-gray-900">{{ t("error") }}</h1>
+        <p class="text-sm text-gray-500">{{ error }}</p>
+        <button type="button" class="bk-cta-primary" @click="goHome">
+          <Home class="h-4 w-4" />
+          {{ t("backToHome") }}
+        </button>
       </div>
 
-      <!-- Success Content -->
       <div
         v-else-if="booking"
-        class="space-y-8 animate-scale-in max-w-md mx-auto w-full"
+        class="success-content w-full space-y-6"
       >
-        <!-- Success Icon -->
-        <div class="text-center mt-6">
-          <div
-            class="mx-auto w-20 h-20 sm:w-24 sm:h-24 bg-green-50 rounded-full flex items-center justify-center mb-2"
-          >
-            <div
-              class="w-14 h-14 sm:w-16 sm:h-16 bg-green-100 rounded-full flex items-center justify-center"
-            >
-              <CheckCircle2 class="w-7 h-7 sm:w-8 sm:h-8 text-green-600" />
+        <header class="space-y-3 text-center">
+          <p class="text-sm text-gray-500">
+            {{ studioStore.studio?.name }}
+          </p>
+
+          <div class="success-check bk-success-mark mx-auto">
+            <div class="bk-success-mark-inner">
+              <CheckCircle2 class="h-6 w-6" />
             </div>
           </div>
-        </div>
 
-        <!-- Text Content -->
-        <div class="text-center space-y-2 sm:space-y-3">
-          <h1
-            class="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 tracking-tight"
-          >
-            {{ t("bookingSuccessful") }}
-          </h1>
-          <p class="text-sm sm:text-base text-gray-500 leading-relaxed px-2">
-            {{ t("thankYouMessage") }}
-          </p>
-        </div>
+          <div class="space-y-1">
+            <h1 class="text-xl font-semibold text-gray-900 sm:text-2xl">
+              {{ t("bookingSuccessful") }}
+            </h1>
+            <p class="mx-auto max-w-sm text-sm text-gray-500">
+              {{ t("thankYouMessage") }}
+            </p>
+            <p
+              v-if="isMultipleBookings"
+              class="text-sm text-gray-500"
+            >
+              {{ bookings.length }} {{ t("sessionsBooked") }}
+            </p>
+          </div>
+        </header>
 
-        <!-- Booking IDs with Payment Status -->
-        <!-- Single Booking -->
-        <div
+        <section
           v-if="!isMultipleBookings"
-          class="bg-gray-50 rounded-xl p-3 sm:p-4 border border-gray-100 text-center space-y-2"
+          class="space-y-2 border-y border-gray-100 py-4 text-center"
         >
-          <span
-            class="block text-[10px] sm:text-xs font-bold text-gray-400 uppercase tracking-widest mb-1 sm:mb-1.5"
-            >{{ t("bookingId") }}</span
+          <p class="text-sm text-gray-500">{{ t("bookingId") }}</p>
+          <button
+            type="button"
+            class="mx-auto flex min-h-11 w-full items-center justify-center gap-2 rounded-lg px-2 transition-colors hover:bg-gray-50"
+            @click="copyBookingNumber(booking.booking_number)"
           >
-          <span
-            class="font-mono text-lg sm:text-xl font-bold text-gray-900 tracking-wider break-all"
-            >{{ booking?.booking_number }}</span
+            <span class="break-all font-mono text-base font-medium text-gray-900">
+              {{ booking.booking_number }}
+            </span>
+            <Check v-if="copiedId" class="h-4 w-4 shrink-0 text-green-600" />
+            <Copy v-else class="h-4 w-4 shrink-0 text-gray-400" />
+          </button>
+          <p
+            v-if="copiedId"
+            class="text-xs font-medium capitalize text-green-600"
           >
-          <div class="pt-2">
+            {{ t("bookingIdCopied") }}
+          </p>
+          <div class="pt-1">
             <span
               :class="[
-                'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] sm:text-xs font-bold uppercase tracking-wider',
+                'inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium capitalize',
                 getPaymentStatusColor(booking),
               ]"
             >
-              <CreditCard class="w-3 h-3 sm:w-3.5 sm:h-3.5" />
               {{ getPaymentStatusLabel(booking) }}
             </span>
           </div>
-        </div>
+        </section>
 
-        <!-- Multiple Bookings (Cart Mode) Summary Removed as per request -->
-
-        <!-- Booking Details -->
         <div class="space-y-4">
-          <div
+          <article
             v-for="(b, bIndex) in bookings"
             :key="b.id"
-            :class="[
+            :class="
               isMultipleBookings
-                ? 'bg-white border border-gray-200 rounded-xl overflow-hidden transition-all duration-300 shadow-sm'
-                : 'space-y-3 sm:space-y-4',
-            ]"
+                ? 'border-y border-gray-100'
+                : 'space-y-4'
+            "
           >
-            <!-- Accordion Header (Only for Multiple Bookings) -->
-            <div
+            <button
               v-if="isMultipleBookings"
+              type="button"
+              class="flex min-h-14 w-full items-center justify-between gap-3 py-3 text-left"
+              :aria-expanded="expandedIndex === bIndex"
               @click="toggleAccordion(bIndex)"
-              class="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 bg-gray-50/50 transition-colors"
-              :class="{
-                'border-b border-gray-100': expandedIndex === bIndex,
-              }"
             >
-              <div class="flex flex-col gap-1">
-                <div class="flex flex-wrap items-center gap-2">
-                  <span
-                    class="text-[10px] font-bold text-gray-500 uppercase tracking-wider"
-                    >{{ t("booking") }} {{ bIndex + 1 }}</span
-                  >
+              <div class="min-w-0 space-y-0.5">
+                <div class="flex flex-wrap items-center gap-1.5">
+                  <span class="text-xs font-medium capitalize text-gray-500">
+                    {{ t("booking") }} {{ bIndex + 1 }}
+                  </span>
                   <span class="font-mono text-xs text-gray-400">{{
                     b.booking_number
                   }}</span>
-
                   <span
                     :class="[
-                      'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase',
+                      'inline-flex rounded-md px-1.5 py-0.5 text-xs font-medium capitalize',
                       getPaymentStatusColor(b),
                     ]"
                   >
-                    <!-- <CreditCard class="w-2.5 h-2.5" /> -->
                     {{ getPaymentStatusLabel(b) }}
                   </span>
                 </div>
-                <h3 class="font-bold text-gray-900 text-sm leading-tight">
+                <h3 class="truncate text-sm font-medium text-gray-900">
                   {{ b.theme?.name }}
                 </h3>
               </div>
               <ChevronDown
-                class="w-5 h-5 text-gray-400 transition-transform duration-300"
+                class="h-5 w-5 shrink-0 text-gray-400 transition-transform duration-300"
                 :class="{ 'rotate-180': expandedIndex === bIndex }"
               />
-            </div>
+            </button>
 
-            <!-- Content Container (Animated) -->
             <div
               class="grid transition-[grid-template-rows] duration-300 ease-in-out"
               :class="
@@ -341,344 +356,361 @@ const getWhatsAppUrl = computed(() => {
                   : 'grid-rows-[0fr]'
               "
             >
-              <div class="overflow-hidden min-h-0">
+              <div class="min-h-0 overflow-hidden">
                 <div
                   :class="
-                    isMultipleBookings
-                      ? 'p-4 space-y-3'
-                      : 'space-y-3 sm:space-y-4'
+                    isMultipleBookings ? 'space-y-4 pb-4' : 'space-y-4'
                   "
                 >
-                  <!-- Theme -->
                   <div
                     v-if="b.theme"
-                    class="flex gap-3 sm:gap-4 items-start bg-gray-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-gray-100"
+                    class="flex items-center gap-3"
+                    :class="isMultipleBookings ? '' : 'border-y border-gray-100 py-4'"
                   >
                     <img
                       v-if="b.theme.images?.[0]"
                       :src="b.theme.images[0]"
-                      class="w-14 h-14 sm:w-16 sm:h-16 rounded-lg object-cover flex-shrink-0"
+                      alt=""
+                      class="h-14 w-14 shrink-0 rounded-lg object-cover"
                     />
-                    <div class="flex-1 min-w-0">
-                      <h3 class="font-bold text-base sm:text-lg leading-tight">
+                    <div
+                      v-else
+                      class="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-sm font-medium text-gray-500"
+                    >
+                      {{ (b.theme.name || "?").slice(0, 1) }}
+                    </div>
+                    <div class="min-w-0 flex-1">
+                      <h3 class="truncate text-base font-medium text-gray-900">
                         {{ b.theme.name }}
                       </h3>
-                      <p
-                        class="text-[11px] sm:text-xs text-gray-500 mt-0.5 sm:mt-1"
-                      >
+                      <p class="truncate text-sm text-gray-500">
                         {{ studioStore.studio?.name }}
                       </p>
                     </div>
                   </div>
 
-                  <!-- Date & Time -->
-                  <div class="grid grid-cols-2 gap-2 sm:gap-3">
-                    <div
-                      class="bg-gray-50 p-2.5 sm:p-3 rounded-xl sm:rounded-2xl border border-gray-100 flex flex-col items-center justify-center text-center gap-1"
-                    >
-                      <Calendar class="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
-                      <span
-                        class="text-xs sm:text-sm font-bold text-gray-900 break-words"
-                        >{{ getFormattedDate(b) }}</span
-                      >
-                      <span
-                        class="text-[9px] sm:text-[10px] text-gray-400 uppercase"
-                        >{{ t("date") }}</span
-                      >
-                    </div>
-                    <div
-                      class="bg-gray-50 p-2.5 sm:p-3 rounded-xl sm:rounded-2xl border border-gray-100 flex flex-col items-center justify-center text-center gap-1"
-                    >
-                      <Clock class="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
-                      <span
-                        class="text-xs sm:text-sm font-bold text-gray-900 break-words"
-                        >{{ getFormattedTime(b) }}</span
-                      >
-                      <span
-                        class="text-[9px] sm:text-[10px] text-gray-400 uppercase"
-                        >{{ t("time") }}</span
-                      >
-                    </div>
-                  </div>
-
-                  <!-- Pax -->
-                  <div
-                    v-if="b.pax_count"
-                    class="bg-gray-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-gray-100 flex items-center justify-between"
+                  <dl
+                    class="divide-y divide-gray-100"
+                    :class="isMultipleBookings ? 'border-y border-gray-100' : 'border-y border-gray-100'"
                   >
-                    <div class="flex items-center gap-2 sm:gap-3">
-                      <Users class="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
-                      <span
-                        class="text-xs sm:text-sm font-medium text-gray-600"
-                        >{{ t("numberOfGuests") }}</span
-                      >
+                    <div class="flex items-center gap-3 py-3">
+                      <Calendar class="h-4 w-4 shrink-0 text-gray-400" />
+                      <div class="min-w-0 flex-1">
+                        <dt class="text-xs text-gray-500">{{ t("date") }}</dt>
+                        <dd class="text-sm font-medium text-gray-900">
+                          {{ getFormattedDate(b) }}
+                        </dd>
+                      </div>
                     </div>
-                    <span class="font-bold text-sm sm:text-base text-gray-900"
-                      >{{ b.pax_count }} {{ t("people") }}</span
-                    >
-                  </div>
+                    <div class="flex items-center gap-3 py-3">
+                      <Clock class="h-4 w-4 shrink-0 text-gray-400" />
+                      <div class="min-w-0 flex-1">
+                        <dt class="text-xs text-gray-500">{{ t("time") }}</dt>
+                        <dd class="text-sm font-medium text-gray-900">
+                          {{ getFormattedTime(b) }}
+                        </dd>
+                      </div>
+                    </div>
+                    <div class="flex items-center gap-3 py-3">
+                      <Users class="h-4 w-4 shrink-0 text-gray-400" />
+                      <div class="min-w-0 flex-1">
+                        <dt class="text-xs text-gray-500">
+                          {{ t("numberOfGuests") }}
+                        </dt>
+                        <dd class="text-sm font-medium text-gray-900">
+                          {{ b.pax_count || 0 }} {{ t("people") }}
+                        </dd>
+                      </div>
+                    </div>
+                  </dl>
 
-                  <!-- Customer Details -->
-                  <div
-                    class="bg-gray-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-gray-100 space-y-2"
-                  >
-                    <div class="flex items-center gap-2 mb-2">
-                      <svg
-                        class="w-4 h-4 text-gray-400"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                        />
-                      </svg>
-                      <span
-                        class="text-xs font-bold text-gray-500 uppercase tracking-wider"
-                        >{{ t("customerDetails") }}</span
-                      >
-                    </div>
-                    <div class="space-y-1.5 text-xs sm:text-sm">
-                      <div class="flex justify-between">
-                        <span class="text-gray-500">{{ t("name") }}</span>
-                        <span class="font-medium text-gray-900">{{
-                          b.customer_name
-                        }}</span>
+                  <section class="space-y-3">
+                    <h4 class="text-sm font-medium text-gray-900">
+                      {{ t("customerDetails") }}
+                    </h4>
+                    <dl class="space-y-2 text-sm">
+                      <div class="flex justify-between gap-3">
+                        <dt class="text-gray-500">{{ t("name") }}</dt>
+                        <dd class="text-right font-medium text-gray-900">
+                          {{ b.customer_name }}
+                        </dd>
                       </div>
-                      <div class="flex justify-between">
-                        <span class="text-gray-500">{{ t("phone") }}</span>
-                        <span class="font-medium text-gray-900">{{
-                          b.customer_phone
-                        }}</span>
+                      <div
+                        v-if="b.customer_phone"
+                        class="flex justify-between gap-3"
+                      >
+                        <dt class="text-gray-500">{{ t("phone") }}</dt>
+                        <dd class="text-right font-medium text-gray-900">
+                          {{ b.customer_phone }}
+                        </dd>
                       </div>
-                      <div v-if="b.customer_email" class="flex justify-between">
-                        <span class="text-gray-500">{{ t("email") }}</span>
-                        <span class="font-medium text-gray-900 break-all">{{
-                          b.customer_email
-                        }}</span>
+                      <div
+                        v-if="b.customer_email"
+                        class="flex justify-between gap-3"
+                      >
+                        <dt class="text-gray-500">{{ t("email") }}</dt>
+                        <dd class="break-all text-right font-medium text-gray-900">
+                          {{ b.customer_email }}
+                        </dd>
                       </div>
                       <div
                         v-if="b.customer_notes"
-                        class="pt-1.5 border-t border-gray-100"
+                        class="border-t border-gray-100 pt-2"
                       >
-                        <span class="text-gray-500 block mb-1">{{
-                          t("notes")
-                        }}</span>
-                        <span class="text-gray-700 italic"
-                          >"{{ b.customer_notes }}"</span
-                        >
+                        <dt class="mb-0.5 text-gray-500">{{ t("notes") }}</dt>
+                        <dd class="text-gray-700">{{ b.customer_notes }}</dd>
                       </div>
-                    </div>
-                    <div
-                      v-if="getFormattedCreatedDate(b)"
-                      class="text-[10px] text-gray-400 pt-2 border-t border-gray-100"
-                    >
-                      {{ t("bookedOn") }}:
-                      {{ getFormattedCreatedDate(b) }}
-                    </div>
-                  </div>
+                    </dl>
+                  </section>
 
-                  <!-- Payment Info -->
-                  <div
+                  <section
                     v-if="b.total_amount"
-                    class="bg-gray-50 p-3 sm:p-4 rounded-xl sm:rounded-2xl border border-gray-100 space-y-3"
+                    class="space-y-3 border-t border-gray-100 pt-4"
                   >
-                    <div class="flex items-center gap-2 mb-1">
-                      <Receipt class="w-4 h-4 text-gray-400" />
-                      <span
-                        class="text-xs font-bold text-gray-500 uppercase tracking-wider"
-                        >{{ t("paymentSummary") }}</span
-                      >
-                    </div>
+                    <h4
+                      class="flex items-center gap-2 text-sm font-medium text-gray-900"
+                    >
+                      <Receipt class="h-4 w-4 text-gray-400" />
+                      {{ t("paymentSummary") }}
+                    </h4>
 
-                    <!-- Payment Breakdown -->
-                    <div class="space-y-2 pb-2 border-b border-gray-200">
-                      <!-- Base Price -->
-                      <div
-                        class="flex justify-between items-center text-xs sm:text-sm"
-                      >
-                        <span class="text-gray-500"
-                          >{{ b.theme?.name }} ({{ b.theme?.base_pax || 1 }}
-                          {{ t("people") }})</span
-                        >
-                        <span class="text-gray-900 font-medium">{{
-                          formatAmount(b.base_price)
-                        }}</span>
+                    <dl class="space-y-2 text-sm">
+                      <div class="flex justify-between gap-3">
+                        <dt class="text-gray-500">
+                          {{ b.theme?.name }} ({{ b.theme?.base_pax || 1 }}
+                          {{ t("people") }})
+                        </dt>
+                        <dd class="tabular-nums font-medium text-gray-900">
+                          {{ formatAmount(b.base_price) }}
+                        </dd>
                       </div>
 
-                      <!-- Extra Pax -->
                       <div
                         v-if="b.extra_pax_fee && b.extra_pax_fee > 0"
-                        class="flex justify-between items-center text-xs sm:text-sm"
+                        class="flex justify-between gap-3"
                       >
-                        <span class="text-gray-500"
-                          >{{ t("extra") }} ({{
+                        <dt class="text-gray-500">
+                          {{ t("extra") }} ({{
                             b.pax_count - (b.theme?.base_pax || 1)
                           }}
-                          {{ t("people") }})</span
-                        >
-                        <span class="text-gray-900 font-medium">{{
-                          formatAmount(b.extra_pax_fee)
-                        }}</span>
+                          {{ t("people") }})
+                        </dt>
+                        <dd class="tabular-nums font-medium text-gray-900">
+                          {{ formatAmount(b.extra_pax_fee) }}
+                        </dd>
                       </div>
 
-                      <!-- Special Pricing -->
                       <div
                         v-if="
                           b.special_pricing_applied &&
                           b.special_pricing_applied !== 0
                         "
-                        class="flex justify-between items-center text-xs sm:text-sm"
+                        class="flex justify-between gap-3"
                       >
-                        <span class="text-gray-500 italic">
+                        <dt class="text-gray-500">
                           {{ b.special_pricing_label || t("specialPrice") }}
-                        </span>
-                        <span class="text-gray-900 font-medium">
+                        </dt>
+                        <dd class="tabular-nums font-medium text-gray-900">
                           {{ b.special_pricing_applied > 0 ? "+" : ""
                           }}{{ formatAmount(b.special_pricing_applied) }}
-                        </span>
+                        </dd>
                       </div>
 
-                      <!-- Addons -->
                       <div
                         v-for="addon in b.addons"
                         :key="addon.addon.name"
-                        class="flex justify-between items-center text-xs sm:text-sm"
+                        class="flex justify-between gap-3"
                       >
-                        <span class="text-gray-500"
-                          >{{ addon.addon.name }} x {{ addon.quantity }}</span
-                        >
-                        <span class="text-gray-900 font-medium">{{
-                          formatAmount(addon.price_at_booking)
-                        }}</span>
+                        <dt class="text-gray-500">
+                          {{ addon.addon.name }} × {{ addon.quantity }}
+                        </dt>
+                        <dd class="tabular-nums font-medium text-gray-900">
+                          {{ formatAmount(addon.price_at_booking) }}
+                        </dd>
                       </div>
 
-                      <!-- Discount -->
                       <div
                         v-if="b.discount_amount && b.discount_amount > 0"
-                        class="flex justify-between items-center text-xs sm:text-sm pt-1 border-t border-gray-100 mt-1"
+                        class="flex justify-between gap-3 border-t border-gray-100 pt-2"
                       >
-                        <span class="text-red-500 font-medium italic">
+                        <dt class="text-green-700">
                           {{ t("discount") }}
                           <span v-if="b.coupon_code"
                             >({{ b.coupon_code }})</span
                           >
-                        </span>
-                        <span class="text-red-500 font-medium">
+                        </dt>
+                        <dd class="tabular-nums font-medium text-green-700">
                           -{{ formatAmount(b.discount_amount) }}
-                        </span>
+                        </dd>
                       </div>
-                    </div>
+                    </dl>
 
-                    <div class="flex justify-between items-center">
-                      <span
-                        class="text-xs sm:text-sm font-medium text-gray-600"
-                        >{{ t("total") }}</span
-                      >
-                      <span
-                        class="font-bold text-base sm:text-lg text-gray-900"
-                        >{{ formatAmount(b.total_amount) }}</span
-                      >
+                    <div class="flex items-baseline justify-between border-t border-gray-100 pt-3">
+                      <span class="text-base font-medium text-gray-900">{{
+                        t("total")
+                      }}</span>
+                      <span class="text-lg font-semibold tabular-nums text-gray-900">{{
+                        formatAmount(b.total_amount)
+                      }}</span>
                     </div>
 
                     <div
                       v-if="
                         b.deposit_amount && b.deposit_amount < b.total_amount
                       "
-                      class="flex justify-between items-center text-[10px] sm:text-xs pt-2 border-t border-gray-200"
+                      class="flex justify-between text-sm text-green-700"
                     >
-                      <span class="text-green-600 font-medium"
-                        >{{ t("deposit") }} ({{
-                          t("depositPaid") || "Paid"
-                        }})</span
-                      >
-                      <span class="text-green-600 font-bold">{{
+                      <span>{{ t("deposit") }} ({{ t("depositPaid") }})</span>
+                      <span class="tabular-nums font-medium">{{
                         formatAmount(b.deposit_amount)
                       }}</span>
                     </div>
 
                     <div
                       v-if="b.balance_amount && b.balance_amount > 0"
-                      class="flex justify-between items-center text-[10px] sm:text-xs text-amber-600"
+                      class="flex justify-between text-sm text-amber-700"
                     >
-                      <span class="font-medium"
-                        >{{ t("balance") }} ({{
-                          t("remaining") || "Remaining"
-                        }})</span
-                      >
-                      <span class="font-bold">{{
+                      <span>{{ t("balance") }} ({{ t("remaining") }})</span>
+                      <span class="tabular-nums font-medium">{{
                         formatAmount(b.balance_amount)
                       }}</span>
                     </div>
 
-                    <!-- Transaction Fee Info -->
-                    <div
+                    <p
                       v-if="b.chip_fee_paid && b.chip_fee_paid > 0"
-                      class="flex justify-between items-center text-[10px] sm:text-xs text-gray-400 border-t border-gray-100 pt-2"
+                      class="text-xs text-gray-400"
                     >
-                      <span class="italic"
-                        >↳
-                        {{
-                          t("inclTransactionFee") || "Incl. Transaction Fee"
-                        }}</span
-                      >
-                      <span>{{ formatAmount(b.chip_fee_paid) }}</span>
-                    </div>
-                  </div>
+                      {{ t("inclTransactionFee") }}:
+                      {{ formatAmount(b.chip_fee_paid) }}
+                    </p>
+                  </section>
                 </div>
               </div>
             </div>
-          </div>
+          </article>
         </div>
 
-        <!-- Actions -->
-        <div class="space-y-2.5 sm:space-y-3 pt-2">
-          <!-- WhatsApp Button -->
-          <!-- <a
-            v-if="getWhatsAppUrl"
-            :href="getWhatsAppUrl"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="w-full bg-green-500 hover:bg-green-600 text-white font-bold uppercase tracking-widest text-[10px] sm:text-xs py-3 sm:py-4 rounded-xl transition-all duration-300 flex items-center justify-center gap-2 group shadow-lg hover:shadow-xl"
-          >
-            <MessageCircle class="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            <span>{{ t("getDetailsInWhatsApp") }}</span>
-            <ArrowRight
-              class="w-3.5 h-3.5 sm:w-4 sm:h-4 transition-transform group-hover:translate-x-1"
-            />
-          </a> -->
-
-          <!-- Back to Home Button -->
-          <button
-            @click="goHome"
-            class="w-full bg-gray-900 text-white font-bold uppercase tracking-widest text-[10px] sm:text-xs py-3 sm:py-4 rounded-xl hover:bg-black hover:shadow-lg transition-all duration-300 flex items-center justify-center gap-2 group"
-          >
-            <span>{{ t("backToHome") }}</span>
-            <Home
-              class="w-3.5 h-3.5 sm:w-4 sm:h-4 transition-transform group-hover:-translate-y-0.5"
-            />
-          </button>
-
-          <!-- Info Text -->
-          <p
-            class="text-[10px] sm:text-xs text-gray-400 mt-3 sm:mt-4 text-center px-2"
-          >
+        <section class="space-y-3 border-t border-gray-100 pt-5">
+          <h2 class="text-sm font-medium text-gray-900">
+            {{ t("whatNext") }}
+          </h2>
+          <ul class="divide-y divide-gray-100 border-y border-gray-100">
+            <li class="flex gap-3 py-3">
+              <Camera class="mt-0.5 h-4 w-4 shrink-0 text-gray-900" />
+              <div class="min-w-0">
+                <p class="text-sm font-medium text-gray-900">
+                  {{ t("saveBookingId") }}
+                </p>
+                <p class="text-xs leading-snug text-gray-500">
+                  {{ t("saveBookingIdDesc") }}
+                </p>
+              </div>
+            </li>
+            <li class="flex gap-3 py-3">
+              <Clock class="mt-0.5 h-4 w-4 shrink-0 text-gray-900" />
+              <div class="min-w-0">
+                <p class="text-sm font-medium text-gray-900">
+                  {{ t("arriveOnTime") }}
+                </p>
+                <p class="text-xs leading-snug text-gray-500">
+                  {{ t("arriveOnTimeDesc") }}
+                </p>
+              </div>
+            </li>
+            <li
+              v-if="booking.balance_amount && booking.balance_amount > 0"
+              class="flex gap-3 py-3"
+            >
+              <CreditCard class="mt-0.5 h-4 w-4 shrink-0 text-gray-900" />
+              <div class="min-w-0">
+                <p class="text-sm font-medium text-gray-900">
+                  {{ t("bringPayment") }}
+                </p>
+                <p class="text-xs leading-snug text-gray-500">
+                  {{ t("bringPaymentDesc") }}
+                </p>
+              </div>
+            </li>
+            <li class="flex gap-3 py-3">
+              <MessageCircle class="mt-0.5 h-4 w-4 shrink-0 text-gray-900" />
+              <div class="min-w-0">
+                <p class="text-sm font-medium text-gray-900">
+                  {{ t("questions") }}
+                </p>
+                <p class="text-xs leading-snug text-gray-500">
+                  {{ t("questionsDesc") }}
+                </p>
+              </div>
+            </li>
+          </ul>
+          <p class="text-center text-xs text-gray-400">
             {{ t("checkWhatsAppForConfirmation") }}
           </p>
-        </div>
+        </section>
+      </div>
+    </div>
+
+    <div
+      v-if="booking && !isLoading && !error"
+      class="bk-sticky-bar"
+    >
+      <div class="bk-sticky-bar-inner">
+        <button
+          type="button"
+          class="bk-cta-secondary shrink-0"
+          :aria-label="t('backToHome')"
+          @click="goHome"
+        >
+          <Home class="h-5 w-5" />
+        </button>
+        <a
+          v-if="getWhatsAppUrl"
+          :href="getWhatsAppUrl"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="bk-cta-primary flex-1"
+        >
+          <MessageCircle class="h-4 w-4 shrink-0" />
+          <span class="truncate">{{ t("getDetailsInWhatsApp") }}</span>
+        </a>
+        <button
+          v-else
+          type="button"
+          class="bk-cta-primary flex-1"
+          @click="goHome"
+        >
+          <span>{{ t("backToHome") }}</span>
+          <Home class="h-4 w-4" />
+        </button>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-@keyframes scale-in {
+.success-content {
+  animation: success-rise 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.success-check {
+  animation: success-pop 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.05s both;
+}
+
+@keyframes success-rise {
   from {
     opacity: 0;
-    transform: scale(0.9);
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes success-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.75);
   }
   to {
     opacity: 1;
@@ -686,21 +718,10 @@ const getWhatsAppUrl = computed(() => {
   }
 }
 
-@keyframes bounce-slow {
-  0%,
-  100% {
-    transform: translateY(-5%);
+@media (prefers-reduced-motion: reduce) {
+  .success-content,
+  .success-check {
+    animation: none;
   }
-  50% {
-    transform: translateY(5%);
-  }
-}
-
-.animate-scale-in {
-  animation: scale-in 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.animate-bounce-slow {
-  animation: bounce-slow 2s infinite ease-in-out;
 }
 </style>

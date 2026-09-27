@@ -30,28 +30,11 @@ const routes: RouteRecordRaw[] = [
     },
   },
   {
-    path: "/theme/:themeId",
-    name: "theme-details",
-    component: () => import("@/pages/theme/details.vue"),
-    meta: {
-      title: "Maklumat Tema",
-    },
-  },
-  {
     path: "/booking",
     name: "booking",
     component: () => import("@/pages/booking/index.vue"),
     meta: {
       title: "Tempahan",
-    },
-  },
-
-  {
-    path: "/booking-cart",
-    name: "booking-cart",
-    component: () => import("@/pages/booking/cart.vue"),
-    meta: {
-      title: "Tempahan (Troli)",
     },
   },
   {

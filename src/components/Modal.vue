@@ -53,70 +53,70 @@ const handleBackdropClick = () => {
 
 <template>
   <Transition
-    enter-active-class="transition-opacity duration-300"
-    leave-active-class="transition-opacity duration-200"
+    enter-active-class="transition-opacity duration-200"
+    leave-active-class="transition-opacity duration-150"
     enter-from-class="opacity-0"
     leave-to-class="opacity-0"
   >
     <div
       v-if="show"
+      class="fixed inset-0 z-[100] flex items-end justify-center bg-black/40 p-4 sm:items-center"
       @click="handleBackdropClick"
-      class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 font-sans"
-      style="font-family: 'Bricolage Grotesque', sans-serif"
     >
       <Transition
-        enter-active-class="transition-all duration-300 cubic-bezier(0.16, 1, 0.3, 1)"
-        leave-active-class="transition-all duration-200 ease-in"
-        enter-from-class="opacity-0 scale-95 translate-y-4"
-        leave-to-class="opacity-0 scale-95"
+        enter-active-class="transition duration-200 ease-out"
+        leave-active-class="transition duration-150 ease-in"
+        enter-from-class="opacity-0 translate-y-2"
+        leave-to-class="opacity-0"
       >
         <div
           v-if="show"
+          class="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl"
+          role="dialog"
+          aria-modal="true"
+          :aria-label="title"
           @click.stop
-          class="bg-white rounded-[2rem] shadow-2xl w-full max-w-sm overflow-hidden p-6 text-center"
         >
-          <!-- Icon -->
           <div
-            class="w-16 h-16 rounded-full bg-gray-50 flex items-center justify-center mx-auto mb-6"
+            class="mb-4 flex h-10 w-10 items-center justify-center rounded-full bg-gray-100"
           >
-            <Lock v-if="type === 'info'" class="w-8 h-8 text-gray-900" />
+            <Lock v-if="type === 'info'" class="h-5 w-5 text-gray-900" />
             <AlertTriangle
               v-else-if="type === 'warning'"
-              class="w-8 h-8 text-amber-500"
+              class="h-5 w-5 text-amber-600"
             />
             <CheckCircle
               v-else-if="type === 'success'"
-              class="w-8 h-8 text-green-500"
+              class="h-5 w-5 text-green-600"
             />
             <XCircle
               v-else-if="type === 'error'"
-              class="w-8 h-8 text-red-500"
+              class="h-5 w-5 text-red-600"
             />
-            <Info v-else class="w-8 h-8 text-gray-900" />
+            <Info v-else class="h-5 w-5 text-gray-900" />
           </div>
 
-          <!-- Content -->
-          <h3 class="text-2xl font-bold mb-3 tracking-tight">
+          <h3 class="text-lg font-semibold text-gray-900">
             {{ title }}
           </h3>
           <p
-            class="text-[15px] leading-relaxed mb-8"
+            class="mt-2 text-sm leading-relaxed text-gray-600"
             v-html="sanitize(message.replace(/\n/g, '<br>'))"
           ></p>
 
-          <!-- Buttons -->
-          <div class="flex gap-3">
+          <div class="mt-6 flex flex-col-reverse gap-2 sm:flex-row">
             <button
               v-if="showCancel"
+              type="button"
+              class="bk-cta-secondary flex-1"
               @click="handleCancel"
-              class="flex-1 px-6 py-3.5 rounded-xl font-bold text-sm bg-white border border-gray-200 text-gray-900 hover:bg-gray-50 transition-colors"
             >
               {{ cancelText }}
             </button>
             <button
+              type="button"
+              class="bk-cta-primary flex-1"
               @click="handleConfirm"
-              class="flex-1 px-6 py-3.5 rounded-xl font-bold text-sm bg-gray-900 text-white hover:bg-black transition-colors shadow-lg shadow-gray-200"
-              :class="{ 'w-full': !showCancel }"
             >
               {{ confirmText }}
             </button>

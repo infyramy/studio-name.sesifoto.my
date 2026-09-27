@@ -280,6 +280,11 @@ export type TranslationKey =
   | "bookingConfirmationPending"
   | "getDetailsInWhatsApp"
   | "checkWhatsAppForConfirmation"
+  | "saveBookingId"
+  | "saveBookingIdDesc"
+  | "copyBookingId"
+  | "bookingIdCopied"
+  | "sessionsBooked"
 
   // Lookup Page
   | "checkYourBooking"

@@ -291,6 +291,11 @@ export const translationsBM: Translations = {
   getDetailsInWhatsApp: "Dapatkan Butiran di WhatsApp",
   checkWhatsAppForConfirmation:
     "Sila semak emel dan WhatsApp anda untuk pengesahan.",
+  saveBookingId: "Simpan ID tempahan",
+  saveBookingIdDesc: "Tangkapan skrin atau salin ID untuk rujukan pantas",
+  copyBookingId: "Salin ID",
+  bookingIdCopied: "Disalin!",
+  sessionsBooked: "sesi ditempah",
 
   // Lookup Page
   checkYourBooking: "Semak Tempahan Anda",
@@ -760,6 +765,11 @@ export const translationsEN: Translations = {
   getDetailsInWhatsApp: "Get Details in WhatsApp",
   checkWhatsAppForConfirmation:
     "Please check your email and WhatsApp for confirmation.",
+  saveBookingId: "Save your booking ID",
+  saveBookingIdDesc: "Screenshot or copy the ID for quick reference",
+  copyBookingId: "Copy ID",
+  bookingIdCopied: "Copied!",
+  sessionsBooked: "sessions booked",
 
   // Lookup Page
   checkYourBooking: "Check Your Booking",

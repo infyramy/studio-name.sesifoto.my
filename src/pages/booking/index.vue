@@ -1,21 +1,21 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from "vue";
-import { useRouter } from "vue-router";
+import { useRouter, useRoute } from "vue-router";
 import { useStudioStore } from "@/stores/studio";
 import { useTranslation } from "@/composables/useTranslation";
 import { useCurrency } from "@/composables/useCurrency";
 import { useDateFormat } from "@/composables/useDateFormat";
 import { useSanitize } from "@/composables/useSanitize";
-import { createBooking, api } from "@/services/api";
+import { api } from "@/services/api";
 import {
   ChevronLeft,
+  ChevronRight,
+  ChevronDown,
   Calendar,
   Clock,
-  Users,
   Plus,
   Minus,
   Check,
-  CreditCard,
   Info,
   Loader2,
   ArrowRight,
@@ -29,71 +29,74 @@ import {
   Pencil,
   Mail,
   Phone,
-  Sparkles,
-  Star,
 } from "lucide-vue-next";
 import type {
   Theme,
   Coupon,
   BatchBookingRequest,
-  BatchBookingItem,
 } from "@/types";
 import Modal from "@/components/Modal.vue";
 import ImageCarousel from "@/components/ImageCarousel.vue";
 import { marked } from "marked";
+import {
+  useBookingSession,
+  useBookingHolds,
+  useBookingStatePersistence,
+  submitPublicBookingCheckout,
+  applyCheckoutResult,
+  isPaymentUnavailableError,
+  isSlotUnavailableError,
+  type CartHold,
+  type BookingCartItem,
+} from "@/composables/booking";
 
 const { sanitize } = useSanitize();
 
 const router = useRouter();
+const route = useRoute();
 const studioStore = useStudioStore();
 const { t } = useTranslation();
 const { formatPriceWhole } = useCurrency();
 const { formatDate } = useDateFormat();
 
+const bookingClosed = computed(
+  () => studioStore.websiteSettings?.bookingOpen === false,
+);
+
 // ============================================
-// Session Management
+// Session / holds / persistence (extracted)
 // ============================================
-function getSessionId(): string {
-  let sessionId = localStorage.getItem("booking_session_id");
-  if (!sessionId) {
-    sessionId = `session_${Date.now()}_${Math.random()
-      .toString(36)
-      .substr(2, 9)}`;
-    localStorage.setItem("booking_session_id", sessionId);
-  }
-  return sessionId;
-}
+const {
+  getSessionId,
+  getReferralCode,
+  initializeSession,
+  clearSession,
+} = useBookingSession();
 
-function getReferralCode(): string | undefined {
-  try {
-    return sessionStorage.getItem("referral_code") || undefined;
-  } catch {
-    return undefined;
-  }
-}
+const {
+  clearBookingState: clearPersistedBookingState,
+  scheduleSave,
+  disposePersistence,
+} = useBookingStatePersistence(400);
 
-function initializeSession(): void {
-  const sessionTimestamp = localStorage.getItem("booking_session_timestamp");
-  const now = Date.now();
-
-  if (sessionTimestamp) {
-    const hoursSinceSession =
-      (now - parseInt(sessionTimestamp)) / (1000 * 60 * 60);
-    if (hoursSinceSession > 24) {
-      clearSession();
-    }
-  } else {
-    localStorage.setItem("booking_session_timestamp", now.toString());
-  }
-
-  getSessionId();
-}
-
-function clearSession(): void {
-  localStorage.removeItem("booking_session_id");
-  localStorage.removeItem("booking_session_timestamp");
-  localStorage.removeItem("booking_state");
-}
+const {
+  holdExpiresAt,
+  holdCountdown,
+  unifiedCartHoldExpiresAt,
+  unifiedCartHoldCountdown,
+  createCartHold,
+  createBatchCartHold,
+  releaseCartHold,
+  getActiveHolds,
+  startHoldCountdown: startHoldCountdownBase,
+  stopHoldCountdown,
+  startUnifiedCartHoldTimer: startUnifiedCartHoldTimerBase,
+  stopUnifiedCartHoldTimer: stopUnifiedCartHoldTimerBase,
+  disposeHoldTimers,
+} = useBookingHolds({
+  getSessionId,
+  getStudioId: () => studioStore.studio?.id || "",
+});
 
 // Cart Mode Detection
 const isCartModeEnabled = computed(() => {
@@ -106,21 +109,7 @@ const isMultipleSlotEnabled = computed(() => {
 });
 
 // Cart State Management (only used when cart mode enabled)
-interface CartItem {
-  id: string;
-  theme: Theme;
-  date: string;
-  slot: any;
-  pax: number;
-  addons: Record<string, number>;
-  total: number;
-  dateInfo?: any; // Store date info for special pricing
-  hold?: CartHold; // Hold info for this cart item
-  specialPricing?: {
-    message: string;
-    amount: number;
-  };
-}
+type CartItem = BookingCartItem;
 const cart = ref<CartItem[]>([]);
 const expandedCartItems = ref<Set<string>>(new Set());
 
@@ -148,15 +137,7 @@ const termsContentHtml = computed(() => {
   return marked(termsContent.value) as string;
 });
 
-// Background Images Setup
-const backgroundImages = [
-  "https://plus.unsplash.com/premium_photo-1661963643348-e95c6387ee8a?q=80&w=2340&auto=format&fit=crop",
-  "https://images.unsplash.com/photo-1604580864964-0462f5d5b1a8?q=80&w=2340&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
-  "https://images.unsplash.com/photo-1506112573664-1a1b66d93ff3?q=80&w=2254&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
-];
-
-const currentImageIndex = ref(0);
-let intervalId: any;
+let holdCleanupIntervalId: ReturnType<typeof setInterval> | null = null;
 
 onMounted(async () => {
   // Initialize session
@@ -192,14 +173,31 @@ onMounted(async () => {
   // Check for saved state after studio is loaded
   await attemptStateRecovery();
 
+  // Deep-link: /booking?theme=<id> (only if recovery did not restore a theme)
+  const themeQuery = route.query.theme;
+  if (typeof themeQuery === "string" && themeQuery && !selectedTheme.value) {
+    const match = studioStore.themes.find((th) => th.id === themeQuery);
+    if (match) {
+      selectedTheme.value = match;
+      currentStep.value = 2;
+    }
+  }
+
   // Clean expired holds
   cleanExpiredHolds();
 
   // Fetch terms and conditions from database
   try {
     const terms = await api.getTerms();
-    if (terms.contentBm) {
+    const preferEn =
+      studioStore.currentLanguage === "EN" ||
+      studioStore.websiteSettings?.defaultLanguage === "EN";
+    if (preferEn && terms.contentEn) {
+      termsContent.value = terms.contentEn;
+    } else if (terms.contentBm) {
       termsContent.value = terms.contentBm;
+    } else if (terms.contentEn) {
+      termsContent.value = terms.contentEn;
     }
   } catch (error) {
     console.error("Failed to fetch terms:", error);
@@ -207,23 +205,16 @@ onMounted(async () => {
     loadingTerms.value = false;
   }
 
-  intervalId = setInterval(() => {
-    currentImageIndex.value =
-      (currentImageIndex.value + 1) % backgroundImages.length;
-  }, 5000); // Change every 5 seconds
-
   // Start background cleanup interval
-  setInterval(() => {
+  holdCleanupIntervalId = setInterval(() => {
     cleanExpiredHolds();
   }, 60000); // Every minute
 });
 
 onUnmounted(() => {
-  if (intervalId) clearInterval(intervalId);
-  if (holdCountdownInterval) clearInterval(holdCountdownInterval);
-
-  // Clear unified cart hold timer
-  stopUnifiedCartHoldTimer();
+  disposeHoldTimers();
+  disposePersistence();
+  if (holdCleanupIntervalId) clearInterval(holdCleanupIntervalId);
 });
 
 // ============================================
@@ -267,8 +258,8 @@ async function attemptStateRecovery() {
 }
 
 function clearBookingState() {
+  clearPersistedBookingState();
   try {
-    localStorage.removeItem("booking_state");
     localStorage.removeItem("booking_session_id");
   } catch (error) {
     console.error("Failed to clear booking state:", error);
@@ -352,6 +343,7 @@ async function restoreBookingState(state: any) {
               studioStore.studio.id,
               selectedTheme.value.id,
               selectedDate.value,
+              getSessionId(),
             );
             timeSlots.value = processTimeSlots(slots, selectedDate.value);
           } catch (err) {
@@ -394,6 +386,7 @@ async function restoreBookingState(state: any) {
               studioStore.studio.id,
               selectedTheme.value.id,
               selectedDate.value,
+              getSessionId(),
             );
             timeSlots.value = processTimeSlots(slots, selectedDate.value);
           } catch (err) {
@@ -433,6 +426,7 @@ async function restoreBookingState(state: any) {
             studioStore.studio.id,
             selectedTheme.value.id,
             selectedDate.value,
+            getSessionId(),
           );
           timeSlots.value = processTimeSlots(slots, selectedDate.value);
         } catch (err) {
@@ -461,6 +455,7 @@ async function restoreBookingState(state: any) {
             studioStore.studio.id,
             selectedTheme.value.id,
             selectedDate.value,
+            getSessionId(),
           );
           timeSlots.value = processTimeSlots(slots, selectedDate.value);
         } catch (err) {
@@ -489,6 +484,7 @@ async function restoreBookingState(state: any) {
             studioStore.studio.id,
             selectedTheme.value.id,
             selectedDate.value,
+            getSessionId(),
           );
           timeSlots.value = processTimeSlots(slots, selectedDate.value);
         } catch (err) {
@@ -640,14 +636,7 @@ const customerInfo = ref({
 // ============================================
 const confirmedSlot = ref<any | null>(null); // Slot with active hold
 const confirmedSlots = ref<any[]>([]); // Multi-slot mode: array of confirmed slots with holds
-const holdExpiresAt = ref<Date | null>(null); // Hold expiry timestamp
-const holdCountdown = ref<string>("10:00"); // Display countdown
 const isCreatingHold = ref(false); // Loading state for hold creation
-
-// UNIFIED CART HOLD: Single timer for entire cart (resets when new item added)
-const unifiedCartHoldExpiresAt = ref<Date | null>(null);
-const unifiedCartHoldCountdown = ref<string>("10:00");
-let unifiedCartHoldTimer: any = null;
 
 // Page refresh recovery
 const isRecovering = ref(false);
@@ -1235,6 +1224,7 @@ const selectDate = async (dateStr: string) => {
         studioStore.studio.id,
         selectedTheme.value.id,
         dateStr,
+        getSessionId(),
       );
 
       // Process slots and disable past ones for current date
@@ -1293,174 +1283,20 @@ const selectSlot = (slot: any) => {
 };
 
 // ============================================
-// Cart Hold API (Backend Integration)
+// Cart holds (API + timers via composable)
 // ============================================
-
-interface CartHold {
-  holdId: string;
-  sessionId: string;
-  studioId: string;
-  themeId: string;
-  date: string;
-  startTime: string;
-  endTime: string;
-  expiresAt: string;
-  createdAt: string;
-}
 
 function parseTimeToMinutes(time: string): number {
   const [hours, minutes] = time.split(":").map(Number);
-  return hours * 60 + minutes;
-}
-
-async function createCartHold(slotData: any): Promise<CartHold> {
-  try {
-    const response = await api.createSlotHold(
-      slotData.themeId,
-      slotData.date,
-      slotData.startTime,
-      slotData.endTime,
-      getSessionId(),
-    );
-
-    return {
-      holdId: response.holdId,
-      sessionId: response.sessionId,
-      studioId: studioStore.studio?.id || "",
-      themeId: response.themeId,
-      date: response.date,
-      startTime: response.startTime,
-      endTime: response.endTime,
-      expiresAt: response.expiresAt,
-      createdAt: response.createdAt,
-    };
-  } catch (error: any) {
-    // Handle conflict error from backend
-    if (
-      error?.data?.message === "SLOT_NO_LONGER_AVAILABLE" ||
-      error?.message === "SLOT_NO_LONGER_AVAILABLE" ||
-      error?.statusCode === 400
-    ) {
-      throw new Error("SLOT_NO_LONGER_AVAILABLE");
-    }
-    // Handle past time slot error from backend
-    if (
-      error?.data?.message === "SLOT_TIME_HAS_PASSED" ||
-      error?.message === "SLOT_TIME_HAS_PASSED"
-    ) {
-      throw new Error("SLOT_TIME_HAS_PASSED");
-    }
-    throw error;
-  }
-}
-
-async function createBatchCartHold(slotsData: any[]): Promise<CartHold[]> {
-  try {
-    const responses = await api.createBatchSlotHold(
-      slotsData.map((s) => ({
-        themeId: s.themeId,
-        date: s.date,
-        startTime: s.startTime,
-        endTime: s.endTime,
-      })),
-      getSessionId(),
-    );
-
-    return responses.map((response) => ({
-      holdId: response.holdId,
-      sessionId: response.sessionId,
-      studioId: studioStore.studio?.id || "",
-      themeId: response.themeId,
-      date: response.date,
-      startTime: response.startTime,
-      endTime: response.endTime,
-      expiresAt: response.expiresAt,
-      createdAt: response.createdAt,
-    }));
-  } catch (error: any) {
-    // Handle conflict error from backend
-    if (
-      error?.data?.message === "SLOT_NO_LONGER_AVAILABLE" ||
-      error?.message === "SLOT_NO_LONGER_AVAILABLE" ||
-      error?.statusCode === 400
-    ) {
-      throw new Error("SLOT_NO_LONGER_AVAILABLE");
-    }
-    // Handle past time slot error from backend
-    if (
-      error?.data?.message === "SLOT_TIME_HAS_PASSED" ||
-      error?.message === "SLOT_TIME_HAS_PASSED"
-    ) {
-      throw new Error("SLOT_TIME_HAS_PASSED");
-    }
-    throw error;
-  }
-}
-
-async function releaseCartHold(holdId: string): Promise<void> {
-  try {
-    await api.releaseSlotHold(holdId, getSessionId());
-  } catch (error) {
-    console.error("Failed to release hold:", error);
-    // Ignore error - hold will expire anyway
-  }
-}
-
-async function getActiveHolds(): Promise<CartHold[]> {
-  try {
-    const holds = await api.getSessionHolds(getSessionId());
-    return holds.map((h) => ({
-      holdId: h.holdId,
-      sessionId: h.sessionId,
-      studioId: studioStore.studio?.id || "",
-      themeId: h.themeId,
-      date: h.date,
-      startTime: h.startTime,
-      endTime: h.endTime,
-      expiresAt: h.expiresAt,
-      createdAt: h.createdAt,
-    }));
-  } catch (error) {
-    console.error("Error fetching holds:", error);
-    return [];
-  }
+  return (hours || 0) * 60 + (minutes || 0);
 }
 
 function cleanExpiredHolds(): void {
-  // No longer needed - backend handles cleanup
+  // Backend handles cleanup
 }
 
-// ============================================
-// Hold Countdown Timer
-// ============================================
-let holdCountdownInterval: any = null;
-
 function startHoldCountdown() {
-  if (holdCountdownInterval) clearInterval(holdCountdownInterval);
-
-  holdCountdownInterval = setInterval(() => {
-    if (!holdExpiresAt.value) {
-      clearInterval(holdCountdownInterval);
-      return;
-    }
-
-    const now = new Date();
-    const timeLeft = holdExpiresAt.value.getTime() - now.getTime();
-
-    if (timeLeft <= 0) {
-      clearInterval(holdCountdownInterval);
-      handleHoldExpiry();
-    } else {
-      const minutes = Math.floor(timeLeft / 60000);
-      const seconds = Math.floor((timeLeft % 60000) / 1000);
-      holdCountdown.value = `${minutes}:${seconds.toString().padStart(2, "0")}`;
-
-      // Warning at 2 minutes
-      if (timeLeft < 120000 && timeLeft > 119000) {
-        console.warn("Hold expires in 2 minutes!");
-      }
-    }
-  }, 1000);
+  startHoldCountdownBase(() => handleHoldExpiry());
 }
 
 async function handleHoldExpiry() {
@@ -1495,51 +1331,18 @@ async function handleHoldExpiry() {
   }
 }
 
-// ============================================
-// UNIFIED CART HOLD TIMER
-// Single timer for entire cart - resets when new item is added
-// ============================================
-
 function startUnifiedCartHoldTimer(expiresAt: Date) {
-  // Clear any existing timer
-  if (unifiedCartHoldTimer) {
-    clearInterval(unifiedCartHoldTimer);
-  }
-
-  unifiedCartHoldExpiresAt.value = expiresAt;
-
-  unifiedCartHoldTimer = setInterval(() => {
-    if (!unifiedCartHoldExpiresAt.value) {
-      clearInterval(unifiedCartHoldTimer);
-      return;
-    }
-
-    const now = new Date();
-    const timeLeft = unifiedCartHoldExpiresAt.value.getTime() - now.getTime();
-
-    if (timeLeft <= 0) {
-      clearInterval(unifiedCartHoldTimer);
-      handleUnifiedCartExpiry();
-    } else {
-      const minutes = Math.floor(timeLeft / 60000);
-      const seconds = Math.floor((timeLeft % 60000) / 1000);
-      unifiedCartHoldCountdown.value = `${minutes}:${seconds
-        .toString()
-        .padStart(2, "0")}`;
-
-      // Also update each cart item's hold info to reflect unified expiry
+  startUnifiedCartHoldTimerBase(
+    expiresAt,
+    () => handleUnifiedCartExpiry(),
+    (exp) => {
       cart.value.forEach((item) => {
         if (item.hold) {
-          item.hold.expiresAt = unifiedCartHoldExpiresAt.value!.toISOString();
+          item.hold.expiresAt = exp.toISOString();
         }
       });
-
-      // Warning at 2 minutes
-      if (timeLeft < 120000 && timeLeft > 119000) {
-        console.warn("Cart hold expires in 2 minutes!");
-      }
-    }
-  }, 1000);
+    },
+  );
 }
 
 async function handleUnifiedCartExpiry() {
@@ -1559,10 +1362,7 @@ async function handleUnifiedCartExpiry() {
 }
 
 function stopUnifiedCartHoldTimer() {
-  if (unifiedCartHoldTimer) {
-    clearInterval(unifiedCartHoldTimer);
-    unifiedCartHoldTimer = null;
-  }
+  stopUnifiedCartHoldTimerBase();
   unifiedCartHoldExpiresAt.value = null;
   unifiedCartHoldCountdown.value = "10:00";
 }
@@ -2031,6 +1831,7 @@ const nextStep = async () => {
                   studioStore.studio.id,
                   selectedTheme.value.id,
                   selectedDate.value,
+                  getSessionId(),
                 );
                 timeSlots.value = processTimeSlots(slots, selectedDate.value);
               } catch (err) {
@@ -2059,6 +1860,7 @@ const nextStep = async () => {
                   studioStore.studio.id,
                   selectedTheme.value.id,
                   selectedDate.value,
+                  getSessionId(),
                 );
                 timeSlots.value = processTimeSlots(slots, selectedDate.value);
               } catch (err) {
@@ -2117,6 +1919,7 @@ const nextStep = async () => {
                 studioStore.studio.id,
                 selectedTheme.value.id,
                 selectedDate.value,
+                getSessionId(),
               );
               timeSlots.value = processTimeSlots(slots, selectedDate.value);
             } catch (err) {
@@ -2142,6 +1945,7 @@ const nextStep = async () => {
                 studioStore.studio.id,
                 selectedTheme.value.id,
                 selectedDate.value,
+                getSessionId(),
               );
               timeSlots.value = processTimeSlots(slots, selectedDate.value);
             } catch (err) {
@@ -2302,24 +2106,15 @@ const nextStep = async () => {
           }),
         };
 
-        // Create bookings in batch
-        const createdBookings = await api.createBatchBooking(batchRequest);
 
-        // Determine payment type from studio settings
         const paymentType =
           studioStore.websiteSettings?.paymentType || "deposit";
 
-        // Get all booking IDs (first one is primary, rest are additional)
-        const primaryBookingId = createdBookings[0].id;
-        const additionalBookingIds = createdBookings.slice(1).map((b) => b.id);
-
         // Calculate total payment amount based on payment type
-        // Coupon is applied to balance first, then deposit (same as payment summary).
         let totalPaymentAmount = 0;
-        for (const item of cart.value) {
-          const itemDiscount = calculateProportionalDiscount(
-            cart.value.indexOf(item),
-          );
+        for (let i = 0; i < cart.value.length; i++) {
+          const item = cart.value[i];
+          const itemDiscount = calculateProportionalDiscount(i);
           const itemTotal = item.total;
 
           if (paymentType === "deposit") {
@@ -2333,7 +2128,6 @@ const nextStep = async () => {
                         100),
                   );
             const itemBalance = itemTotal - rawDeposit;
-            // Apply discount to balance first, then remainder to deposit
             const remainingDiscount = Math.max(0, itemDiscount - itemBalance);
             const effectiveDeposit = Math.max(
               0,
@@ -2345,69 +2139,33 @@ const nextStep = async () => {
           }
         }
 
-        // Call payment initiation API with all booking IDs
-        // Pass the calculated amount to prevent double discount (bookings already have discount applied)
-        const paymentResult = await api.initiatePayment(
-          primaryBookingId,
+        const { result } = await submitPublicBookingCheckout({
+          batchRequest,
           paymentType,
-          additionalBookingIds.length > 0 ? additionalBookingIds : undefined,
-          totalPaymentAmount, // Always pass calculated amount to avoid recalculation from discounted booking amounts
-        );
-
-        // Clear booking state before redirecting
-        clearBookingState();
-
-        // Handle zero payment (auto-confirmed)
-        if (paymentResult.paymentSkipped) {
-          // Bookings were auto-confirmed, redirect to success with all booking numbers
-          const allBookingNumbers = createdBookings
-            .map((b) => b.booking_number)
-            .join(",");
-          router.push(`/success/${allBookingNumbers}`);
-          return;
-        }
-
-        // Redirect to CHIP checkout
-        if (paymentResult.checkoutUrl) {
-          window.location.href = paymentResult.checkoutUrl;
-          return; // Stop execution after redirect
-        }
-
-        // Fallback: If no checkoutUrl (CHIP not configured), redirect to success with all booking numbers
-        const allBookingNumbers = createdBookings
-          .map((b) => b.booking_number)
-          .join(",");
-        router.push(`/success/${allBookingNumbers}`);
+          amount: totalPaymentAmount,
+          clearBookingState,
+        });
+        applyCheckoutResult(router, result);
+        return;
       } catch (error: any) {
         console.error("Failed to create bookings:", error);
 
-        // Check for payment unavailable error (CHIP no payment method)
-        if (
-          error.message?.includes("Cannot proceed with payment") ||
-          error.data?.message?.includes("Cannot proceed with payment")
-        ) {
+        if (isPaymentUnavailableError(error)) {
           router.push("/payment/failed?error=payment_unavailable");
           return;
         }
 
-        // Check for slot unavailable error (Race condition)
         const errorMessage = error.data?.message || error.message || "";
-        if (
-          errorMessage.includes("Selected time slot is not available") ||
-          errorMessage.includes("Slot not available")
-        ) {
+        if (isSlotUnavailableError(error)) {
           await showModal({
             title: t("slotNoLongerAvailable"),
             message: t("slotNoLongerAvailableMessage"),
             type: "warning",
             confirmText: t("ok"),
           });
-          // Refresh page/slots?
-          // For now just letting them try again or change selection
           return;
         }
 
-        // Show error to user
         await showModal({
           title: t("error") || "Error",
           message:
@@ -2508,105 +2266,39 @@ const nextStep = async () => {
           }),
         };
 
-        // Create bookings in batch
-        const createdBookings = await api.createBatchBooking(batchRequest);
 
-        // Determine payment type from studio settings
         const paymentType =
           studioStore.websiteSettings?.paymentType || "deposit";
+        const amountToSend =
+          paymentAmount.value <= 0 ? 0 : paymentAmount.value;
 
-        if (createdBookings.length === 1) {
-          // Single booking: original payment flow
-          const firstBooking = createdBookings[0]!;
-          const amountToSend =
-            paymentAmount.value <= 0 ? 0 : paymentAmount.value;
-          const paymentResult = await api.initiatePayment(
-            firstBooking.id,
-            paymentType,
-            undefined,
-            amountToSend,
-          );
-
-          clearBookingState();
-
-          if (paymentResult.paymentSkipped) {
-            router.push(`/success/${firstBooking.booking_number}`);
-            return;
-          }
-
-          if (paymentResult.checkoutUrl) {
-            window.location.href = paymentResult.checkoutUrl;
-            return;
-          }
-
-          router.push(`/success/${firstBooking.booking_number}`);
-        } else {
-          // Multiple bookings: batch payment (same as cart mode)
-          const primaryBookingId = createdBookings[0].id;
-          const additionalBookingIds = createdBookings
-            .slice(1)
-            .map((b) => b.id);
-
-          // Use unified payment amount (already multiplied and discounted)
-          const totalAmount = paymentAmount.value;
-
-          const paymentResult = await api.initiatePayment(
-            primaryBookingId,
-            paymentType,
-            additionalBookingIds.length > 0 ? additionalBookingIds : undefined,
-            totalAmount <= 0 ? 0 : totalAmount,
-          );
-
-          clearBookingState();
-
-          if (paymentResult.paymentSkipped) {
-            const allBookingNumbers = createdBookings
-              .map((b) => b.booking_number)
-              .join(",");
-            router.push(`/success/${allBookingNumbers}`);
-            return;
-          }
-
-          if (paymentResult.checkoutUrl) {
-            window.location.href = paymentResult.checkoutUrl;
-            return;
-          }
-
-          const allBookingNumbers = createdBookings
-            .map((b) => b.booking_number)
-            .join(",");
-          router.push(`/success/${allBookingNumbers}`);
-        }
+        const { result } = await submitPublicBookingCheckout({
+          batchRequest,
+          paymentType,
+          amount: amountToSend,
+          clearBookingState,
+        });
+        applyCheckoutResult(router, result);
+        return;
       } catch (error: any) {
         console.error("Failed to create booking:", error);
 
-        // Check for payment unavailable error (CHIP no payment method)
-        if (
-          error.message?.includes("Cannot proceed with payment") ||
-          error.data?.message?.includes("Cannot proceed with payment")
-        ) {
+        if (isPaymentUnavailableError(error)) {
           router.push("/payment/failed?error=payment_unavailable");
           return;
         }
 
-        // Check for slot unavailable error (Race condition)
         const errorMessage = error.data?.message || error.message || "";
-        if (
-          errorMessage.includes("Selected time slot is not available") ||
-          errorMessage.includes("Slot not available")
-        ) {
+        if (isSlotUnavailableError(error)) {
           await showModal({
             title: t("slotNoLongerAvailable"),
             message: t("slotNoLongerAvailableMessage"),
             type: "warning",
             confirmText: t("ok"),
           });
-          // For single mode, we might want to refresh slots if possible,
-          // but usually user will just pick another time on step 2
           return;
         }
 
-        // Show error to user
         await showModal({
           title: t("error") || "Error",
           message:
@@ -2658,7 +2350,7 @@ const prevStep = async () => {
       }
       confirmedSlot.value = null;
       holdExpiresAt.value = null;
-      if (holdCountdownInterval) clearInterval(holdCountdownInterval);
+      stopHoldCountdown();
     }
 
     currentStep.value--;
@@ -2706,7 +2398,7 @@ const handleChangeTheme = async () => {
     }
     confirmedSlot.value = null;
     holdExpiresAt.value = null;
-    if (holdCountdownInterval) clearInterval(holdCountdownInterval);
+    stopHoldCountdown();
   }
   currentStep.value = 1;
 };
@@ -2895,6 +2587,31 @@ const isSummaryStep = computed(() => {
     return currentStep.value === 7;
   }
   return currentStep.value === 6;
+});
+
+const totalSteps = computed(() => steps.value.length);
+
+const dockTotal = computed(() =>
+  isSummaryStep.value ? amountToPayNow.value : grandTotal.value || 0,
+);
+
+const dockAmountPulse = ref(false);
+let dockPulseTimer: ReturnType<typeof setTimeout> | null = null;
+
+watch(dockTotal, (next, prev) => {
+  if (next <= 0 || next === prev) return;
+  dockAmountPulse.value = false;
+  void nextTick(() => {
+    dockAmountPulse.value = true;
+    if (dockPulseTimer) clearTimeout(dockPulseTimer);
+    dockPulseTimer = setTimeout(() => {
+      dockAmountPulse.value = false;
+    }, 420);
+  });
+});
+
+onUnmounted(() => {
+  if (dockPulseTimer) clearTimeout(dockPulseTimer);
 });
 
 const paymentType = computed(() => {
@@ -3391,7 +3108,7 @@ const specialPricingAmount = computed(() => {
   return slotPrice - basePrice; // Returns the surcharge/discount amount in sen
 });
 // ============================================
-// Auto-Save Booking State
+// Auto-Save Booking State (debounced)
 // ============================================
 watch(
   [
@@ -3412,23 +3129,17 @@ watch(
   () => {
     if (!studioStore.studio) return;
 
-    // Only save if there's meaningful progress to recover
     const hasMeaningfulProgress =
       selectedTheme.value ||
       currentStep.value > 1 ||
       (cart.value && cart.value.length > 0);
 
     if (!hasMeaningfulProgress) {
-      // Clear saved state if no meaningful progress
-      try {
-        localStorage.removeItem("booking_state");
-      } catch (error) {
-        console.error("Failed to clear booking state:", error);
-      }
+      scheduleSave(null);
       return;
     }
 
-    const state = {
+    scheduleSave({
       mode: isCartModeEnabled.value ? "cart" : "single",
       sessionId: getSessionId(),
       studioSlug: studioStore.studio.slug,
@@ -3446,54 +3157,60 @@ watch(
       currentStep: currentStep.value,
       termsAccepted: termsAccepted.value,
       savedAt: new Date().toISOString(),
-    };
-
-    try {
-      localStorage.setItem("booking_state", JSON.stringify(state));
-    } catch (error) {
-      console.error("Failed to save booking state:", error);
-    }
+    });
   },
   { deep: true },
 );
 </script>
 
 <template>
-  <div class="min-h-screen relative text-gray-900 pb-20">
+  <div class="bk-page bk-page--sticky-cta-lg">
+    <!-- Booking closed gate -->
+    <div
+      v-if="bookingClosed"
+      class="bk-shell bk-shell--wide py-24 text-center"
+    >
+      <AlertCircle class="w-12 h-12 mx-auto text-gray-400 mb-4" />
+      <h1 class="mb-2 text-xl font-semibold text-gray-900">{{ t("bookingUnavailable") }}</h1>
+      <p class="text-gray-600 mb-8">{{ t("bookingUnavailableDesc") }}</p>
+      <button
+        type="button"
+        class="bk-cta-primary"
+        @click="router.push('/')"
+      >
+        {{ t("backToHome") }}
+      </button>
+    </div>
+
     <!-- Content Wrapper -->
-    <div class="relative z-20 max-w-2xl mx-auto">
+    <div
+      v-else
+      class="relative z-20 mx-auto flex w-full max-w-2xl flex-1 flex-col"
+    >
       <!-- Header -->
       <header class="sticky top-0 z-40">
-        <div
-          class="bg-white/80 backdrop-blur-md border-b border-gray-100 px-5 py-4 flex items-center justify-between transition-all duration-300"
-        >
-          <!-- Left: Back & Title -->
-          <div class="flex items-center gap-4">
+        <div class="bk-header-bar">
+          <div class="flex h-14 items-center gap-3 px-4 sm:px-6">
             <button
-              @click="prevStep"
-              class="p-1 -ml-1 hover:bg-gray-100 rounded-full transition-colors active:scale-95 text-gray-900"
+              type="button"
+              class="-ml-2 flex h-10 w-10 items-center justify-center rounded-full text-gray-900 transition-colors hover:bg-gray-100"
+              :aria-label="t('back')"
               :disabled="isProcessingPayment"
+              @click="prevStep"
             >
-              <ArrowLeft class="w-6 h-6 stroke-[2.5]" />
+              <ArrowLeft class="h-5 w-5" />
             </button>
-            <h1 class="text-xl font-bold tracking-tight text-gray-900">
-              {{ steps[currentStep - 1]?.title || t("booking") }}
-            </h1>
-          </div>
-
-          <!-- Right: Segmented Progress & Cart -->
-          <div class="flex items-center gap-4">
-            <!-- Segmented Progress -->
-            <div class="flex items-center gap-1.5">
-              <template v-for="step in isCartModeEnabled ? 7 : 6" :key="step">
-                <div
-                  class="h-1.5 rounded-full transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)]"
-                  :class="
-                    step <= currentStep ? 'w-5 bg-black' : 'w-1.5 bg-gray-200'
-                  "
-                ></div>
-              </template>
+            <div class="min-w-0 flex-1">
+              <h1 class="truncate text-base font-medium text-gray-900">
+                {{ steps[currentStep - 1]?.title || t("booking") }}
+              </h1>
             </div>
+          </div>
+          <div class="h-0.5 w-full bg-gray-100">
+            <div
+              class="h-full bg-gray-900 transition-[width] duration-500 ease-out"
+              :style="{ width: `${(currentStep / totalSteps) * 100}%` }"
+            />
           </div>
         </div>
 
@@ -3504,35 +3221,28 @@ watch(
             selectedTheme &&
             currentStep !== (isCartModeEnabled ? 7 : 6)
           "
-          class="bg-gray-50 shadow-sm border-b border-gray-100 overflow-hidden animate-fade-in relative z-30"
+          class="relative z-30 animate-fade-in border-b border-gray-100 bg-white"
         >
-          <!-- Top Section: Details -->
-          <div class="p-4 flex gap-4 items-center">
-            <!-- Image -->
-            <div
-              class="w-16 h-16 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0"
-            >
+          <div class="flex items-center gap-3 px-4 py-3 sm:px-6">
+            <div class="h-10 w-10 shrink-0 overflow-hidden rounded-md bg-gray-100">
               <img
                 v-if="selectedTheme.images?.[0]"
                 :src="selectedTheme.images[0]"
                 :alt="selectedTheme.name"
-                class="w-full h-full object-cover"
+                class="h-full w-full object-cover"
               />
               <div
                 v-else
-                class="w-full h-full flex items-center justify-center text-gray-300"
+                class="flex h-full w-full items-center justify-center text-gray-300"
               >
-                <ImageIcon class="w-6 h-6" />
+                <ImageIcon class="h-4 w-4" />
               </div>
             </div>
 
-            <!-- Middle: Title & Date -->
-            <div class="flex-1 min-w-0 flex flex-col justify-center">
-              <h3 class="font-bold text-base leading-tight">
+            <div class="min-w-0 flex-1">
+              <p class="truncate text-sm font-medium text-gray-900">
                 {{ selectedTheme.name }}
-              </h3>
-
-              <!-- Date & Time (if selected) -->
+              </p>
               <p
                 v-if="
                   selectedDate &&
@@ -3540,7 +3250,7 @@ watch(
                     ? selectedSlots.length > 0
                     : selectedSlot)
                 "
-                class="text-xs text-gray-500 mt-1 line-clamp-1"
+                class="truncate text-xs text-gray-500"
               >
                 {{ formatDate(selectedDate) }},
                 <template
@@ -3554,38 +3264,31 @@ watch(
                   {{ selectedSlot.start }} - {{ selectedSlot.end }}
                 </template>
               </p>
-              <!-- Fallback if only theme selected -->
-              <p v-else class="text-xs text-gray-400 mt-1">
+              <p v-else class="text-xs text-gray-400">
                 {{ t("selectDateAndTime") }}
               </p>
             </div>
 
-            <!-- Right: Price & Action -->
-            <div class="flex flex-col items-center justify-between">
-              <span class="font-bold text-base">
-                RM{{ formatPriceWhole(selectedTheme.base_price) }}
-              </span>
-              <button
-                @click="handleChangeTheme"
-                class="text-xs text-gray-400 underline hover:text-gray-600 transition-colors"
-              >
-                {{ t("change") }}
-              </button>
-            </div>
+            <button
+              type="button"
+              class="shrink-0 text-sm text-gray-500 underline-offset-2 hover:text-gray-900 hover:underline"
+              @click="handleChangeTheme"
+            >
+              {{ t("change") }}
+            </button>
           </div>
 
-          <!-- Bottom Section: Hold Timer (only if hold active) -->
-          <div
+          <button
             v-if="confirmedSlot && holdExpiresAt && !isCartModeEnabled"
+            type="button"
+            class="flex w-full items-center justify-center gap-2 border-t border-amber-100 bg-amber-50 py-2 text-xs font-medium text-amber-700"
             @click="prevStep"
-            class="bg-orange-50 py-2.5 flex items-center justify-center gap-2 text-orange-700 font-bold text-xs tracking-widest uppercase cursor-pointer hover:bg-orange-100 transition-colors"
           >
-            <Clock class="w-3.5 h-3.5" />
-            <span
-              >{{ t("slotLocked") }}: {{ holdCountdown }} •
-              {{ t("change") }}</span
-            >
-          </div>
+            <Clock class="h-3.5 w-3.5" />
+            <span>
+              {{ t("slotLocked") }} {{ holdCountdown }} · {{ t("change") }}
+            </span>
+          </button>
         </div>
       </header>
 
@@ -3600,25 +3303,16 @@ watch(
       >
         <div
           v-if="isProcessingPayment"
-          class="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white/80 backdrop-blur-sm"
+          class="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-white/95"
+          role="status"
+          aria-live="polite"
         >
-          <div
-            class="bg-white p-8 rounded-3xl shadow-2xl border border-gray-100 flex flex-col items-center space-y-6 max-w-xs w-full mx-4"
-          >
-            <div class="relative">
-              <div
-                class="w-16 h-16 border-4 border-gray-100 border-t-gray-900 rounded-full animate-spin"
-              ></div>
-              <div class="absolute inset-0 flex items-center justify-center">
-                <CreditCard class="w-6 h-6 text-gray-900" />
-              </div>
-            </div>
-            <div class="text-center space-y-2">
-              <h3 class="text-xl font-bold">
-                {{ t("processingPayment") }}
-              </h3>
-              <p class="text-sm text-gray-500">{{ t("pleaseWait") }}</p>
-            </div>
+          <Loader2 class="h-8 w-8 animate-spin text-gray-900" />
+          <div class="space-y-1 text-center">
+            <p class="text-base font-medium text-gray-900">
+              {{ t("processingPayment") }}
+            </p>
+            <p class="text-sm text-gray-500">{{ t("pleaseWait") }}</p>
           </div>
         </div>
       </Transition>
@@ -3627,472 +3321,300 @@ watch(
 
       <!-- Theme Overview (shown in steps 2-4) -->
       <main
-        class="p-4 sm:p-6 max-w-4xl mx-auto space-y-8 pb-32 overflow-hidden"
+        class="mx-auto w-full max-w-2xl flex-1 space-y-8 overflow-hidden px-4 pb-8 pt-6 sm:px-6 sm:pt-8"
       >
         <Transition :name="transitionName" mode="out-in">
           <!-- Step 1: Themes -->
-          <div v-if="currentStep === 1" :key="1" class="space-y-3">
-            <!-- Header -->
-            <div class="mb-5">
-              <h2 class="text-2xl font-bold tracking-tight">
-                {{ t("selectTheme") }}
-              </h2>
-              <p class="text-gray-500 text-xs font-light">
-                {{ t("selectThemeDescription") }}
-              </p>
-            </div>
+          <div v-if="currentStep === 1" :key="1">
+            <p class="mb-4 text-sm text-gray-500">
+              {{ t("selectThemeDescription") }}
+            </p>
 
             <!-- Loading Skeleton -->
-            <template v-if="loadingThemes">
-              <div
+            <ul
+              v-if="loadingThemes"
+              class="divide-y divide-gray-100 border-y border-gray-100"
+            >
+              <li
                 v-for="i in 3"
                 :key="`skeleton-${i}`"
-                class="bg-white rounded-[2rem] border border-gray-100 p-6 flex flex-col sm:flex-row gap-6 animate-pulse"
+                class="flex animate-pulse items-center gap-4 py-4"
               >
-                <div
-                  class="w-full sm:w-28 h-48 sm:h-28 bg-gray-100 rounded-2xl flex-shrink-0"
-                ></div>
-                <div class="flex-1 space-y-3 py-1">
-                  <div class="h-6 bg-gray-100 rounded w-1/3"></div>
-                  <div class="h-4 bg-gray-100 rounded w-2/3"></div>
-                  <div class="flex gap-2 mt-4">
-                    <div class="h-8 w-20 bg-gray-100 rounded-full"></div>
-                    <div class="h-8 w-20 bg-gray-100 rounded-full"></div>
-                  </div>
+                <div class="h-16 w-16 shrink-0 rounded-lg bg-gray-100" />
+                <div class="flex-1 space-y-2">
+                  <div class="h-4 w-1/3 rounded bg-gray-100" />
+                  <div class="h-3 w-2/3 rounded bg-gray-100" />
                 </div>
-              </div>
-            </template>
+                <div class="h-4 w-12 rounded bg-gray-100" />
+              </li>
+            </ul>
 
             <!-- Themes List -->
-            <div
+            <ul
               v-else
-              v-for="theme in studioStore.themes"
-              :key="theme.id"
-              class="bg-white rounded-2xl p-4 sm:p-6 border transition-all duration-300 cursor-pointer group hover:shadow-lg relative"
-              :class="
-                selectedTheme?.id === theme.id
-                  ? 'border-black shadow-sm'
-                  : 'border-gray-200 hover:border-gray-300'
-              "
-              @click="selectTheme(theme)"
+              class="divide-y divide-gray-100 border-y border-gray-100"
+              role="radiogroup"
+              :aria-label="t('selectTheme')"
             >
-              <!-- Popular Badge (On Top Right Border) -->
-              <div
-                v-if="theme.popular"
-                class="absolute -top-3 right-0 z-20 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-gray-900 to-gray-800 text-white text-[10px] font-bold uppercase tracking-widest shadow-lg shadow-gray-400/20 border-2 border-white ring-1 ring-gray-100"
+              <li
+                v-for="theme in studioStore.themes"
+                :key="theme.id"
+                role="radio"
+                tabindex="0"
+                :aria-checked="selectedTheme?.id === theme.id"
+                class="-mx-3 flex cursor-pointer items-center gap-4 rounded-lg px-3 py-4 transition-colors"
+                :class="
+                  selectedTheme?.id === theme.id
+                    ? 'bg-gray-50'
+                    : 'hover:bg-gray-50'
+                "
+                @click="selectTheme(theme)"
+                @keydown.enter.prevent="selectTheme(theme)"
+                @keydown.space.prevent="selectTheme(theme)"
               >
-                <Sparkles class="w-3 h-3 text-amber-400" fill="currentColor" />
-                <span class="text-amber-400">{{ t("popular") }}</span>
-              </div>
-
-              <!-- Mobile Checkmark (Absolute) -->
-              <div
-                v-if="selectedTheme?.id === theme.id"
-                class="absolute top-5 right-5 z-10 bg-gray-900 text-white rounded-full p-1 sm:hidden"
-              >
-                <Check class="w-3 h-3" />
-              </div>
-
-              <div class="flex flex-row gap-5 items-stretch">
-                <!-- Left: Image (Fixed Square) -->
-                <div
-                  class="group/image relative w-20 h-20 shrink-0 rounded-2xl overflow-hidden bg-gray-100 shadow-sm border border-gray-50 cursor-zoom-in"
+                <button
+                  type="button"
+                  class="h-16 w-16 shrink-0 cursor-zoom-in overflow-hidden rounded-lg bg-gray-100"
+                  :aria-label="theme.name"
                   @click.stop="openGallery(theme)"
                 >
                   <img
                     v-if="theme.images?.[0]"
                     :src="theme.images[0]"
                     :alt="theme.name"
-                    class="w-full h-full object-cover transition-transform duration-700 group-hover/image:scale-105"
+                    class="h-full w-full object-cover"
                   />
-                  <div
+                  <span
                     v-else
-                    class="w-full h-full flex items-center justify-center text-gray-300"
+                    class="flex h-full w-full items-center justify-center text-gray-300"
                   >
-                    <ImageIcon class="w-8 h-8" />
-                  </div>
+                    <ImageIcon class="h-6 w-6" />
+                  </span>
+                </button>
 
-                  <!-- Hover Overlay -->
-                  <div
-                    v-if="theme.images && theme.images.length > 0"
-                    class="absolute inset-0 bg-black/10 opacity-0 group-hover/image:opacity-100 flex items-center justify-center transition-all duration-300"
-                  >
-                    <div
-                      class="bg-white/90 p-1.5 rounded-full shadow-sm backdrop-blur-sm transform scale-75 group-hover/image:scale-100 transition-all duration-300"
-                    >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        class="w-3.5 h-3.5 text-gray-900"
-                      >
-                        <polyline points="15 3 21 3 21 9" />
-                        <polyline points="9 21 3 21 3 15" />
-                        <line x1="21" x2="14" y1="3" y2="10" />
-                        <line x1="3" x2="10" y1="21" y2="14" />
-                      </svg>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Middle: Content -->
-                <div class="flex-1 flex flex-col justify-between py-1">
-                  <div>
-                    <h3
-                      class="text-xl font-bold text-gray-900 leading-none mb-1"
-                    >
+                <div class="min-w-0 flex-1">
+                  <div class="flex flex-wrap items-baseline gap-x-2">
+                    <h3 class="truncate text-base font-medium text-gray-900">
                       {{ theme.name }}
                     </h3>
-                    <p
-                      class="text-[0.9rem] text-gray-500 leading-tight line-clamp-2 w-full"
+                    <span
+                      v-if="theme.popular"
+                      class="rounded bg-gray-100 px-1.5 py-0.5 text-[11px] font-medium capitalize text-gray-600"
                     >
-                      {{ theme.description_short }}
-                    </p>
+                      {{ t("popular") }}
+                    </span>
                   </div>
-
-                  <div class="flex justify-between items-end">
-                    <!-- Pills / Badges -->
-                    <div class="flex items-center gap-2">
-                      <div
-                        class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-[#F3F4F6] text-gray-600 text-[11px] font-bold tracking-wide"
-                      >
-                        <Clock class="w-3 h-3" />
-                        {{ theme.duration_minutes }}m
-                      </div>
-
-                      <div
-                        class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-[#F3F4F6] text-gray-600 text-[11px] font-bold tracking-wide"
-                      >
-                        <Users class="w-3 h-3" />
-                        {{ theme.base_pax }} pax
-                      </div>
-                    </div>
-
-                    <!-- Mobile Price -->
-                    <div
-                      class="sm:hidden font-bold text-lg text-gray-900 leading-none"
-                    >
-                      RM{{ formatPriceWhole(theme.base_price) }}
-                    </div>
-                  </div>
+                  <p
+                    v-if="theme.description_short"
+                    class="mt-0.5 line-clamp-1 text-sm text-gray-500"
+                  >
+                    {{ theme.description_short }}
+                  </p>
+                  <p class="mt-1 text-xs text-gray-400">
+                    {{ theme.duration_minutes }} {{ t("minutes") }} ·
+                    {{ theme.base_pax }} {{ t("pax") }}
+                  </p>
                 </div>
 
-                <!-- Right: Selection & Price (Desktop Only) -->
-                <div
-                  class="hidden sm:flex flex-col items-end justify-between self-stretch py-1"
-                >
-                  <!-- Checkmark -->
-                  <div class="h-8 w-8 flex items-center justify-end">
-                    <transition
-                      enter-active-class="transform transition duration-300 ease-out"
-                      enter-from-class="scale-50 opacity-0"
-                      enter-to-class="scale-100 opacity-100"
-                      leave-active-class="transform transition duration-200 ease-in"
-                      leave-from-class="scale-100 opacity-100"
-                      leave-to-class="scale-50 opacity-0"
-                    >
-                      <div
-                        v-if="selectedTheme?.id === theme.id"
-                        class="bg-gray-900 text-white rounded-full shadow-sm"
-                      >
-                        <Check class="w-4 h-4" />
-                      </div>
-                    </transition>
-                  </div>
-
-                  <!-- Price -->
-                  <div class="font-bold text-xl text-gray-900">
+                <div class="flex shrink-0 items-center gap-3">
+                  <span class="text-base font-medium tabular-nums text-gray-900">
                     RM{{ formatPriceWhole(theme.base_price) }}
-                  </div>
+                  </span>
+                  <span
+                    class="flex h-5 w-5 items-center justify-center rounded-full border transition-colors"
+                    :class="
+                      selectedTheme?.id === theme.id
+                        ? 'border-gray-900 bg-gray-900 text-white'
+                        : 'border-gray-300'
+                    "
+                    aria-hidden="true"
+                  >
+                    <Check
+                      v-if="selectedTheme?.id === theme.id"
+                      class="h-3 w-3"
+                    />
+                  </span>
                 </div>
-              </div>
-            </div>
+              </li>
+            </ul>
           </div>
 
           <!-- Step 2: Date & Time -->
-          <div v-else-if="currentStep === 2" :key="2" class="space-y-10">
-            <div class="flex flex-col space-y-4">
-              <!-- Instructions Note -->
-
-              <!-- Header -->
-              <div class="mb-3">
-                <h2 class="text-xl sm:text-2xl font-bold tracking-tight">
-                  {{ t("selectDateAndTime") }}
+          <div v-else-if="currentStep === 2" :key="2" class="space-y-8">
+            <section class="space-y-3">
+              <div class="flex items-center justify-between">
+                <h2 class="text-sm font-medium text-gray-900">
+                  {{ t("date") }}
                 </h2>
-                <!-- <p class="text-gray-500 text-sm font-light">
-                  {{ t("selectDateAndTimeDescription") }}
-                </p> -->
-              </div>
-
-              <!-- Date Scroller -->
-              <div class="relative">
-                <!-- Left Navigation Button -->
-                <button
-                  @click="scrollDates('left')"
-                  class="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-white/30 backdrop-blur-md border border-white/50 rounded-full p-2 shadow-lg hover:bg-white/50 transition-all hover:scale-110 active:scale-95 text-gray-700 hover:text-gray-900"
-                  aria-label="Scroll dates left"
-                >
-                  <ChevronLeft class="w-5 h-5" />
-                </button>
-
-                <!-- Right Navigation Button -->
-                <button
-                  @click="scrollDates('right')"
-                  class="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white/30 backdrop-blur-md border border-white/50 rounded-full p-2 shadow-lg hover:bg-white/50 transition-all hover:scale-110 active:scale-95 text-gray-700 hover:text-gray-900"
-                  aria-label="Scroll dates right"
-                >
-                  <ArrowRight class="w-5 h-5" />
-                </button>
-
-                <div
-                  ref="dateScroller"
-                  class="flex gap-3 overflow-x-auto pb-4 pt-2 px-1 scrollbar-hide snap-x mask-fade scroll-smooth"
-                >
-                  <!-- Loading Skeleton -->
-                  <template v-if="loadingDates">
-                    <div
-                      v-for="i in 7"
-                      :key="`date-skeleton-${i}`"
-                      class="snap-center flex-shrink-0 w-16 sm:w-[4.5rem] h-20 sm:h-24 rounded-2xl bg-gray-100 animate-pulse"
-                    ></div>
-                  </template>
-
-                  <!-- Dates -->
+                <div class="flex items-center gap-1">
                   <button
-                    v-else
-                    v-for="d in dates"
-                    :key="d.date"
-                    :data-date="d.date"
-                    @click="!d.isBlackout && selectDate(d.date)"
-                    :disabled="d.isBlackout"
-                    :class="[
-                      'snap-center flex-shrink-0 w-16 sm:w-[4.5rem] h-20 sm:h-24 rounded-2xl flex flex-col items-center justify-center transition-all duration-300 relative overflow-hidden group',
-                      d.isBlackout
-                        ? 'bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed opacity-60'
-                        : selectedDate === d.date
-                          ? 'bg-gray-900 text-white shadow-xl scale-105 ring-4 ring-gray-100'
-                          : 'bg-white text-gray-900 border border-gray-100 hover:border-gray-300 hover:text-gray-600',
-                    ]"
+                    type="button"
+                    class="flex h-8 w-8 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900"
+                    aria-label="Scroll dates left"
+                    @click="scrollDates('left')"
                   >
-                    <span
-                      class="text-[10px] uppercase tracking-widest font-medium mb-1"
-                      >{{ d.month }}</span
-                    >
-                    <span class="text-2xl font-bold leading-none">{{
-                      d.day
-                    }}</span>
-                    <span class="text-[10px] mt-1 opacity-80">{{
-                      d.weekday
-                    }}</span>
-
-                    <!-- Blackout Indicator -->
-                    <div v-if="d.isBlackout" class="absolute top-2 right-2">
-                      <X class="w-3 h-3 text-gray-400" />
-                    </div>
-
-                    <!-- Special Pricing Indicator -->
-                    <div v-else-if="d.isSpecial" class="absolute top-2 right-2">
-                      <Sparkles
-                        :class="[
-                          'w-3.5 h-3.5',
-                          selectedDate === d.date
-                            ? 'text-white fill-white/20'
-                            : 'text-amber-500 fill-amber-500',
-                        ]"
-                      />
-                    </div>
+                    <ChevronLeft class="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    class="flex h-8 w-8 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900"
+                    aria-label="Scroll dates right"
+                    @click="scrollDates('right')"
+                  >
+                    <ChevronRight class="h-4 w-4" />
                   </button>
                 </div>
               </div>
 
+              <div
+                ref="dateScroller"
+                class="-mx-4 flex snap-x gap-2 overflow-x-auto scroll-smooth px-4 pb-1 scrollbar-hide sm:-mx-6 sm:px-6"
+              >
+                <template v-if="loadingDates">
+                  <div
+                    v-for="i in 7"
+                    :key="`date-skeleton-${i}`"
+                    class="h-[4.5rem] w-14 shrink-0 animate-pulse rounded-lg bg-gray-100"
+                  />
+                </template>
+
+                <button
+                  v-else
+                  v-for="d in dates"
+                  :key="d.date"
+                  type="button"
+                  :data-date="d.date"
+                  :disabled="d.isBlackout"
+                  :aria-pressed="selectedDate === d.date"
+                  class="relative flex h-[4.5rem] w-14 shrink-0 snap-start flex-col items-center justify-center rounded-lg border transition-colors"
+                  :class="
+                    d.isBlackout
+                      ? 'cursor-not-allowed border-transparent bg-gray-50 text-gray-300 line-through'
+                      : selectedDate === d.date
+                        ? 'border-gray-900 bg-gray-900 text-white'
+                        : 'border-gray-200 bg-white text-gray-900 hover:border-gray-400'
+                  "
+                  @click="!d.isBlackout && selectDate(d.date)"
+                >
+                  <span
+                    class="text-[11px] capitalize"
+                    :class="selectedDate === d.date ? 'text-white/70' : 'text-gray-500'"
+                  >
+                    {{ d.weekday }}
+                  </span>
+                  <span class="text-lg font-medium leading-tight tabular-nums">
+                    {{ d.day }}
+                  </span>
+                  <span
+                    class="text-[11px] capitalize"
+                    :class="selectedDate === d.date ? 'text-white/70' : 'text-gray-500'"
+                  >
+                    {{ d.month }}
+                  </span>
+                  <span
+                    v-if="d.isSpecial && !d.isBlackout"
+                    class="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full"
+                    :class="selectedDate === d.date ? 'bg-white' : 'bg-amber-500'"
+                    aria-hidden="true"
+                  />
+                </button>
+              </div>
+
               <!-- Blackout Date Info -->
               <div
-                v-if="
-                  isBlackoutDateSelected && selectedDateInfo?.blackoutReason
-                "
-                class="bg-red-50/80 backdrop-blur-sm border border-red-100/50 p-4 rounded-2xl flex items-start gap-3 text-red-900 shadow-sm"
+                v-if="isBlackoutDateSelected && selectedDateInfo?.blackoutReason"
+                class="flex items-start gap-2 rounded-lg bg-red-50 px-3 py-2.5 text-sm text-red-700"
               >
-                <div class="bg-red-100 p-2 rounded-full flex-shrink-0">
-                  <AlertCircle class="w-4 h-4" />
-                </div>
-                <div class="text-xs leading-relaxed">
-                  <span
-                    class="font-bold block uppercase tracking-wider text-[10px] mb-0.5 text-red-700"
-                    >{{ t("blackoutDate") }}</span
-                  >
+                <AlertCircle class="mt-0.5 h-4 w-4 shrink-0" />
+                <p>
+                  <span class="font-medium">{{ t("blackoutDate") }}:</span>
                   {{ selectedDateInfo.blackoutReason }}
-                </div>
+                </p>
               </div>
 
               <!-- Special Date Info -->
               <div
                 v-if="isSpecialDateSelected && selectedDateInfo"
-                class="bg-gradient-to-br from-amber-50 to-orange-50/50 backdrop-blur-sm border border-amber-200/60 p-4 rounded-2xl shadow-sm relative overflow-hidden"
+                class="space-y-2 rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-900"
               >
-                <!-- Decorative background sparkle -->
-                <Sparkles
-                  class="absolute -top-4 -right-4 w-16 h-16 text-amber-100/50 -rotate-12"
-                />
+                <p class="font-medium">{{ t("specialDate") }}</p>
 
-                <div class="flex items-start gap-3 relative z-10">
-                  <!-- <div
-                    class="bg-amber-100 p-2 rounded-full flex-shrink-0 relative z-10"
-                  >
-                    <Sparkles class="w-4 h-4 text-amber-600" />
-                  </div> -->
+                <template v-if="datePricingInfo && datePricingInfo.length > 0">
                   <div
-                    class="text-xs leading-relaxed flex-1 relative z-10 space-y-2"
+                    v-for="(info, idx) in datePricingInfo"
+                    :key="idx"
+                    class="space-y-0.5"
                   >
-                    <div>
-                      <span
-                        class="font-bold block uppercase tracking-wider text-[10px] mb-1 text-amber-600"
-                        >{{ t("specialDate") }}</span
-                      >
-                      <!-- <p class="font-bold text-amber-900 text-sm">
-                        {{ selectedDateInfo.specialLabel || t("specialPrice") }}
-                      </p> -->
-                    </div>
-
-                    <!-- Pricing Info from Time Slots -->
-                    <div
-                      v-if="datePricingInfo && datePricingInfo.length > 0"
-                      class="space-y-2"
-                    >
-                      <div
-                        v-for="(info, idx) in datePricingInfo"
-                        :key="idx"
-                        class="bg-amber-100/80 px-3 py-2 rounded-lg border border-amber-200/50 space-y-1.5"
-                      >
-                        <!-- Rule Name -->
-                        <p class="font-semibold text-amber-900 text-xs">
-                          {{ info.label }}
-                        </p>
-
-                        <!-- Price (shown when applies to all slots) -->
-                        <div
-                          v-if="info.appliesToAllSlots"
-                          class="flex items-center gap-2 text-[11px]"
-                        >
-                          <span class="text-amber-900 font-semibold">
-                            RM{{ formatPriceWhole(info.minPrice) }}
-                            <span
-                              v-if="info.minPrice !== info.maxPrice"
-                              class="text-amber-700 text-[10px]"
-                            >
-                              - RM{{ formatPriceWhole(info.maxPrice) }}
-                            </span>
-                          </span>
-                        </div>
-
-                        <!-- Time Ranges with Prices (only shown if rule has time restriction) -->
-                        <div v-else-if="info.hasTimeRange" class="space-y-1.5">
-                          <!-- Show overall time range for clarity -->
-                          <div class="flex items-center gap-2 text-[11px]">
-                            <Clock
-                              class="w-3 h-3 text-amber-700 flex-shrink-0"
-                            />
-                            <span class="text-amber-800 font-mono flex-1">
-                              {{ info.earliestStart }} - {{ info.latestEnd }}
-                            </span>
-                            <span class="text-amber-900 font-semibold">
-                              RM{{ formatPriceWhole(info.minPrice) }}
-                              <span
-                                v-if="info.minPrice !== info.maxPrice"
-                                class="text-amber-700 text-[10px]"
-                              >
-                                - RM{{ formatPriceWhole(info.maxPrice) }}
-                              </span>
-                            </span>
-                          </div>
-                        </div>
-
-                        <!-- Price Difference Summary -->
-                        <div
-                          v-if="info.minDiff !== 0 || info.maxDiff !== 0"
-                          class="flex items-center gap-1.5 pt-1 border-t border-amber-200/50"
-                        >
-                          <span class="text-[10px] text-amber-700">
-                            <template v-if="info.minDiff === info.maxDiff">
-                              <!-- Same price for all slots -->
-                              {{ info.minDiff > 0 ? "+" : "-" }}RM{{
-                                formatPriceWhole(Math.abs(info.minDiff))
-                              }}
-                              {{
-                                info.minDiff > 0
-                                  ? t("specialPriceSurcharge") || "surcharge"
-                                  : t("specialPriceDiscount") || "discount"
-                              }}
-                            </template>
-                            <template v-else>
-                              <!-- Different prices for different slots -->
-                              {{ info.minDiff > 0 ? "+" : "-" }}RM{{
-                                formatPriceWhole(Math.abs(info.minDiff))
-                              }}
-                              {{
-                                info.minDiff > 0
-                                  ? t("specialPriceSurcharge") || "surcharge"
-                                  : t("specialPriceDiscount") || "discount"
-                              }}
-                              <span
-                                v-if="info.maxDiff !== info.minDiff"
-                                class="ml-1"
-                              >
-                                to {{ info.maxDiff > 0 ? "+" : "-" }}RM{{
-                                  formatPriceWhole(Math.abs(info.maxDiff))
-                                }}
-                              </span>
-                            </template>
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <!-- Fallback: Show generic message if no time-based info -->
-                    <div
-                      v-else-if="specialPricingMessage"
-                      class="flex items-center gap-2 font-bold text-amber-800 bg-amber-100/80 px-2 py-1 rounded-md border border-amber-200/50"
-                    >
-                      <span>{{ specialPricingAmount > 0 ? "+" : "-" }}</span>
-                      <span>{{ specialPricingMessage }}</span>
+                    <div class="flex items-baseline justify-between gap-3">
                       <span>
-                        {{ specialPricingAmount > 0 ? "+" : "-" }}RM{{
-                          formatPriceWhole(Math.abs(specialPricingAmount))
-                        }}
+                        {{ info.label }}
+                        <span
+                          v-if="!info.appliesToAllSlots && info.hasTimeRange"
+                          class="text-amber-700"
+                        >
+                          · {{ info.earliestStart }} - {{ info.latestEnd }}
+                        </span>
+                      </span>
+                      <span
+                        v-if="info.appliesToAllSlots || info.hasTimeRange"
+                        class="shrink-0 font-medium tabular-nums"
+                      >
+                        RM{{ formatPriceWhole(info.minPrice) }}
+                        <template v-if="info.minPrice !== info.maxPrice">
+                          - RM{{ formatPriceWhole(info.maxPrice) }}
+                        </template>
                       </span>
                     </div>
-                    <p v-else class="text-amber-700/80 italic text-xs">
+                    <p
+                      v-if="info.minDiff !== 0 || info.maxDiff !== 0"
+                      class="text-xs text-amber-700"
+                    >
+                      {{ info.minDiff > 0 ? "+" : "-" }}RM{{
+                        formatPriceWhole(Math.abs(info.minDiff))
+                      }}
+                      <template v-if="info.maxDiff !== info.minDiff">
+                        to {{ info.maxDiff > 0 ? "+" : "-" }}RM{{
+                          formatPriceWhole(Math.abs(info.maxDiff))
+                        }}
+                      </template>
                       {{
-                        t("specialPriceApply") ||
-                        "Special pricing applies to this date"
+                        info.minDiff > 0
+                          ? t("specialPriceSurcharge") || "surcharge"
+                          : t("specialPriceDiscount") || "discount"
                       }}
                     </p>
                   </div>
-                </div>
+                </template>
+
+                <p v-else-if="specialPricingMessage" class="flex justify-between gap-3">
+                  <span>{{ specialPricingMessage }}</span>
+                  <span class="shrink-0 font-medium tabular-nums">
+                    {{ specialPricingAmount > 0 ? "+" : "-" }}RM{{
+                      formatPriceWhole(Math.abs(specialPricingAmount))
+                    }}
+                  </span>
+                </p>
+                <p v-else class="text-amber-700">
+                  {{
+                    t("specialPriceApply") ||
+                    "Special pricing applies to this date"
+                  }}
+                </p>
               </div>
-            </div>
+            </section>
 
             <!-- Time Slots -->
-            <div
+            <section
               data-time-section
-              class="space-y-4 transition-all duration-500"
-              :class="{
-                'opacity-50 blur-sm pointer-events-none': !selectedDate,
-              }"
+              class="space-y-3 transition-opacity"
+              :class="{ 'pointer-events-none opacity-40': !selectedDate }"
             >
               <div class="flex items-center justify-between">
-                <h3 class="text-lg font-bold flex items-center gap-2">
-                  <Clock class="w-5 h-5" /> {{ t("selectTime") }}
-                </h3>
-                <span
-                  v-if="selectedDate"
-                  class="text-xs text-gray-400 uppercase tracking-wider"
-                  >{{
+                <h2 class="text-sm font-medium text-gray-900">
+                  {{ t("selectTime") }}
+                </h2>
+                <span v-if="selectedDate" class="text-xs text-gray-500">
+                  {{
                     isMultipleSlotEnabled
                       ? selectedSlots.length > 0
                         ? `${selectedSlots.length} ${t("slotsSelected") || "slot dipilih"}`
@@ -4100,80 +3622,63 @@ watch(
                       : selectedSlot
                         ? t("oneSlotSelected")
                         : t("selectOneSlot")
-                  }}</span
-                >
+                  }}
+                </span>
               </div>
 
-              <!-- Loading State -->
-              <div
-                v-if="loadingSlots"
-                class="flex items-center justify-center py-8"
-              >
-                <Loader2 class="w-6 h-6 animate-spin text-gray-400" />
+              <div v-if="loadingSlots" class="flex justify-center py-8">
+                <Loader2 class="h-5 w-5 animate-spin text-gray-400" />
               </div>
 
-              <!-- Time Slots Grid -->
               <div
                 v-else-if="timeSlots.length > 0"
-                class="grid grid-cols-2 gap-3"
+                class="grid grid-cols-2 gap-2 sm:grid-cols-3"
               >
                 <button
                   v-for="slot in timeSlots"
                   :key="slot.id"
-                  @click="selectSlot(slot)"
+                  type="button"
                   :disabled="!slot.available"
-                  :class="[
-                    'py-4 px-3 rounded-2xl text-sm  font-medium text-center border transition-all duration-300 relative overflow-hidden flex items-center justify-center',
+                  :aria-pressed="
+                    isMultipleSlotEnabled
+                      ? selectedSlots.some((s) => s.id === slot.id)
+                      : selectedSlot?.id === slot.id
+                  "
+                  class="h-11 rounded-lg border text-sm font-medium tabular-nums transition-colors"
+                  :class="
                     !slot.available
-                      ? 'bg-gray-50 text-gray-300 border-transparent cursor-not-allowed'
+                      ? 'cursor-not-allowed border-transparent bg-gray-50 text-gray-300 line-through'
                       : (
                             isMultipleSlotEnabled
                               ? selectedSlots.some((s) => s.id === slot.id)
                               : selectedSlot?.id === slot.id
                           )
-                        ? 'bg-gray-900 text-white border-gray-900 shadow-lg'
-                        : 'bg-white text-gray-600 border-gray-200 hover:border-gray-900 hover:text-gray-900',
-                  ]"
+                        ? 'border-gray-900 bg-gray-900 text-white'
+                        : 'border-gray-200 bg-white text-gray-900 hover:border-gray-400'
+                  "
+                  @click="selectSlot(slot)"
                 >
-                  <span class="font-bold text-sm"
-                    >{{ slot.start }} - {{ slot.end }}</span
-                  >
-
-                  <div
-                    v-if="
-                      isMultipleSlotEnabled
-                        ? selectedSlots.some((s) => s.id === slot.id)
-                        : selectedSlot?.id === slot.id
-                    "
-                    class="absolute inset-0 bg-white/10"
-                  ></div>
+                  {{ slot.start }} - {{ slot.end }}
                 </button>
               </div>
 
-              <!-- No Slots Available -->
-              <div
+              <p
                 v-else-if="selectedDate && !loadingSlots"
-                class="text-center py-8 text-gray-500 text-sm"
+                class="py-8 text-center text-sm text-gray-500"
               >
                 {{
                   t("noSlotsAvailable") ||
                   "Tiada slot tersedia untuk tarikh ini"
                 }}
-              </div>
-            </div>
+              </p>
+            </section>
           </div>
 
           <!-- Step 3: Pax & Addons -->
           <div v-else-if="currentStep === 3" :key="3" class="space-y-8">
-            <!-- Main Header -->
-            <div class="space-y-1 mt-5">
-              <h2 class="text-xl sm:text-2xl font-bold tracking-tight">
-                {{ t("paxAndAddons") }}
-              </h2>
-              <p class="text-gray-500 font-light">
-                {{ t("paxAndAddonsDescription") }}
-              </p>
-            </div>
+            <p class="text-sm text-gray-500">
+              {{ t("paxAndAddonsDescription") }}
+            </p>
 
             <!-- Multi-slot Pax/Addon Note -->
             <div
@@ -4181,88 +3686,71 @@ watch(
                 isMultipleSlotEnabled &&
                 (confirmedSlots.length > 1 || selectedSlots.length > 1)
               "
-              class="bg-blue-50 border border-blue-100 rounded-2xl p-4 flex items-start gap-3"
+              class="flex items-start gap-2 rounded-lg bg-gray-50 px-3 py-2.5 text-sm text-gray-600"
             >
-              <Info class="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
-              <p class="text-sm text-blue-700 leading-relaxed">
-                {{ t("multiSlotPaxAddonNote") }}
-              </p>
+              <Info class="mt-0.5 h-4 w-4 shrink-0 text-gray-400" />
+              <p>{{ t("multiSlotPaxAddonNote") }}</p>
             </div>
 
-            <!-- Pax Counter Card -->
-            <div
-              class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden"
-            >
-              <!-- Top Section -->
-              <div class="p-3 flex items-center justify-between">
-                <!-- Left: Label -->
-                <div class="flex items-center gap-4">
-                  <div
-                    class="w-12 h-12 rounded-full bg-gray-50 flex items-center justify-center"
-                  >
-                    <Users class="w-6 h-6 text-gray-900" />
-                  </div>
-                  <div>
-                    <h3 class="font-bold text-lg text-gray-900">
-                      {{ t("paxCount") }}
-                    </h3>
-                    <p class="text-gray-400 text-sm">
-                      {{ t("totalPaxPresent") }}
-                    </p>
-                  </div>
+            <!-- Pax -->
+            <section class="border-y border-gray-100">
+              <div class="flex items-center justify-between gap-4 py-4">
+                <div>
+                  <h2 class="text-base font-medium text-gray-900">
+                    {{ t("paxCount") }}
+                  </h2>
+                  <p class="text-sm text-gray-500">
+                    {{ t("totalPaxPresent") }}
+                  </p>
                 </div>
 
-                <!-- Right: Counter -->
-                <div class="flex items-center gap-6">
+                <div class="flex items-center gap-3">
                   <button
-                    @click="paxCount > 1 ? paxCount-- : null"
-                    class="w-10 h-10 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:border-gray-900 hover:text-gray-900 transition-colors disabled:opacity-30 disabled:hover:border-gray-200"
+                    type="button"
+                    class="flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 text-gray-700 transition-colors hover:border-gray-400 disabled:opacity-30"
                     :disabled="paxCount <= 1"
+                    :aria-label="`${t('paxCount')} -1`"
+                    @click="paxCount > 1 ? paxCount-- : null"
                   >
-                    <Minus class="w-5 h-5" />
+                    <Minus class="h-4 w-4" />
                   </button>
-
-                  <span class="text-2xl font-bold w-6 text-center">{{
-                    paxCount
-                  }}</span>
-
+                  <span class="w-6 text-center text-lg font-medium tabular-nums">
+                    {{ paxCount }}
+                  </span>
                   <button
-                    @click="paxCount < maxPax ? paxCount++ : null"
-                    class="w-10 h-10 rounded-full bg-gray-900 flex items-center justify-center text-white hover:bg-black transition-colors disabled:opacity-50"
+                    type="button"
+                    class="flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 text-gray-700 transition-colors hover:border-gray-400 disabled:opacity-30"
                     :disabled="paxCount >= maxPax"
+                    :aria-label="`${t('paxCount')} +1`"
+                    @click="paxCount < maxPax ? paxCount++ : null"
                   >
-                    <Plus class="w-5 h-5" />
+                    <Plus class="h-4 w-4" />
                   </button>
                 </div>
               </div>
 
-              <!-- Bottom Section: Extra Pax Summary -->
               <div
                 v-if="extraPaxCost > 0"
-                class="bg-gray-50/50 border-t border-gray-100 px-6 py-4 flex items-center justify-between"
+                class="flex items-center justify-between border-t border-gray-100 py-3 text-sm"
               >
-                <div
-                  class="flex items-center gap-2 text-orange-600 font-medium"
-                >
-                  <Plus class="w-4 h-4" />
-                  <span
-                    >{{ paxCount - (selectedTheme!.base_pax || 0) }}
-                    {{ t("extraPaxLabel") }} (RM{{
-                      formatPriceWhole(selectedTheme.extra_pax_price)
-                    }}/head)</span
-                  >
-                </div>
-                <span class="font-bold text-gray-900"
-                  >+ RM{{ formatPriceWhole(extraPaxCost) }}</span
-                >
+                <span class="text-gray-500">
+                  {{ paxCount - (selectedTheme!.base_pax || 0) }}
+                  {{ t("extraPaxLabel") }} · RM{{
+                    formatPriceWhole(selectedTheme.extra_pax_price)
+                  }}/pax
+                </span>
+                <span class="font-medium tabular-nums text-gray-900">
+                  +RM{{ formatPriceWhole(extraPaxCost) }}
+                </span>
               </div>
-            </div>
+            </section>
 
-            <!-- Addons Section -->
-            <div class="space-y-6">
-              <h3 class="font-bold text-xl text-gray-900">
-                Tambahan (Add-ons)
-              </h3>
+            <!-- Addons -->
+            <section class="space-y-3">
+              <h2 class="text-base font-medium text-gray-900">
+                {{ t("addOns") }}
+                <span class="font-normal text-gray-400">· {{ t("optional") }}</span>
+              </h2>
 
               <!-- Multi-slot: Addons apply to all or first slot only -->
               <div
@@ -4272,261 +3760,166 @@ watch(
                   studioStore.addons &&
                   studioStore.addons.length > 0
                 "
-                class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden"
+                class="space-y-2"
               >
-                <div class="p-4 sm:p-5">
-                  <p class="text-sm text-gray-500 font-medium mb-3">
-                    {{ t("addonsApplyToLabel") }}
-                  </p>
-                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <label
-                      class="flex items-center gap-3 p-4 rounded-2xl border transition-all cursor-pointer select-none hover:shadow-sm"
+                <p class="text-sm text-gray-500">
+                  {{ t("addonsApplyToLabel") }}
+                </p>
+                <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <label
+                    v-for="option in (['all', 'firstOnly'] as const)"
+                    :key="option"
+                    class="flex cursor-pointer select-none items-center gap-3 rounded-lg border px-3 py-3 text-sm transition-colors"
+                    :class="
+                      addonsApplyTo === option
+                        ? 'border-gray-900 text-gray-900'
+                        : 'border-gray-200 text-gray-600 hover:border-gray-400'
+                    "
+                  >
+                    <input
+                      v-model="addonsApplyTo"
+                      type="radio"
+                      :value="option"
+                      class="sr-only"
+                    />
+                    <span
+                      class="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border"
                       :class="
-                        addonsApplyTo === 'all'
-                          ? 'border-gray-900 bg-gray-50/50'
-                          : 'border-gray-100 hover:border-gray-200'
+                        addonsApplyTo === option
+                          ? 'border-gray-900 bg-gray-900'
+                          : 'border-gray-300'
                       "
                     >
-                      <input
-                        v-model="addonsApplyTo"
-                        type="radio"
-                        value="all"
-                        class="sr-only"
+                      <span
+                        v-if="addonsApplyTo === option"
+                        class="h-1.5 w-1.5 rounded-full bg-white"
                       />
-                      <span
-                        class="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors"
-                        :class="
-                          addonsApplyTo === 'all'
-                            ? 'border-gray-900 bg-gray-900'
-                            : 'border-gray-300'
-                        "
-                      >
-                        <Check
-                          v-if="addonsApplyTo === 'all'"
-                          class="w-3 h-3 text-white"
-                        />
-                      </span>
-                      <span
-                        class="font-medium text-gray-900"
-                        :class="addonsApplyTo === 'all' ? '' : 'text-gray-600'"
-                      >
-                        {{ t("addonsApplyToAllSlots") }}
-                      </span>
-                    </label>
-                    <label
-                      class="flex items-center gap-3 p-4 rounded-2xl border transition-all cursor-pointer select-none hover:shadow-sm"
-                      :class="
-                        addonsApplyTo === 'firstOnly'
-                          ? 'border-gray-900 bg-gray-50/50'
-                          : 'border-gray-100 hover:border-gray-200'
-                      "
-                    >
-                      <input
-                        v-model="addonsApplyTo"
-                        type="radio"
-                        value="firstOnly"
-                        class="sr-only"
-                      />
-                      <span
-                        class="w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors"
-                        :class="
-                          addonsApplyTo === 'firstOnly'
-                            ? 'border-gray-900 bg-gray-900'
-                            : 'border-gray-300'
-                        "
-                      >
-                        <Check
-                          v-if="addonsApplyTo === 'firstOnly'"
-                          class="w-3 h-3 text-white"
-                        />
-                      </span>
-                      <span
-                        class="font-medium"
-                        :class="
-                          addonsApplyTo === 'firstOnly'
-                            ? 'text-gray-900'
-                            : 'text-gray-600'
-                        "
-                      >
-                        {{ t("addonsApplyToFirstSlotOnly") }}
-                      </span>
-                    </label>
-                  </div>
+                    </span>
+                    {{
+                      option === "all"
+                        ? t("addonsApplyToAllSlots")
+                        : t("addonsApplyToFirstSlotOnly")
+                    }}
+                  </label>
                 </div>
-                <div
-                  class="bg-gray-50/50 border-t border-gray-100 px-4 sm:px-5 py-3"
-                >
-                  <p class="text-xs text-gray-500 leading-relaxed">
-                    {{ t("addonsApplyToFirstSlotOnlyHint") }}
-                  </p>
-                </div>
+                <p class="text-xs text-gray-500">
+                  {{ t("addonsApplyToFirstSlotOnlyHint") }}
+                </p>
               </div>
 
-              <!-- Addons List -->
-              <div class="space-y-4">
-                <!-- Empty State -->
-                <div
-                  v-if="!studioStore.addons || studioStore.addons.length === 0"
-                  class="bg-gray-50 border border-dashed border-gray-200 rounded-2xl p-8 text-center"
-                >
-                  <p class="text-gray-500">
-                    {{ t("noAddonsAvailable") }}
-                  </p>
-                </div>
+              <p
+                v-if="!studioStore.addons || studioStore.addons.length === 0"
+                class="py-6 text-center text-sm text-gray-500"
+              >
+                {{ t("noAddonsAvailable") }}
+              </p>
 
-                <div
+              <ul
+                v-else
+                class="divide-y divide-gray-100 border-y border-gray-100"
+              >
+                <li
                   v-for="addon in studioStore.addons"
                   :key="addon.id"
-                  class="bg-white p-4 rounded-2xl border transition-all hover:shadow-sm"
-                  :class="
-                    selectedAddons[addon.id]
-                      ? 'border-gray-900 bg-gray-50/50'
-                      : 'border-gray-100'
-                  "
+                  class="flex items-center gap-4 py-4"
                 >
-                  <div class="flex gap-4">
-                    <!-- Image -->
-                    <div
-                      class="group/image relative w-20 h-20 rounded-xl bg-gray-100 flex-shrink-0 overflow-hidden"
-                      :class="addon.image ? 'cursor-zoom-in' : ''"
-                      @click.stop="openAddonImage(addon)"
+                  <button
+                    type="button"
+                    class="h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-gray-100"
+                    :class="addon.image ? 'cursor-zoom-in' : 'cursor-default'"
+                    :aria-label="addon.name"
+                    @click.stop="openAddonImage(addon)"
+                  >
+                    <img
+                      v-if="addon.image"
+                      :src="addon.image"
+                      :alt="addon.name"
+                      class="h-full w-full object-cover"
+                    />
+                    <span
+                      v-else
+                      class="flex h-full w-full items-center justify-center text-gray-300"
                     >
-                      <img
-                        v-if="addon.image"
-                        :src="addon.image"
-                        :alt="addon.name"
-                        class="w-full h-full object-cover"
-                      />
-                      <div
-                        v-else
-                        class="w-full h-full flex items-center justify-center text-gray-300"
+                      <ImageIcon class="h-5 w-5" />
+                    </span>
+                  </button>
+
+                  <div class="min-w-0 flex-1">
+                    <p class="text-sm font-medium text-gray-900">
+                      {{ addon.name }}
+                    </p>
+                    <p
+                      v-if="addon.description"
+                      class="mt-0.5 cursor-pointer text-xs text-gray-500"
+                      :class="expandedAddonDesc[addon.id] ? '' : 'line-clamp-1'"
+                      @click="
+                        expandedAddonDesc[addon.id] =
+                          !expandedAddonDesc[addon.id]
+                      "
+                    >
+                      {{ addon.description }}
+                    </p>
+                    <p class="mt-1 text-sm tabular-nums text-gray-900">
+                      RM{{ formatPriceWhole(addon.price) }}
+                    </p>
+                  </div>
+
+                  <div class="shrink-0">
+                    <button
+                      v-if="!selectedAddons[addon.id]"
+                      type="button"
+                      class="flex h-9 items-center gap-1 rounded-full border border-gray-200 px-3 text-sm text-gray-900 transition-colors hover:border-gray-400"
+                      @click="selectedAddons[addon.id] = 1"
+                    >
+                      <Plus class="h-3.5 w-3.5" /> {{ t("add") }}
+                    </button>
+
+                    <button
+                      v-else-if="addon.addon_type === 'single'"
+                      type="button"
+                      class="flex h-9 items-center gap-1 rounded-full bg-gray-900 px-3 text-sm text-white"
+                      @click="delete selectedAddons[addon.id]"
+                    >
+                      <Check class="h-3.5 w-3.5" /> {{ t("added") }}
+                    </button>
+
+                    <div
+                      v-else
+                      class="flex items-center gap-2 rounded-full border border-gray-200 px-1"
+                    >
+                      <button
+                        type="button"
+                        class="flex h-8 w-8 items-center justify-center rounded-full text-gray-700 hover:bg-gray-100"
+                        @click="
+                          selectedAddons[addon.id] > 0
+                            ? selectedAddons[addon.id]--
+                            : null;
+                          if (selectedAddons[addon.id] === 0)
+                            delete selectedAddons[addon.id];
+                        "
                       >
-                        <ImageIcon class="w-6 h-6" />
-                      </div>
-
-                      <!-- Hover Overlay -->
-                      <div
-                        v-if="addon.image"
-                        class="absolute inset-0 bg-black/10 opacity-0 group-hover/image:opacity-100 flex items-center justify-center transition-all duration-300"
+                        <Minus class="h-3.5 w-3.5" />
+                      </button>
+                      <span class="w-4 text-center text-sm font-medium tabular-nums">
+                        {{ selectedAddons[addon.id] }}
+                      </span>
+                      <button
+                        type="button"
+                        class="flex h-8 w-8 items-center justify-center rounded-full text-gray-700 hover:bg-gray-100 disabled:opacity-30"
+                        :disabled="
+                          !!addon.max_quantity &&
+                          addon.max_quantity > 0 &&
+                          selectedAddons[addon.id] >= addon.max_quantity
+                        "
+                        @click="selectedAddons[addon.id]++"
                       >
-                        <div
-                          class="bg-white/90 p-1.5 rounded-full shadow-sm backdrop-blur-sm transform scale-75 group-hover/image:scale-100 transition-all duration-300"
-                        >
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="16"
-                            height="16"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            class="w-3.5 h-3.5 text-gray-900"
-                          >
-                            <polyline points="15 3 21 3 21 9" />
-                            <polyline points="9 21 3 21 3 15" />
-                            <line x1="21" x2="14" y1="3" y2="10" />
-                            <line x1="3" x2="10" y1="21" y2="14" />
-                          </svg>
-                        </div>
-                      </div>
-                    </div>
-
-                    <!-- Content & Actions -->
-                    <div class="flex-1 min-w-0 flex flex-col justify-between">
-                      <!-- Top Row: Name + Price -->
-                      <div class="flex items-start justify-between gap-2">
-                        <div class="flex-1 min-w-0">
-                          <h4 class="font-bold text-gray-900 leading-tight">
-                            {{ addon.name }}
-                          </h4>
-                          <p
-                            v-if="addon.description"
-                            class="text-xs text-gray-500 mt-0.5 cursor-pointer hover:text-gray-700"
-                            :class="
-                              expandedAddonDesc[addon.id] ? '' : 'line-clamp-1'
-                            "
-                            @click="
-                              expandedAddonDesc[addon.id] =
-                                !expandedAddonDesc[addon.id]
-                            "
-                          >
-                            {{ addon.description }}
-                          </p>
-                        </div>
-                        <span
-                          class="bg-gray-100 px-2 py-1 rounded text-xs font-bold text-gray-900 flex-shrink-0"
-                          >RM{{ formatPriceWhole(addon.price) }}</span
-                        >
-                      </div>
-
-                      <!-- Bottom Row: Actions -->
-                      <div class="flex justify-end items-center gap-2 mt-2">
-                        <!-- Added indicator -->
-                        <span
-                          v-if="selectedAddons[addon.id]"
-                          class="bg-gray-900 text-white px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider"
-                          >{{ t("added") }}</span
-                        >
-
-                        <button
-                          v-if="!selectedAddons[addon.id]"
-                          @click="selectedAddons[addon.id] = 1"
-                          class="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-bold hover:bg-gray-50 transition-colors flex items-center gap-1.5"
-                        >
-                          <Plus class="w-3.5 h-3.5" /> {{ t("add") }}
-                        </button>
-
-                        <div
-                          v-else
-                          class="flex items-center gap-3 bg-gray-100 rounded-lg px-2 py-1"
-                        >
-                          <!-- If addon_type is 'single', show a simple Remove button -->
-                          <button
-                            v-if="addon.addon_type === 'single'"
-                            @click="delete selectedAddons[addon.id]"
-                            class="px-2 py-1 text-xs font-bold text-red-500 hover:text-red-700 flex items-center gap-1"
-                          >
-                            <Trash2 class="w-3.5 h-3.5" /> Remove
-                          </button>
-
-                          <!-- Else show the quantity counter -->
-                          <template v-else>
-                            <button
-                              @click="
-                                selectedAddons[addon.id] > 0
-                                  ? selectedAddons[addon.id]--
-                                  : null;
-                                if (selectedAddons[addon.id] === 0)
-                                  delete selectedAddons[addon.id];
-                              "
-                              class="w-7 h-7 flex items-center justify-center text-gray-500 hover:text-gray-900 rounded-full hover:bg-white"
-                            >
-                              <Minus class="w-3.5 h-3.5" />
-                            </button>
-                            <span class="font-bold w-4 text-center text-sm">{{
-                              selectedAddons[addon.id]
-                            }}</span>
-                            <button
-                              @click="selectedAddons[addon.id]++"
-                              class="w-7 h-7 flex items-center justify-center text-gray-500 hover:text-gray-900 rounded-full hover:bg-white"
-                              :disabled="
-                                addon.max_quantity &&
-                                addon.max_quantity > 0 &&
-                                selectedAddons[addon.id] >= addon.max_quantity
-                              "
-                            >
-                              <Plus class="w-3.5 h-3.5" />
-                            </button>
-                          </template>
-                        </div>
-                      </div>
+                        <Plus class="h-3.5 w-3.5" />
+                      </button>
                     </div>
                   </div>
-                </div>
-              </div>
-            </div>
+                </li>
+              </ul>
+            </section>
           </div>
 
           <!-- Step 4: Conditional - Cart Review (Cart Mode) or Customer Information (Single Mode) -->
@@ -4534,382 +3927,280 @@ watch(
           <div
             v-else-if="currentStep === 4 && isCartModeEnabled"
             :key="4.1"
-            class="space-y-8"
+            class="space-y-6"
           >
-            <div class="space-y-4">
-              <h2 class="text-xl sm:text-2xl font-bold">
-                {{ t("yourSessions") }}
-              </h2>
-              <!-- Empty Cart State -->
-              <div
-                v-if="cartItemCount === 0"
-                class="bg-white p-6 sm:p-8 rounded-3xl border border-gray-100 shadow-sm text-center"
-              >
-                <p class="text-gray-500">
-                  {{ t("cartEmpty") }}
-                </p>
-                <button
-                  @click="addAnotherSession"
-                  class="mt-4 bg-gray-900 text-white px-6 py-3 rounded-xl font-bold uppercase tracking-widest text-xs hover:shadow-lg transition-all"
-                >
-                  {{ t("addSession") }}
-                </button>
-              </div>
-
-              <!-- Unified Cart Hold Timer (Subtle Style) -->
-              <div
-                v-if="unifiedCartHoldExpiresAt && cart.length > 0"
-                class="bg-orange-50 rounded-xl py-3 px-4 flex items-center justify-between border border-orange-100"
-              >
-                <div
-                  class="flex items-center gap-2 text-orange-800 font-bold text-xs uppercase tracking-wider"
-                >
-                  <Clock class="w-4 h-4 animate-pulse" />
-                  <span>{{ t("slotHeld") }}</span>
-                </div>
-                <div class="text-orange-700 font-mono font-bold text-sm">
-                  {{ unifiedCartHoldCountdown }}
-                </div>
-              </div>
-
-              <!-- Cart Items -->
-              <div
-                v-for="(item, index) in cart || []"
-                :key="item.id"
-                class="bg-white p-4 sm:p-5 rounded-3xl border border-gray-100 shadow-sm relative group"
-              >
-                <button
-                  @click="removeCartItem(index)"
-                  class="absolute top-4 right-4 p-2 rounded-full bg-gray-50 hover:bg-red-50 hover:text-red-600 transition-colors"
-                >
-                  <Trash2 class="w-4 h-4" />
-                </button>
-                <div class="pr-10">
-                  <h3 class="font-bold text-lg">
-                    {{ item.theme.name }}
-                  </h3>
-                  <!-- Theme & Slot Details -->
-                  <div class="text-sm text-gray-500 mt-2 space-y-1">
-                    <div class="flex items-center gap-2">
-                      <Calendar class="w-3.5 h-3.5" />
-                      <span class="font-medium text-gray-700">{{
-                        formatDate(item.date)
-                      }}</span>
-                    </div>
-                    <div class="flex items-center gap-2">
-                      <Clock class="w-3.5 h-3.5" />
-                      <span>{{ item.slot.start }} - {{ item.slot.end }}</span>
-                    </div>
-                  </div>
-
-                  <!-- Accordion Toggle Button -->
-                  <button
-                    @click="toggleCartItemExpansion(item.id)"
-                    class="mt-4 flex items-center gap-1 text-xs font-bold text-gray-900 border-b border-dashed border-gray-300 pb-0.5 hover:text-gray-600 hover:border-gray-400 transition-colors w-fit"
-                  >
-                    <span>{{
-                      expandedCartItems.has(item.id)
-                        ? t("hideDetails")
-                        : t("viewBreakdown")
-                    }}</span>
-                    <component
-                      :is="expandedCartItems.has(item.id) ? Minus : Plus"
-                      class="w-3 h-3"
-                    />
-                  </button>
-
-                  <!-- Expanded Pricing Breakdown -->
-                  <div
-                    v-if="expandedCartItems.has(item.id)"
-                    class="mt-4 pt-4 border-t border-dashed border-gray-100 space-y-2 text-sm bg-gray-50/50 p-4 rounded-xl animate-fade-in"
-                  >
-                    <!-- Base Price -->
-                    <div
-                      class="flex justify-between items-center text-gray-600"
-                    >
-                      <span
-                        >{{ t("setPrice") }} ({{
-                          item.theme.base_pax
-                        }}
-                        Pax)</span
-                      >
-                      <span
-                        >RM{{ formatPriceWhole(item.theme.base_price) }}</span
-                      >
-                    </div>
-
-                    <!-- Special Pricing -->
-                    <div
-                      v-if="item.specialPricing"
-                      class="flex justify-between items-center"
-                    >
-                      <div class="flex items-center gap-1.5 text-amber-700">
-                        <AlertCircle class="w-3 h-3" />
-                        <span>{{ item.specialPricing.message }}</span>
-                      </div>
-                      <span
-                        :class="
-                          item.specialPricing.amount > 0
-                            ? 'text-amber-700'
-                            : 'text-green-600'
-                        "
-                      >
-                        {{ item.specialPricing.amount > 0 ? "+" : "" }}RM{{
-                          formatPriceWhole(item.specialPricing.amount)
-                        }}
-                      </span>
-                    </div>
-
-                    <!-- Extra Pax -->
-                    <div
-                      v-if="
-                        Math.max(0, item.pax - (item.theme.base_pax || 0)) > 0
-                      "
-                      class="flex justify-between items-center text-gray-600"
-                    >
-                      <span
-                        >{{ t("extraPaxLabel") }} (x{{
-                          Math.max(0, item.pax - (item.theme.base_pax || 0))
-                        }})</span
-                      >
-                      <span
-                        >+RM{{
-                          formatPriceWhole(
-                            Math.max(0, item.pax - (item.theme.base_pax || 0)) *
-                              item.theme.extra_pax_price,
-                          )
-                        }}</span
-                      >
-                    </div>
-
-                    <!-- Addons -->
-                    <template v-for="(qty, id) in item.addons" :key="id">
-                      <div
-                        v-if="
-                          qty > 0 && studioStore.addons.find((a) => a.id === id)
-                        "
-                        class="flex justify-between items-center text-gray-600"
-                      >
-                        <span class="truncate pr-4"
-                          >{{
-                            studioStore.addons.find((a) => a.id === id).name
-                          }}
-                          (x{{ qty }})</span
-                        >
-                        <span
-                          >+RM{{
-                            formatPriceWhole(
-                              (studioStore.addons.find((a) => a.id === id)
-                                .price || 0) * qty,
-                            )
-                          }}</span
-                        >
-                      </div>
-                    </template>
-                  </div>
-
-                  <!-- Item Total -->
-                  <div
-                    class="mt-4 border-t border-gray-100 pt-3 flex justify-between items-center"
-                  >
-                    <span class="font-bold text-gray-900 text-sm">Total</span>
-                    <span class="font-bold text-lg text-gray-900"
-                      >RM{{ formatPriceWhole(item.total) }}</span
-                    >
-                  </div>
-                </div>
-              </div>
-
-              <!-- Add Another Session Button -->
+            <div
+              v-if="cartItemCount === 0"
+              class="space-y-4 py-10 text-center"
+            >
+              <p class="text-sm text-gray-500">{{ t("cartEmpty") }}</p>
               <button
+                type="button"
+                class="bk-cta-primary bk-cta-primary--inline"
                 @click="addAnotherSession"
-                class="w-full py-4 rounded-2xl border-2 border-dashed border-gray-300 text-gray-500 font-bold uppercase tracking-widest text-xs hover:border-gray-900 hover:text-gray-900 transition-all flex items-center justify-center gap-2"
               >
-                <Plus class="w-4 h-4" />
-                {{ t("addAnotherSession") }}
+                {{ t("addSession") }}
               </button>
             </div>
+
+            <div
+              v-if="unifiedCartHoldExpiresAt && cart.length > 0"
+              class="flex items-center justify-between rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-800"
+            >
+              <span class="flex items-center gap-2">
+                <Clock class="h-4 w-4" />
+                {{ t("slotHeld") }}
+              </span>
+              <span class="font-medium tabular-nums">
+                {{ unifiedCartHoldCountdown }}
+              </span>
+            </div>
+
+            <ul
+              v-if="cart && cart.length > 0"
+              class="divide-y divide-gray-100 border-y border-gray-100"
+            >
+              <li v-for="(item, index) in cart" :key="item.id" class="py-4">
+                <div class="flex items-start gap-3">
+                  <div class="min-w-0 flex-1">
+                    <p class="text-base font-medium text-gray-900">
+                      {{ item.theme.name }}
+                    </p>
+                    <p class="mt-0.5 text-sm text-gray-500">
+                      {{ formatDate(item.date) }} · {{ item.slot.start }} –
+                      {{ item.slot.end }}
+                    </p>
+                  </div>
+                  <p class="text-base font-medium tabular-nums text-gray-900">
+                    RM{{ formatPriceWhole(item.total) }}
+                  </p>
+                  <button
+                    type="button"
+                    class="-mr-2 -mt-1 flex h-9 w-9 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                    :aria-label="`${t('removeFromCart')}: ${item.theme.name}`"
+                    @click="removeCartItem(index)"
+                  >
+                    <Trash2 class="h-4 w-4" />
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  class="mt-2 flex items-center gap-1 text-sm text-gray-500 transition-colors hover:text-gray-900"
+                  :aria-expanded="expandedCartItems.has(item.id)"
+                  @click="toggleCartItemExpansion(item.id)"
+                >
+                  {{
+                    expandedCartItems.has(item.id)
+                      ? t("hideDetails")
+                      : t("viewBreakdown")
+                  }}
+                  <ChevronDown
+                    class="h-4 w-4 transition-transform"
+                    :class="expandedCartItems.has(item.id) ? 'rotate-180' : ''"
+                  />
+                </button>
+
+                <dl
+                  v-if="expandedCartItems.has(item.id)"
+                  class="mt-3 space-y-1.5 rounded-lg bg-gray-50 px-3 py-3 text-sm"
+                >
+                  <div class="flex justify-between gap-4 text-gray-600">
+                    <dt>{{ t("setPrice") }} ({{ item.theme.base_pax }} {{ t("pax") }})</dt>
+                    <dd class="tabular-nums">
+                      RM{{ formatPriceWhole(item.theme.base_price) }}
+                    </dd>
+                  </div>
+
+                  <div
+                    v-if="item.specialPricing"
+                    class="flex justify-between gap-4"
+                  >
+                    <dt class="text-amber-700">{{ item.specialPricing.message }}</dt>
+                    <dd
+                      class="tabular-nums"
+                      :class="
+                        item.specialPricing.amount > 0
+                          ? 'text-amber-700'
+                          : 'text-green-600'
+                      "
+                    >
+                      {{ item.specialPricing.amount > 0 ? "+" : "" }}RM{{
+                        formatPriceWhole(item.specialPricing.amount)
+                      }}
+                    </dd>
+                  </div>
+
+                  <div
+                    v-if="Math.max(0, item.pax - (item.theme.base_pax || 0)) > 0"
+                    class="flex justify-between gap-4 text-gray-600"
+                  >
+                    <dt>
+                      {{ t("extraPaxLabel") }} ×{{
+                        Math.max(0, item.pax - (item.theme.base_pax || 0))
+                      }}
+                    </dt>
+                    <dd class="tabular-nums">
+                      +RM{{
+                        formatPriceWhole(
+                          Math.max(0, item.pax - (item.theme.base_pax || 0)) *
+                            item.theme.extra_pax_price,
+                        )
+                      }}
+                    </dd>
+                  </div>
+
+                  <template v-for="(qty, id) in item.addons" :key="id">
+                    <div
+                      v-if="
+                        qty > 0 && studioStore.addons.find((a) => a.id === id)
+                      "
+                      class="flex justify-between gap-4 text-gray-600"
+                    >
+                      <dt class="truncate">
+                        {{ studioStore.addons.find((a) => a.id === id).name }}
+                        ×{{ qty }}
+                      </dt>
+                      <dd class="tabular-nums">
+                        +RM{{
+                          formatPriceWhole(
+                            (studioStore.addons.find((a) => a.id === id)
+                              .price || 0) * qty,
+                          )
+                        }}
+                      </dd>
+                    </div>
+                  </template>
+                </dl>
+              </li>
+            </ul>
+
+            <button
+              v-if="cartItemCount > 0"
+              type="button"
+              class="bk-cta-secondary w-full gap-2"
+              @click="addAnotherSession"
+            >
+              <Plus class="h-4 w-4" />
+              {{ t("addAnotherSession") }}
+            </button>
           </div>
 
           <!-- Single Mode: Customer Information -->
           <div
             v-else-if="currentStep === 4 && !isCartModeEnabled"
-            class="animate-fade-in"
+            class="space-y-6"
           >
-            <div class="space-y-8 px-2 mt-5">
-              <!-- Main Header -->
-              <div class="space-y-1">
-                <h2 class="text-xl sm:text-2xl font-bold tracking-tight">
-                  {{ t("customerInformation") }}
-                </h2>
-                <p class="text-gray-500 font-light">
-                  {{ t("fillDetailsNote") }}
+            <p class="text-sm text-gray-500">
+              {{ t("fillDetailsNote") }}
+            </p>
+
+            <div class="space-y-5">
+              <div class="space-y-1.5">
+                <label for="name" class="bk-label">
+                  {{ t("fullName") }}
+                </label>
+                <input
+                  id="name"
+                  v-model="customerInfo.name"
+                  type="text"
+                  required
+                  autocomplete="name"
+                  class="bk-input"
+                  :class="{ 'bk-input--error': formErrors.name }"
+                  :placeholder="t('enterFullName')"
+                  @blur="validateName"
+                  @input="formErrors.name = ''"
+                />
+                <p v-if="formErrors.name" class="text-xs text-red-600">
+                  {{ formErrors.name }}
                 </p>
               </div>
 
-              <div class="space-y-6">
-                <div class="relative group">
-                  <input
-                    type="text"
-                    v-model="customerInfo.name"
-                    @blur="validateName"
-                    @input="formErrors.name = ''"
-                    id="name"
-                    required
-                    class="peer w-full bg-transparent border-b-2 py-2.5 pt-4 outline-none text-lg transition-colors placeholder-transparent"
-                    :class="
-                      formErrors.name
-                        ? 'border-red-300 focus:border-red-500'
-                        : 'border-gray-200 focus:border-gray-900'
-                    "
-                    :placeholder="t('enterFullName')"
-                  />
-                  <label
-                    for="name"
-                    class="absolute left-0 -top-1 text-xs font-bold uppercase tracking-wider transition-all peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:font-normal peer-placeholder-shown:normal-case peer-focus:-top-1 peer-focus:text-xs peer-focus:font-bold peer-focus:uppercase"
-                    :class="
-                      formErrors.name
-                        ? 'text-red-600 peer-placeholder-shown:text-red-400'
-                        : 'text-gray-500 peer-placeholder-shown:text-gray-400 peer-focus:text-gray-900'
-                    "
-                  >
-                    {{ t("fullName") }}
-                  </label>
-                  <p v-if="formErrors.name" class="mt-1 text-xs text-red-500">
-                    {{ formErrors.name }}
-                  </p>
-                </div>
-
-                <div class="flex gap-3">
-                  <div class="relative w-24 group" ref="countryDropdownRef">
+              <div class="space-y-1.5">
+                <label for="phone" class="bk-label">
+                  {{ t("phoneNumber") }}
+                </label>
+                <div class="flex gap-2">
+                  <div ref="countryDropdownRef" class="relative w-28 shrink-0">
                     <button
                       type="button"
+                      class="bk-select"
+                      :aria-label="t('code') || 'Code'"
+                      :aria-expanded="isCountryDropdownOpen"
                       @click="toggleCountryDropdown"
-                      class="peer w-full bg-transparent border-b-2 py-2.5 pt-4 outline-none text-lg transition-colors border-gray-200 focus:border-gray-900 flex items-center justify-between gap-1"
                     >
-                      <span class="flex items-center gap-2">
+                      <span class="flex items-center gap-1.5">
                         <span>{{
                           countryCodes.find(
                             (c) => c.code === selectedCountryCode,
                           )?.flag
                         }}</span>
-                        <span>{{ selectedCountryCode }}</span>
+                        <span class="tabular-nums">{{ selectedCountryCode }}</span>
                       </span>
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        class="text-gray-400"
-                      >
-                        <path d="m6 9 6 6 6-6" />
-                      </svg>
+                      <ChevronDown class="h-4 w-4 text-gray-400" />
                     </button>
 
-                    <!-- Custom Dropdown Menu -->
                     <div
                       v-if="isCountryDropdownOpen"
-                      class="absolute top-full left-0 w-full bg-white border border-gray-100 shadow-xl rounded-b-xl z-50 overflow-hidden mt-1 animate-fade-in-up"
+                      class="absolute left-0 top-full z-50 mt-1 w-full overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg"
                     >
                       <button
                         v-for="country in countryCodes"
                         :key="country.code"
                         type="button"
+                        class="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-gray-700 transition-colors hover:bg-gray-50"
                         @click="selectCountry(country.code)"
-                        class="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 transition-colors border-b border-gray-50 last:border-0"
                       >
-                        <span class="text-xl">{{ country.flag }}</span>
-                        <span class="font-medium text-gray-700">{{
-                          country.code
-                        }}</span>
+                        <span>{{ country.flag }}</span>
+                        <span class="tabular-nums">{{ country.code }}</span>
                       </button>
                     </div>
-
-                    <label
-                      class="absolute left-0 -top-1 text-xs font-bold uppercase tracking-wider text-gray-500"
-                    >
-                      {{ t("code") || "Code" }}
-                    </label>
                   </div>
 
-                  <div class="relative group flex-1">
-                    <input
-                      type="tel"
-                      v-model="localPhone"
-                      @blur="validatePhone"
-                      @input="formErrors.phone = ''"
-                      id="phone"
-                      required
-                      class="peer w-full bg-transparent border-b-2 py-2.5 pt-4 outline-none text-lg transition-colors placeholder-transparent"
-                      :class="
-                        formErrors.phone
-                          ? 'border-red-300 focus:border-red-500'
-                          : 'border-gray-200 focus:border-gray-900'
-                      "
-                      :placeholder="t('enterPhone')"
-                    />
-                    <label
-                      for="phone"
-                      class="absolute left-0 -top-1 text-xs font-bold uppercase tracking-wider transition-all peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:font-normal peer-placeholder-shown:normal-case peer-focus:-top-1 peer-focus:text-xs peer-focus:font-bold peer-focus:uppercase"
-                      :class="
-                        formErrors.phone
-                          ? 'text-red-600 peer-placeholder-shown:text-red-400'
-                          : 'text-gray-500 peer-placeholder-shown:text-gray-400 peer-focus:text-gray-900'
-                      "
-                    >
-                      {{ t("phoneNumber") }}
-                    </label>
-                    <p
-                      v-if="formErrors.phone"
-                      class="mt-1 text-xs text-red-500"
-                    >
-                      {{ formErrors.phone }}
-                    </p>
-                    <p v-else class="mt-1 text-xs text-gray-500">
-                      {{ t("preferWhatsApp") }}
-                    </p>
-                  </div>
-                </div>
-
-                <div class="relative group">
                   <input
-                    type="email"
-                    v-model="customerInfo.email"
-                    @blur="validateEmail"
-                    @input="formErrors.email = ''"
-                    id="email"
+                    id="phone"
+                    v-model="localPhone"
+                    type="tel"
                     required
-                    class="peer w-full bg-transparent border-b-2 py-2.5 pt-4 outline-none text-lg transition-colors placeholder-transparent"
-                    :class="
-                      formErrors.email
-                        ? 'border-red-300 focus:border-red-500'
-                        : 'border-gray-200 focus:border-gray-900'
-                    "
-                    :placeholder="t('enterEmail')"
+                    autocomplete="tel-national"
+                    class="bk-input bk-input--flex"
+                    :class="{ 'bk-input--error': formErrors.phone }"
+                    :placeholder="t('enterPhone')"
+                    @blur="validatePhone"
+                    @input="formErrors.phone = ''"
                   />
-                  <label
-                    for="email"
-                    class="absolute left-0 -top-1 text-xs font-bold uppercase tracking-wider transition-all peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:font-normal peer-placeholder-shown:normal-case peer-focus:-top-1 peer-focus:text-xs peer-focus:font-bold peer-focus:uppercase"
-                    :class="
-                      formErrors.email
-                        ? 'text-red-600 peer-placeholder-shown:text-red-400'
-                        : 'text-gray-500 peer-placeholder-shown:text-gray-400 peer-focus:text-gray-900'
-                    "
-                  >
-                    {{ t("email") }}
-                  </label>
-                  <p v-if="formErrors.email" class="mt-1 text-xs text-red-500">
-                    {{ formErrors.email }}
-                  </p>
-                  <p v-else class="mt-1 text-xs text-gray-500">
-                    {{ t("emailConfirmationNote") }}
-                  </p>
                 </div>
+                <p v-if="formErrors.phone" class="text-xs text-red-600">
+                  {{ formErrors.phone }}
+                </p>
+                <p v-else class="bk-hint">
+                  {{ t("preferWhatsApp") }}
+                </p>
+              </div>
+
+              <div class="space-y-1.5">
+                <label for="email" class="bk-label">
+                  {{ t("email") }}
+                </label>
+                <input
+                  id="email"
+                  v-model="customerInfo.email"
+                  type="email"
+                  required
+                  autocomplete="email"
+                  class="bk-input"
+                  :class="{ 'bk-input--error': formErrors.email }"
+                  :placeholder="t('enterEmail')"
+                  @blur="validateEmail"
+                  @input="formErrors.email = ''"
+                />
+                <p v-if="formErrors.email" class="text-xs text-red-600">
+                  {{ formErrors.email }}
+                </p>
+                <p v-else class="bk-hint">
+                  {{ t("emailConfirmationNote") }}
+                </p>
               </div>
             </div>
           </div>
@@ -4918,181 +4209,118 @@ watch(
           <div
             v-else-if="currentStep === 5 && isCartModeEnabled"
             :key="5.1"
-            class="space-y-8 animate-fade-in"
+            class="space-y-6"
           >
-            <div class="space-y-6 px-2">
-              <div class="space-y-1">
-                <h2 class="text-xl sm:text-2xl font-bold tracking-tight">
-                  {{ t("customerInformation") }}
-                </h2>
-                <p class="text-gray-500 font-light">
-                  {{ t("fillDetailsNote") }}
+            <p class="text-sm text-gray-500">
+              {{ t("fillDetailsNote") }}
+            </p>
+
+            <div class="space-y-5">
+              <div class="space-y-1.5">
+                <label for="cart-name" class="bk-label">
+                  {{ t("fullName") }}
+                </label>
+                <input
+                  id="cart-name"
+                  v-model="customerInfo.name"
+                  type="text"
+                  required
+                  autocomplete="name"
+                  class="bk-input"
+                  :class="{ 'bk-input--error': formErrors.name }"
+                  :placeholder="t('enterFullName')"
+                  @blur="validateName"
+                  @input="formErrors.name = ''"
+                />
+                <p v-if="formErrors.name" class="text-xs text-red-600">
+                  {{ formErrors.name }}
                 </p>
               </div>
 
-              <div class="space-y-6 mt-5">
-                <div class="relative group">
-                  <input
-                    type="text"
-                    v-model="customerInfo.name"
-                    @blur="validateName"
-                    @input="formErrors.name = ''"
-                    id="cart-name"
-                    required
-                    class="peer w-full bg-transparent border-b-2 py-2.5 pt-4 outline-none text-lg transition-colors placeholder-transparent"
-                    :class="
-                      formErrors.name
-                        ? 'border-red-300 focus:border-red-500'
-                        : 'border-gray-200 focus:border-gray-900'
-                    "
-                    :placeholder="t('enterFullName')"
-                  />
-                  <label
-                    for="cart-name"
-                    class="absolute left-0 -top-1 text-xs font-bold uppercase tracking-wider transition-all peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:font-normal peer-placeholder-shown:normal-case peer-focus:-top-1 peer-focus:text-xs peer-focus:font-bold peer-focus:uppercase"
-                    :class="
-                      formErrors.name
-                        ? 'text-red-600 peer-placeholder-shown:text-red-400'
-                        : 'text-gray-500 peer-placeholder-shown:text-gray-400 peer-focus:text-gray-900'
-                    "
-                  >
-                    {{ t("fullName") }}
-                  </label>
-                  <p v-if="formErrors.name" class="mt-1 text-xs text-red-500">
-                    {{ formErrors.name }}
-                  </p>
-                </div>
-
-                <div class="flex gap-3">
-                  <div class="relative w-24 group" ref="countryDropdownRef">
+              <div class="space-y-1.5">
+                <label for="cart-phone" class="bk-label">
+                  {{ t("phoneNumber") }}
+                </label>
+                <div class="flex gap-2">
+                  <div ref="countryDropdownRef" class="relative w-28 shrink-0">
                     <button
                       type="button"
+                      class="bk-select"
+                      :aria-label="t('code') || 'Code'"
+                      :aria-expanded="isCountryDropdownOpen"
                       @click="toggleCountryDropdown"
-                      class="peer w-full bg-transparent border-b-2 py-2.5 pt-4 outline-none text-lg transition-colors border-gray-200 focus:border-gray-900 flex items-center justify-between gap-1"
                     >
-                      <span class="flex items-center gap-2">
+                      <span class="flex items-center gap-1.5">
                         <span>{{
                           countryCodes.find(
                             (c) => c.code === selectedCountryCode,
                           )?.flag
                         }}</span>
-                        <span>{{ selectedCountryCode }}</span>
+                        <span class="tabular-nums">{{ selectedCountryCode }}</span>
                       </span>
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        class="text-gray-400"
-                      >
-                        <path d="m6 9 6 6 6-6" />
-                      </svg>
+                      <ChevronDown class="h-4 w-4 text-gray-400" />
                     </button>
 
-                    <!-- Custom Dropdown Menu -->
                     <div
                       v-if="isCountryDropdownOpen"
-                      class="absolute top-full left-0 w-full bg-white border border-gray-100 shadow-xl rounded-b-xl z-50 overflow-hidden mt-1 animate-fade-in-up"
+                      class="absolute left-0 top-full z-50 mt-1 w-full overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg"
                     >
                       <button
                         v-for="country in countryCodes"
                         :key="country.code"
                         type="button"
+                        class="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm text-gray-700 transition-colors hover:bg-gray-50"
                         @click="selectCountry(country.code)"
-                        class="w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 transition-colors border-b border-gray-50 last:border-0"
                       >
-                        <span class="text-xl">{{ country.flag }}</span>
-                        <span class="font-medium text-gray-700">{{
-                          country.code
-                        }}</span>
+                        <span>{{ country.flag }}</span>
+                        <span class="tabular-nums">{{ country.code }}</span>
                       </button>
                     </div>
-
-                    <label
-                      class="absolute left-0 -top-1 text-xs font-bold uppercase tracking-wider text-gray-500"
-                    >
-                      {{ t("code") || "Code" }}
-                    </label>
                   </div>
 
-                  <div class="relative group flex-1">
-                    <input
-                      type="tel"
-                      v-model="localPhone"
-                      @blur="validatePhone"
-                      @input="formErrors.phone = ''"
-                      id="cart-phone"
-                      required
-                      class="peer w-full bg-transparent border-b-2 py-2.5 pt-4 outline-none text-lg transition-colors placeholder-transparent"
-                      :class="
-                        formErrors.phone
-                          ? 'border-red-300 focus:border-red-500'
-                          : 'border-gray-200 focus:border-gray-900'
-                      "
-                      :placeholder="t('enterPhone')"
-                    />
-                    <label
-                      for="cart-phone"
-                      class="absolute left-0 -top-1 text-xs font-bold uppercase tracking-wider transition-all peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:font-normal peer-placeholder-shown:normal-case peer-focus:-top-1 peer-focus:text-xs peer-focus:font-bold peer-focus:uppercase"
-                      :class="
-                        formErrors.phone
-                          ? 'text-red-600 peer-placeholder-shown:text-red-400'
-                          : 'text-gray-500 peer-placeholder-shown:text-gray-400 peer-focus:text-gray-900'
-                      "
-                    >
-                      {{ t("phoneNumber") }}
-                    </label>
-                    <p
-                      v-if="formErrors.phone"
-                      class="mt-1 text-xs text-red-500"
-                    >
-                      {{ formErrors.phone }}
-                    </p>
-                    <p v-else class="mt-1 text-xs text-gray-500">
-                      {{ t("preferWhatsApp") }}
-                    </p>
-                  </div>
-                </div>
-
-                <div class="relative group">
                   <input
-                    type="email"
-                    v-model="customerInfo.email"
-                    @blur="validateEmail"
-                    @input="formErrors.email = ''"
-                    id="cart-email"
+                    id="cart-phone"
+                    v-model="localPhone"
+                    type="tel"
                     required
-                    class="peer w-full bg-transparent border-b-2 py-2.5 pt-4 outline-none text-lg transition-colors placeholder-transparent"
-                    :class="
-                      formErrors.email
-                        ? 'border-red-300 focus:border-red-500'
-                        : 'border-gray-200 focus:border-gray-900'
-                    "
-                    :placeholder="t('enterEmail')"
+                    autocomplete="tel-national"
+                    class="bk-input bk-input--flex"
+                    :class="{ 'bk-input--error': formErrors.phone }"
+                    :placeholder="t('enterPhone')"
+                    @blur="validatePhone"
+                    @input="formErrors.phone = ''"
                   />
-                  <label
-                    for="cart-email"
-                    class="absolute left-0 -top-1 text-xs font-bold uppercase tracking-wider transition-all peer-placeholder-shown:top-4 peer-placeholder-shown:text-base peer-placeholder-shown:font-normal peer-placeholder-shown:normal-case peer-focus:-top-1 peer-focus:text-xs peer-focus:font-bold peer-focus:uppercase"
-                    :class="
-                      formErrors.email
-                        ? 'text-red-600 peer-placeholder-shown:text-red-400'
-                        : 'text-gray-500 peer-placeholder-shown:text-gray-400 peer-focus:text-gray-900'
-                    "
-                  >
-                    {{ t("email") }}
-                  </label>
-                  <p v-if="formErrors.email" class="mt-1 text-xs text-red-500">
-                    {{ formErrors.email }}
-                  </p>
-                  <p v-else class="mt-1 text-xs text-gray-500">
-                    {{ t("emailConfirmationNote") }}
-                  </p>
                 </div>
+                <p v-if="formErrors.phone" class="text-xs text-red-600">
+                  {{ formErrors.phone }}
+                </p>
+                <p v-else class="bk-hint">
+                  {{ t("preferWhatsApp") }}
+                </p>
+              </div>
+
+              <div class="space-y-1.5">
+                <label for="cart-email" class="bk-label">
+                  {{ t("email") }}
+                </label>
+                <input
+                  id="cart-email"
+                  v-model="customerInfo.email"
+                  type="email"
+                  required
+                  autocomplete="email"
+                  class="bk-input"
+                  :class="{ 'bk-input--error': formErrors.email }"
+                  :placeholder="t('enterEmail')"
+                  @blur="validateEmail"
+                  @input="formErrors.email = ''"
+                />
+                <p v-if="formErrors.email" class="text-xs text-red-600">
+                  {{ formErrors.email }}
+                </p>
+                <p v-else class="bk-hint">
+                  {{ t("emailConfirmationNote") }}
+                </p>
               </div>
             </div>
           </div>
@@ -5101,235 +4329,138 @@ watch(
           <!-- Cart Mode: Terms & Conditions -->
           <div
             v-else-if="currentStep === 6 && isCartModeEnabled"
-            class="space-y-6 animate-fade-in"
+            class="space-y-6"
           >
-            <div class="space-y-4">
-              <!-- <h3 class="font-bold text-lg sm:text-xl px-1">{{ t('termsAndConditions') }}</h3> -->
+            <div v-if="loadingTerms" class="flex justify-center py-10">
+              <Loader2 class="h-6 w-6 animate-spin text-gray-400" />
+            </div>
 
-              <!-- Scrollable Terms Container -->
-              <div
-                class="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-y-auto"
-              >
-                <div class="p-4 sm:p-6 space-y-6">
-                  <!-- Loading State -->
-                  <div v-if="loadingTerms" class="flex justify-center py-8">
-                    <Loader2 class="w-6 h-6 animate-spin text-gray-400" />
-                  </div>
+            <div
+              v-else-if="termsContent"
+              class="prose prose-sm max-w-none text-gray-700 prose-headings:font-medium prose-headings:text-gray-900"
+              v-html="sanitize(termsContentHtml)"
+            />
 
-                  <!-- Terms Content -->
-                  <div
-                    v-else-if="termsContent"
-                    class="prose prose-sm sm:prose max-w-none text-gray-700 space-y-4"
-                  >
-                    <h4 class="font-bold text-lg text-gray-900">
-                      {{ t("bookingTerms") || "Booking Terms" }}
-                    </h4>
+            <p v-else class="py-10 text-center text-sm text-gray-500">
+              {{
+                t("noTermsConfigured") ||
+                "Tiada terma dan syarat dikonfigurasi."
+              }}
+            </p>
 
-                    <div
-                      class="space-y-4 text-sm sm:text-base leading-relaxed"
-                      v-html="sanitize(termsContentHtml)"
-                    />
-                  </div>
-
-                  <!-- No Terms Configured Fallback -->
-                  <div v-else class="text-center py-8 text-gray-500">
-                    <p>
-                      {{
-                        t("noTermsConfigured") ||
-                        "Tiada terma dan syarat dikonfigurasi."
-                      }}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Custom Checkbox -->
-              <div
-                class="bg-gray-50 rounded-2xl p-4 sm:p-5 border border-gray-200 flex items-start gap-3 sm:gap-4 transition-all duration-300"
+            <label
+              class="flex cursor-pointer select-none items-start gap-3 border-t border-gray-100 pt-5"
+            >
+              <input v-model="termsAccepted" type="checkbox" class="peer sr-only" />
+              <span
+                class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-gray-900 peer-focus-visible:ring-offset-2"
                 :class="
                   termsAccepted
-                    ? 'border-gray-900 bg-gray-50/50'
-                    : 'hover:border-gray-300'
+                    ? 'border-gray-900 bg-gray-900'
+                    : 'border-gray-300 bg-white'
                 "
               >
-                <!-- Custom Checkbox Button -->
-                <button
-                  @click="termsAccepted = !termsAccepted"
-                  type="button"
-                  class="flex-shrink-0 w-6 h-6 sm:w-7 sm:h-7 rounded-lg border-2 flex items-center justify-center transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-2"
-                  :class="
-                    termsAccepted
-                      ? 'bg-gray-900 border-gray-900 shadow-md scale-105'
-                      : 'bg-white border-gray-300 hover:border-gray-400 active:scale-95'
-                  "
-                >
-                  <Check
-                    v-if="termsAccepted"
-                    class="w-4 h-4 sm:w-5 sm:h-5 text-white transition-all duration-200"
-                    :class="termsAccepted ? 'scale-100' : 'scale-0'"
-                  />
-                </button>
-
-                <!-- Label -->
-                <label
-                  @click="termsAccepted = !termsAccepted"
-                  class="flex-1 cursor-pointer select-none"
-                >
-                  <span
-                    class="block text-sm sm:text-base font-bold text-gray-900 mb-1"
-                  >
-                    {{ t("agreeToTerms") }}
-                  </span>
-                  <span
-                    class="block text-xs sm:text-sm text-gray-600 leading-relaxed"
-                  >
-                    {{
-                      t("termsAcceptanceNote") ||
-                      "Saya telah membaca dan memahami semua terma dan syarat di atas."
-                    }}
-                  </span>
-                </label>
-              </div>
-            </div>
+                <Check v-if="termsAccepted" class="h-3.5 w-3.5 text-white" />
+              </span>
+              <span class="min-w-0">
+                <span class="text-sm font-medium text-gray-900">
+                  {{ t("agreeToTerms") }}
+                </span>
+                <span class="mt-0.5 block text-sm text-gray-500">
+                  {{
+                    t("termsAcceptanceNote") ||
+                    "Saya telah membaca dan memahami semua terma dan syarat di atas."
+                  }}
+                </span>
+              </span>
+            </label>
           </div>
 
           <!-- Single Mode: Terms & Conditions -->
           <div
             v-else-if="currentStep === 5 && !isCartModeEnabled"
-            class="space-y-6 animate-fade-in"
+            class="space-y-6"
           >
-            <div class="space-y-4">
-              <!-- <h3 class="font-bold text-lg sm:text-xl px-1">{{ t('termsAndConditions') }}</h3> -->
+            <div v-if="loadingTerms" class="flex justify-center py-10">
+              <Loader2 class="h-6 w-6 animate-spin text-gray-400" />
+            </div>
 
-              <!-- Scrollable Terms Container -->
-              <div
-                class="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-y-auto"
-                style=""
-              >
-                <div class="p-4 sm:p-6 space-y-6">
-                  <!-- Loading State -->
-                  <div v-if="loadingTerms" class="flex justify-center py-8">
-                    <Loader2 class="w-6 h-6 animate-spin text-gray-400" />
-                  </div>
+            <div
+              v-else-if="termsContent"
+              class="prose prose-sm max-w-none text-gray-700 prose-headings:font-medium prose-headings:text-gray-900"
+              v-html="sanitize(termsContentHtml)"
+            />
 
-                  <!-- Terms Content -->
-                  <div
-                    v-else-if="termsContent"
-                    class="prose prose-sm sm:prose max-w-none text-gray-700 space-y-4"
-                  >
-                    <h4 class="font-bold text-lg text-gray-900">
-                      {{ t("bookingTerms") }}
-                    </h4>
+            <p v-else class="py-10 text-center text-sm text-gray-500">
+              {{
+                t("noTermsConfigured") ||
+                "Tiada terma dan syarat dikonfigurasi."
+              }}
+            </p>
 
-                    <div
-                      class="space-y-4 text-sm sm:text-base leading-relaxed"
-                      v-html="sanitize(termsContentHtml)"
-                    />
-                  </div>
-
-                  <!-- No Terms Configured Fallback -->
-                  <div v-else class="text-center py-8 text-gray-500">
-                    <p>
-                      {{
-                        t("noTermsConfigured") ||
-                        "Tiada terma dan syarat dikonfigurasi."
-                      }}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Custom Checkbox -->
-              <div
-                class="bg-gray-50 rounded-2xl p-4 sm:p-5 border border-gray-200 flex items-start gap-3 sm:gap-4 transition-all duration-300"
+            <label
+              class="flex cursor-pointer select-none items-start gap-3 border-t border-gray-100 pt-5"
+            >
+              <input v-model="termsAccepted" type="checkbox" class="peer sr-only" />
+              <span
+                class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-gray-900 peer-focus-visible:ring-offset-2"
                 :class="
                   termsAccepted
-                    ? 'border-gray-900 bg-gray-50/50'
-                    : 'hover:border-gray-300'
+                    ? 'border-gray-900 bg-gray-900'
+                    : 'border-gray-300 bg-white'
                 "
               >
-                <!-- Custom Checkbox Button -->
-                <button
-                  @click="termsAccepted = !termsAccepted"
-                  type="button"
-                  class="flex-shrink-0 w-6 h-6 sm:w-7 sm:h-7 rounded-lg border-2 flex items-center justify-center transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-gray-900 focus:ring-offset-2"
-                  :class="
-                    termsAccepted
-                      ? 'bg-gray-900 border-gray-900 shadow-md scale-105'
-                      : 'bg-white border-gray-300 hover:border-gray-400 active:scale-95'
-                  "
-                >
-                  <Check
-                    v-if="termsAccepted"
-                    class="w-4 h-4 sm:w-5 sm:h-5 text-white transition-all duration-200"
-                    :class="termsAccepted ? 'scale-100' : 'scale-0'"
-                  />
-                </button>
-
-                <!-- Label -->
-                <label
-                  @click="termsAccepted = !termsAccepted"
-                  class="flex-1 cursor-pointer select-none"
-                >
-                  <span
-                    class="block text-sm sm:text-base font-bold text-gray-900 mb-1"
-                  >
-                    {{ t("agreeToTerms") }}
-                  </span>
-                  <span
-                    class="block text-xs sm:text-sm text-gray-600 leading-relaxed"
-                  >
-                    {{
-                      t("termsAcceptanceNote") ||
-                      "Saya telah membaca dan memahami semua terma dan syarat di atas."
-                    }}
-                  </span>
-                </label>
-              </div>
-            </div>
+                <Check v-if="termsAccepted" class="h-3.5 w-3.5 text-white" />
+              </span>
+              <span class="min-w-0">
+                <span class="text-sm font-medium text-gray-900">
+                  {{ t("agreeToTerms") }}
+                </span>
+                <span class="mt-0.5 block text-sm text-gray-500">
+                  {{
+                    t("termsAcceptanceNote") ||
+                    "Saya telah membaca dan memahami semua terma dan syarat di atas."
+                  }}
+                </span>
+              </span>
+            </label>
           </div>
 
           <!-- Step 7: Summary (Cart Mode) -->
           <div
             v-else-if="currentStep === 7 && isCartModeEnabled"
-            class="space-y-8 animate-fade-in"
+            class="space-y-6"
           >
-            <!-- Header -->
-            <div class="mb-5">
-              <h2 class="text-xl sm:text-2xl font-bold tracking-tight">
-                {{ t("bookingSummary") }}
-              </h2>
-              <p class="text-gray-500 text-xs font-light">
-                {{ t("bookingSummaryDescription") }}
-              </p>
-            </div>
+            <p class="text-sm text-gray-500">
+              {{ t("bookingSummaryDescription") }}
+            </p>
 
             <!-- Unified Cart Hold Timer (Subtle Style) -->
             <div
               v-if="unifiedCartHoldExpiresAt && cart.length > 0"
-              class="bg-orange-50 rounded-xl py-3 px-4 flex items-center justify-between border border-orange-100"
+              class="flex items-center justify-between rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-800"
             >
               <div
-                class="flex items-center gap-2 text-orange-800 font-bold text-xs uppercase tracking-wider"
+                class="flex items-center gap-2"
               >
-                <Clock class="w-4 h-4 animate-pulse" />
+                <Clock class="h-4 w-4" />
                 <span>{{ t("slotHeld") }}</span>
               </div>
-              <div class="text-orange-700 font-mono font-bold text-sm">
+              <div class="font-medium tabular-nums">
                 {{ unifiedCartHoldCountdown }}
               </div>
             </div>
 
             <!-- Booking Summary Card -->
             <div
-              class="bg-white rounded-3xl shadow-lg shadow-gray-200/50 border border-gray-100 overflow-hidden"
+              class="border-y border-gray-100"
             >
               <!-- Card Header: Customer Info (Matches Step 6) -->
               <div
-                class="bg-gray-50/80 p-4 sm:p-6 flex justify-between items-start border-b border-gray-100"
+                class="flex items-start justify-between gap-3 border-b border-gray-100 py-4"
               >
                 <div>
-                  <h3 class="font-bold text-lg text-gray-900">
+                  <h3 class="text-base font-medium text-gray-900">
                     {{ customerInfo.name }}
                   </h3>
                   <div
@@ -5346,14 +4477,16 @@ watch(
                 </div>
                 <button
                   @click="currentStep = 5"
-                  class="w-10 h-10 rounded-full bg-white border border-gray-200 flex items-center justify-center hover:bg-gray-50 transition-colors shadow-sm"
+                  type="button"
+                  :aria-label="t('customerInformation')"
+                  class="-mr-2 flex h-9 w-9 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900"
                 >
-                  <Pencil class="w-4 h-4 text-gray-900" />
+                  <Pencil class="h-4 w-4" />
                 </button>
               </div>
 
               <!-- Cart Items Content -->
-              <div class="p-4 sm:p-6">
+              <div class="py-5">
                 <div class="space-y-8">
                   <!-- Iterate over cart items -->
                   <div
@@ -5364,7 +4497,7 @@ watch(
                     <!-- Item Header -->
                     <div class="flex justify-between items-start mb-1">
                       <div class="flex items-center gap-2">
-                        <h4 class="font-bold text-lg text-gray-900">
+                        <h4 class="text-base font-medium text-gray-900">
                           {{ item.theme.name }}
                         </h4>
                         <!-- Coupon Applied Badge -->
@@ -5390,7 +4523,7 @@ watch(
                           {{ t("notEligible") }}
                         </span>
                       </div>
-                      <span class="font-bold text-lg text-gray-900">
+                      <span class="text-base font-medium text-gray-900">
                         RM{{ formatPriceWhole(item.theme.base_price) }}
                       </span>
                     </div>
@@ -5426,7 +4559,7 @@ watch(
                           item.specialPricing.message
                         }}</span>
                         <span
-                          class="font-bold"
+                          class="font-medium"
                           :class="
                             item.specialPricing.amount > 0
                               ? 'text-gray-900'
@@ -5453,7 +4586,7 @@ watch(
                             Math.max(0, item.pax - (item.theme.base_pax || 0))
                           }})</span
                         >
-                        <span class="font-bold text-gray-900">
+                        <span class="font-medium text-gray-900">
                           +RM{{
                             formatPriceWhole(
                               Math.max(
@@ -5480,7 +4613,7 @@ watch(
                             }}
                             (x{{ qty }})
                           </span>
-                          <span class="font-bold text-gray-900">
+                          <span class="font-medium text-gray-900">
                             +RM{{
                               formatPriceWhole(
                                 (studioStore.addons.find((a) => a.id === id)
@@ -5499,7 +4632,7 @@ watch(
                         isCartItemEligibleForCoupon(index) &&
                         getCartItemDiscount(index) > 0
                       "
-                      class="mt-3 pt-3 border-t border-dashed border-green-100 flex justify-between items-center bg-green-50/50 -mx-2 px-2 py-2 rounded-lg"
+                      class="mt-3 pt-3 border-t border-green-100 flex justify-between items-center bg-green-50/50 -mx-2 px-2 py-2 rounded-lg"
                     >
                       <span
                         class="text-xs font-medium text-green-700 flex items-center gap-1"
@@ -5507,7 +4640,7 @@ watch(
                         <Ticket class="w-3 h-3" />
                         {{ t("discountApplied") }} ({{ validatedCoupon.code }})
                       </span>
-                      <span class="font-bold text-green-600 text-sm"
+                      <span class="font-medium text-green-600 text-sm"
                         >-RM{{
                           formatPriceWhole(getCartItemDiscount(index))
                         }}</span
@@ -5516,13 +4649,13 @@ watch(
 
                     <!-- Item Total Row -->
                     <div
-                      class="mt-4 pt-4 border-t border-dashed border-gray-100 flex justify-between items-center"
+                      class="mt-4 pt-4 border-t border-gray-100 flex justify-between items-center"
                     >
                       <span
-                        class="text-xs font-bold uppercase tracking-wider text-gray-400"
+                        class="text-sm text-gray-500"
                         >{{ t("total") || "Total" }}</span
                       >
-                      <span class="font-bold text-gray-900"
+                      <span class="font-medium text-gray-900"
                         >RM{{
                           formatPriceWhole(
                             item.total - getCartItemDiscount(index),
@@ -5540,7 +4673,7 @@ watch(
                 </div>
 
                 <!-- Separator -->
-                <div class="border-t border-dashed border-gray-200 my-6"></div>
+                <div class="border-t border-gray-100 my-6"></div>
 
                 <!-- Coupon Section (Matches Step 6) -->
                 <div>
@@ -5549,31 +4682,32 @@ watch(
                       type="text"
                       v-model="couponCode"
                       :placeholder="t('haveCoupon')"
-                      class="flex-1 px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:border-gray-900 focus:ring-0 text-sm transition-colors"
+                      class="bk-input bk-input--flex"
                       @keydown.enter.prevent="handleApplyCoupon"
                     />
                     <button
                       @click="handleApplyCoupon"
                       :disabled="!couponCode.trim() || isValidatingCoupon"
-                      class="px-6 py-3 bg-gray-900 text-white rounded-xl text-sm font-bold disabled:opacity-50 hover:bg-black transition-colors"
+                      type="button"
+                      class="h-11 shrink-0 rounded-lg bg-gray-900 px-5 text-sm font-medium text-white transition-colors hover:bg-black disabled:opacity-40"
                     >
                       {{ isValidatingCoupon ? "..." : t("apply") || "Guna" }}
                     </button>
                   </div>
 
-                  <p v-if="couponError" class="text-xs text-red-500 mt-2 ml-1">
+                  <p v-if="couponError" class="mt-2 text-xs text-red-600">
                     {{ couponError }}
                   </p>
 
                   <!-- Applied Coupon -->
                   <div
                     v-if="validatedCoupon"
-                    class="bg-green-50 p-3 rounded-xl border border-green-100 space-y-3"
+                    class="space-y-2 rounded-lg bg-green-50 px-3 py-2.5"
                   >
                     <div class="flex items-center justify-between">
                       <div class="flex items-center gap-2">
                         <Ticket class="w-4 h-4 text-green-700" />
-                        <span class="font-bold text-green-700">{{
+                        <span class="font-medium text-green-700">{{
                           validatedCoupon.code
                         }}</span>
                         <span class="text-green-600 text-sm"
@@ -5582,7 +4716,9 @@ watch(
                       </div>
                       <button
                         @click="removeCoupon"
-                        class="p-1 hover:bg-green-100 rounded-full text-green-700 transition-colors"
+                        type="button"
+                        :aria-label="validatedCoupon.code"
+                        class="rounded-full p-1 text-green-700 transition-colors hover:bg-green-100"
                       >
                         <X class="w-4 h-4" />
                       </button>
@@ -5594,7 +4730,7 @@ watch(
                         validatedCoupon.eligible_indices.length > 0 &&
                         validatedCoupon.eligible_indices.length < cart.length
                       "
-                      class="text-xs text-green-700 bg-green-100/50 rounded-lg p-2"
+                      class="text-xs text-green-700"
                     >
                       <span class="font-medium">
                         {{ t("appliedToSessions") }}:
@@ -5617,7 +4753,7 @@ watch(
                 <!-- Amount Summary (transparent breakdown) -->
                 <div class="space-y-4">
                   <h4
-                    class="text-xs font-bold uppercase tracking-wider text-gray-400"
+                    class="text-sm font-medium text-gray-900"
                   >
                     {{ t("amountSummary") }}
                   </h4>
@@ -5625,10 +4761,10 @@ watch(
                   <!-- Multi-slot: sessions breakdown (cart mode) -->
                   <div
                     v-if="cart.length > 1"
-                    class="bg-gray-50/80 border border-gray-100 rounded-xl p-3 space-y-2"
+                    class="space-y-2 rounded-lg bg-gray-50 px-3 py-3"
                   >
                     <p
-                      class="text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      class="text-xs font-medium text-gray-500"
                     >
                       {{ t("sessionsCalculation") }}
                     </p>
@@ -5688,10 +4824,10 @@ watch(
                     <!-- Per-session deposit breakdown (cart) -->
                     <div
                       v-if="cartDepositPerItem.length > 0"
-                      class="bg-gray-50/80 border border-gray-100 rounded-xl p-3 space-y-1.5"
+                      class="space-y-1.5 rounded-lg bg-gray-50 px-3 py-3"
                     >
                       <p
-                        class="text-xs font-medium text-gray-500 uppercase tracking-wider"
+                        class="text-xs font-medium text-gray-500"
                       >
                         {{ t("depositPerSessionBreakdown") }}
                       </p>
@@ -5717,7 +4853,7 @@ watch(
                         <span class="text-gray-600 font-medium">{{
                           t("depositPayNow")
                         }}</span>
-                        <span class="font-bold text-gray-900">
+                        <span class="font-medium text-gray-900">
                           RM{{ formatPriceWhole(effectiveDepositAmount) }}
                         </span>
                       </div>
@@ -5768,18 +4904,18 @@ watch(
 
                   <div class="border-t border-gray-200 pt-3 mt-1">
                     <!-- Amount to pay now - highlighted -->
-                    <div class="bg-gray-900 rounded-xl p-4 -mx-2">
+                    <div>
                       <div class="flex justify-between items-center">
                         <span
-                          class="text-sm font-medium text-white uppercase tracking-wide"
+                          class="text-base font-medium text-gray-900"
                         >
                           {{ t("amountToPay") }}
                         </span>
-                        <span class="text-2xl font-bold text-white">
+                        <span class="text-xl font-semibold tabular-nums text-gray-900">
                           RM{{ formatPriceWhole(amountToPayNow) }}
                         </span>
                       </div>
-                      <p class="text-xs text-gray-300 mt-2 leading-relaxed">
+                      <p class="mt-1 text-xs leading-relaxed text-gray-500">
                         {{
                           paymentType === "deposit"
                             ? t("amountToPayExplanation")
@@ -5796,26 +4932,20 @@ watch(
           <!-- Single Mode: Summary -->
           <div
             v-else-if="currentStep === 6 && !isCartModeEnabled"
-            class="space-y-8 animate-fade-in"
+            class="space-y-6"
           >
-            <!-- Header -->
-            <div class="mb-5">
-              <h2 class="text-xl sm:text-2xl font-bold tracking-tight">
-                {{ t("bookingSummary") }}
-              </h2>
-              <p class="text-gray-500 text-xs font-light">
-                {{ t("bookingSummaryDescription") }}
-              </p>
-            </div>
+            <p class="text-sm text-gray-500">
+              {{ t("bookingSummaryDescription") }}
+            </p>
             <!-- Booking Summary Card -->
             <div
-              class="bg-white rounded-3xl shadow-lg shadow-gray-200/50 border border-gray-100 overflow-hidden"
+              class="border-y border-gray-100"
             >
               <div
-                class="bg-gray-50/80 p-4 sm:p-6 flex justify-between items-start border-b border-gray-100"
+                class="flex items-start justify-between gap-3 border-b border-gray-100 py-4"
               >
                 <div>
-                  <h3 class="font-bold text-lg text-gray-900">
+                  <h3 class="text-base font-medium text-gray-900">
                     {{ customerInfo.name }}
                   </h3>
                   <div
@@ -5832,31 +4962,33 @@ watch(
                 </div>
                 <button
                   @click="currentStep = 4"
-                  class="w-10 h-10 rounded-full bg-white border border-gray-200 flex items-center justify-center hover:bg-gray-50 transition-colors shadow-sm"
+                  type="button"
+                  :aria-label="t('customerInformation')"
+                  class="-mr-2 flex h-9 w-9 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900"
                 >
-                  <Pencil class="w-4 h-4 text-gray-900" />
+                  <Pencil class="h-4 w-4" />
                 </button>
               </div>
 
               <!-- Hold Timer Banner -->
               <div
                 v-if="confirmedSlot && holdExpiresAt"
-                class="bg-orange-50 border-b border-orange-100 flex items-center justify-center gap-2 py-2 text-orange-700 text-xs font-bold uppercase tracking-wider"
+                class="mt-4 flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-800"
               >
-                <Clock class="w-3.5 h-3.5 animate-pulse" />
+                <Clock class="h-4 w-4" />
                 <span> {{ t("slotLocked") }}: {{ holdCountdown }} </span>
               </div>
 
-              <div class="p-4 sm:p-6">
+              <div class="py-5">
                 <!-- 2. Main Booking Details -->
                 <div class="space-y-6">
                   <!-- Theme Item -->
                   <div>
                     <div class="flex justify-between items-start mb-1">
-                      <h4 class="font-bold text-lg text-gray-900">
+                      <h4 class="text-base font-medium text-gray-900">
                         {{ selectedTheme?.name }}
                       </h4>
-                      <span class="font-bold text-lg text-gray-900"
+                      <span class="text-base font-medium text-gray-900"
                         >RM{{
                           formatPriceWhole(selectedTheme?.base_price || 0)
                         }}</span
@@ -5917,7 +5049,7 @@ watch(
                           {{ specialPricingMessage || t("specialDate") }}
                         </span>
                         <span
-                          class="font-bold"
+                          class="font-medium"
                           :class="
                             specialPricingAmount > 0
                               ? 'text-gray-900'
@@ -5940,7 +5072,7 @@ watch(
                             paxCount - (selectedTheme!.base_pax || 0)
                           }})
                         </span>
-                        <span class="font-bold text-gray-900"
+                        <span class="font-medium text-gray-900"
                           >+RM{{ formatPriceWhole(extraPaxCost) }}</span
                         >
                       </div>
@@ -5957,7 +5089,7 @@ watch(
                             }}
                             (x{{ qty }})
                           </span>
-                          <span class="font-bold text-gray-900">
+                          <span class="font-medium text-gray-900">
                             +RM{{
                               formatPriceWhole(
                                 (studioStore.addons.find((a) => a.id === id)
@@ -5971,7 +5103,7 @@ watch(
                   </div>
 
                   <!-- Separator -->
-                  <div class="border-t border-dashed border-gray-200"></div>
+                  <div class="border-t border-gray-100"></div>
 
                   <!-- 3. Coupon Section -->
                   <div>
@@ -5980,13 +5112,14 @@ watch(
                         type="text"
                         v-model="couponCode"
                         :placeholder="t('haveCoupon')"
-                        class="flex-1 px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 focus:outline-none focus:border-gray-900 focus:ring-0 text-sm transition-colors"
+                        class="bk-input bk-input--flex"
                         @keydown.enter.prevent="handleApplyCoupon"
                       />
                       <button
                         @click="handleApplyCoupon"
                         :disabled="!couponCode.trim() || isValidatingCoupon"
-                        class="px-6 py-3 bg-gray-900 text-white rounded-xl text-sm font-bold disabled:opacity-50 hover:bg-black transition-colors"
+                        type="button"
+                      class="h-11 shrink-0 rounded-lg bg-gray-900 px-5 text-sm font-medium text-white transition-colors hover:bg-black disabled:opacity-40"
                       >
                         {{ isValidatingCoupon ? "..." : t("apply") || "Guna" }}
                       </button>
@@ -5994,7 +5127,7 @@ watch(
 
                     <p
                       v-if="couponError"
-                      class="text-xs text-red-500 mt-2 ml-1"
+                      class="mt-2 text-xs text-red-600"
                     >
                       {{ couponError }}
                     </p>
@@ -6002,12 +5135,12 @@ watch(
                     <!-- Applied Coupon -->
                     <div
                       v-if="validatedCoupon"
-                      class="bg-green-50 p-3 rounded-xl border border-green-100 space-y-2"
+                      class="space-y-2 rounded-lg bg-green-50 px-3 py-2.5"
                     >
                       <div class="flex items-center justify-between">
                         <div class="flex items-center gap-2">
                           <Ticket class="w-4 h-4 text-green-700" />
-                          <span class="font-bold text-green-700">{{
+                          <span class="font-medium text-green-700">{{
                             validatedCoupon.code
                           }}</span>
                           <span class="text-green-600 text-sm"
@@ -6016,7 +5149,9 @@ watch(
                         </div>
                         <button
                           @click="removeCoupon"
-                          class="p-1 hover:bg-green-100 rounded-full text-green-700 transition-colors"
+                          type="button"
+                        :aria-label="validatedCoupon.code"
+                        class="rounded-full p-1 text-green-700 transition-colors hover:bg-green-100"
                         >
                           <X class="w-4 h-4" />
                         </button>
@@ -6029,7 +5164,7 @@ watch(
                           validatedCoupon &&
                           discountAmount > 0
                         "
-                        class="text-xs text-green-700 bg-green-100/50 rounded-lg p-2"
+                        class="text-xs text-green-700"
                       >
                         <span class="font-medium">
                           {{ t("appliedToAllSessions") }}
@@ -6045,7 +5180,7 @@ watch(
                   <!-- Amount Summary (transparent breakdown) -->
                   <div class="space-y-4">
                     <h4
-                      class="text-xs font-bold uppercase tracking-wider text-gray-400"
+                      class="text-sm font-medium text-gray-900"
                     >
                       {{ t("amountSummary") }}
                     </h4>
@@ -6053,10 +5188,10 @@ watch(
                     <!-- Single mode multi-slot: sessions calculation breakdown -->
                     <div
                       v-if="singleModeSlotCount > 1"
-                      class="bg-gray-50/80 border border-gray-100 rounded-xl p-3 space-y-2"
+                      class="space-y-2 rounded-lg bg-gray-50 px-3 py-3"
                     >
                       <p
-                        class="text-xs font-medium text-gray-500 uppercase tracking-wider"
+                        class="text-xs font-medium text-gray-500"
                       >
                         {{ t("sessionsCalculation") }}
                       </p>
@@ -6111,7 +5246,7 @@ watch(
                           <span class="text-gray-600">
                             × {{ singleModeSlotCount }} {{ t("sessions") }}
                           </span>
-                          <span class="font-bold text-gray-900"
+                          <span class="font-medium text-gray-900"
                             >RM{{
                               formatPriceWhole(
                                 singleModePerSessionAmount *
@@ -6156,7 +5291,7 @@ watch(
                           <span class="text-gray-600 font-medium">{{
                             t("sessionsSubtotal")
                           }}</span>
-                          <span class="font-bold text-gray-900"
+                          <span class="font-medium text-gray-900"
                             >RM{{
                               formatPriceWhole(subtotalBeforeDiscount)
                             }}</span
@@ -6240,10 +5375,10 @@ watch(
                       <!-- Per-slot deposit breakdown (single mode multi-slot) -->
                       <div
                         v-if="singleModeDepositPerSlot.length > 1"
-                        class="bg-gray-50/80 border border-gray-100 rounded-xl p-3 space-y-1.5"
+                        class="space-y-1.5 rounded-lg bg-gray-50 px-3 py-3"
                       >
                         <p
-                          class="text-xs font-medium text-gray-500 uppercase tracking-wider"
+                          class="text-xs font-medium text-gray-500"
                         >
                           {{ t("depositPerSessionBreakdown") }}
                         </p>
@@ -6276,7 +5411,7 @@ watch(
                           <span class="text-gray-600 font-medium">{{
                             t("depositPayNow")
                           }}</span>
-                          <span class="font-bold text-gray-900">
+                          <span class="font-medium text-gray-900">
                             RM{{ formatPriceWhole(effectiveDepositAmount) }}
                           </span>
                         </div>
@@ -6329,18 +5464,18 @@ watch(
 
                     <div class="border-t border-gray-200 pt-3 mt-1">
                       <!-- Amount to pay now - highlighted -->
-                      <div class="bg-gray-900 rounded-xl p-4 -mx-2">
+                      <div>
                         <div class="flex justify-between items-center">
                           <span
-                            class="text-sm font-medium text-white uppercase tracking-wide"
+                            class="text-base font-medium text-gray-900"
                           >
                             {{ t("amountToPay") }}
                           </span>
-                          <span class="text-2xl font-bold text-white">
+                          <span class="text-xl font-semibold tabular-nums text-gray-900">
                             RM{{ formatPriceWhole(amountToPayNow) }}
                           </span>
                         </div>
-                        <p class="text-xs text-gray-300 mt-2 leading-relaxed">
+                        <p class="mt-1 text-xs leading-relaxed text-gray-500">
                           {{
                             paymentType === "deposit"
                               ? t("amountToPayExplanation")
@@ -6359,40 +5494,39 @@ watch(
     </div>
 
     <!-- Bottom Action Bar -->
-    <div class="fixed bottom-0 left-0 right-0 z-50 pointer-events-none">
-      <div class="safe-area-bottom max-w-2xl mx-auto border-t border-gray-200">
-        <div
-          class="bg-white/90 sm:bg-white/80 backdrop-blur-md border border-white/40 p-3 sm:p-4 shadow-2xl shadow-black/5 flex flex-row items-center justify-between gap-4 pointer-events-auto"
-        >
-          <div class="flex flex-col pl-1 sm:pl-2">
-            <span
-              class="text-[9px] sm:text-[10px] text-gray-500 uppercase tracking-wider font-bold"
-            >
+    <div v-if="!bookingClosed" class="bk-sticky-bar">
+      <div class="bk-sticky-bar-inner bk-sticky-bar-inner--wide">
+          <div v-if="dockTotal > 0" class="flex min-w-0 flex-col">
+            <span class="text-xs text-gray-500">
               {{
-                isCartModeEnabled && (currentStep === 4 || currentStep === 7)
-                  ? t("cartTotal") || "Cart Total"
-                  : t("estimatedTotal")
+                isSummaryStep
+                  ? t("amountToPay")
+                  : isCartModeEnabled && currentStep === 4
+                    ? t("cartTotal") || "Cart Total"
+                    : t("estimatedTotal")
               }}
             </span>
-            <span class="font-bold text-xl sm:text-2xl">
-              RM{{
-                formatPriceWhole(
-                  isSummaryStep ? amountToPayNow : grandTotal || 0,
-                )
-              }}
+            <span
+              class="origin-left text-lg font-semibold tabular-nums text-gray-900"
+              :class="{ 'bk-dock-amount-pulse': dockAmountPulse }"
+            >
+              RM{{ formatPriceWhole(dockTotal) }}
             </span>
           </div>
 
-          <div class="flex items-center gap-3">
+          <div
+            class="flex items-center gap-2"
+            :class="dockTotal > 0 ? 'shrink-0' : 'flex-1'"
+          >
             <!-- Cart Indicator (Bottom Bar) -->
             <div
               v-if="isCartModeEnabled && cartItemCount > 0"
               @click="currentStep = 4"
-              class="relative flex items-center justify-center cursor-pointer hover:bg-gray-100 p-2 rounded-full transition-colors"
+              class="bk-cta-secondary relative cursor-pointer"
             >
-              <ShoppingBag class="w-6 h-6 text-gray-900" />
+              <ShoppingBag class="h-5 w-5" />
               <span
-                class="absolute top-0 right-0 bg-gray-900 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center border-2 border-white"
+                class="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full border-2 border-[var(--bk-card)] bg-[var(--bk-primary)] text-[10px] font-bold text-[var(--bk-primary-fg)]"
                 >{{ cartItemCount }}</span
               >
             </div>
@@ -6444,7 +5578,8 @@ watch(
                 isProcessingPayment ||
                 isCreatingHold
               "
-              class="bg-gray-900 text-white px-5 sm:px-8 py-3 sm:py-6 rounded-xl sm:rounded-2xl font-bold uppercase tracking-widest text-[10px] sm:text-xs disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 sm:gap-3 transition-all duration-300 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] w-auto"
+              class="bk-cta-primary"
+              :class="dockTotal > 0 ? 'bk-cta-primary--inline' : 'flex-1'"
             >
               <span v-if="isProcessingPayment">{{
                 t("processingPayment")
@@ -6479,7 +5614,6 @@ watch(
               <Loader2 v-else class="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" />
             </button>
           </div>
-        </div>
       </div>
     </div>
 
@@ -6494,18 +5628,22 @@ watch(
     >
       <div
         v-if="showRecoveryDialog && recoveryState"
-        class="fixed inset-0 z-[99] flex items-center justify-center bg-black/50 backdrop-blur-sm"
+        class="fixed inset-0 z-[99] flex items-end justify-center bg-black/40 p-4 sm:items-center"
       >
-        <div class="bg-white rounded-3xl p-8 max-w-md mx-4 shadow-2xl">
-          <h3 class="text-2xl font-bold mb-4">
+        <div
+          class="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
+          role="dialog"
+          aria-modal="true"
+        >
+          <h3 class="text-lg font-semibold text-gray-900">
             {{ t("restoreYourBooking") }}
           </h3>
-          <p class="text-sm text-gray-600 mb-6">
+          <p class="mt-1 text-sm text-gray-500">
             {{ t("restoreBookingMessage") }}
           </p>
 
           <div
-            class="space-y-2 text-sm mb-6 bg-gray-50 p-4 rounded-xl max-h-60 overflow-y-auto"
+            class="my-5 max-h-60 space-y-2 overflow-y-auto rounded-lg bg-gray-50 px-3 py-3 text-sm text-gray-700"
           >
             <!-- Cart Items Recovery -->
             <template
@@ -6513,15 +5651,15 @@ watch(
                 recoveryState.cartItems && recoveryState.cartItems.length > 0
               "
             >
-              <div class="font-bold mb-2 border-b border-gray-200 pb-2">
+              <div class="mb-2 border-b border-gray-200 pb-2 font-medium text-gray-900">
                 {{ t("cartItems") }} ({{ recoveryState.cartItems.length }})
               </div>
               <div
                 v-for="(item, idx) in recoveryState.cartItems"
                 :key="idx"
-                class="mb-3 last:mb-0 border-b last:border-0 border-dashed border-gray-200 pb-2 last:pb-0"
+                class="mb-2 border-b border-gray-100 pb-2 last:mb-0 last:border-0 last:pb-0"
               >
-                <div class="font-bold text-gray-900">
+                <div class="font-medium text-gray-900">
                   {{ item.theme.name }}
                 </div>
                 <div class="text-xs text-gray-500 mt-0.5">
@@ -6534,11 +5672,11 @@ watch(
             <!-- Single Session Recovery -->
             <template v-else>
               <div v-if="recoveryState.selectedTheme">
-                <span class="font-bold">{{ t("theme") }}:</span>
+                <span class="text-gray-500">{{ t("theme") }}:</span>
                 {{ recoveryState.selectedTheme.name }}
               </div>
               <div v-if="recoveryState.selectedDate">
-                <span class="font-bold">{{ t("date") }}:</span>
+                <span class="text-gray-500">{{ t("date") }}:</span>
                 {{ formatDate(recoveryState.selectedDate) }}
               </div>
               <div
@@ -6547,7 +5685,7 @@ watch(
                   recoveryState.selectedSlots.length > 0
                 "
               >
-                <span class="font-bold">{{ t("time") }}:</span>
+                <span class="text-gray-500">{{ t("time") }}:</span>
                 {{
                   recoveryState.selectedSlots
                     .map((s) => `${s.start} - ${s.end}`)
@@ -6560,7 +5698,7 @@ watch(
                   recoveryState.confirmedSlots.length > 0
                 "
               >
-                <span class="font-bold">{{ t("time") }}:</span>
+                <span class="text-gray-500">{{ t("time") }}:</span>
                 {{
                   recoveryState.confirmedSlots
                     .map((s) => `${s.start} - ${s.end}`)
@@ -6568,18 +5706,18 @@ watch(
                 }}
               </div>
               <div v-else-if="recoveryState.selectedSlot">
-                <span class="font-bold">{{ t("time") }}:</span>
+                <span class="text-gray-500">{{ t("time") }}:</span>
                 {{ recoveryState.selectedSlot.start }} -
                 {{ recoveryState.selectedSlot.end }}
               </div>
             </template>
           </div>
 
-          <div class="flex gap-3">
+          <div class="flex flex-col-reverse gap-2 sm:flex-row">
             <button
               @click="restoreBookingState(recoveryState)"
               :disabled="isRecovering"
-              class="flex-1 bg-gray-900 text-white py-3 rounded-xl font-bold text-sm uppercase tracking-wider flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+              class="bk-cta-primary flex-1 gap-2 disabled:cursor-not-allowed disabled:opacity-70"
             >
               <Loader2 v-if="isRecovering" class="w-4 h-4 animate-spin" />
               {{
@@ -6588,7 +5726,7 @@ watch(
             </button>
             <button
               @click="dismissRecoveryDialog"
-              class="flex-1 bg-gray-100 text-gray-900 py-3 rounded-xl font-bold text-sm uppercase tracking-wider"
+              class="bk-cta-secondary flex-1"
             >
               {{ t("startFresh") }}
             </button>

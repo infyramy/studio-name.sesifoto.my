@@ -21,6 +21,7 @@ const emit = defineEmits<{
 
 const currentIndex = ref(0);
 const isLoading = ref(true);
+const isCaptionExpanded = ref(false);
 
 function markLoaded() {
   isLoading.value = false;
@@ -71,6 +72,7 @@ watch(
   (newVal) => {
     if (newVal) {
       currentIndex.value = props.initialIndex || 0;
+      isCaptionExpanded.value = false;
       document.body.style.overflow = "hidden";
       markLoading();
       preloadAndMaybeMarkLoaded(props.images[currentIndex.value]);
@@ -154,138 +156,151 @@ const handleSwipe = () => {
 
 <template>
   <Transition
-    enter-active-class="transition duration-300 ease-out"
+    enter-active-class="transition duration-200 ease-out"
     enter-from-class="opacity-0"
     enter-to-class="opacity-100"
-    leave-active-class="transition duration-200 ease-in"
+    leave-active-class="transition duration-150 ease-in"
     leave-from-class="opacity-100"
     leave-to-class="opacity-0"
   >
     <div
       v-if="show"
-      class="fixed inset-0 z-[100] bg-black/95 backdrop-blur-md flex flex-col"
-      @click="close"
+      class="fixed inset-0 z-[100] flex flex-col bg-black text-white"
+      role="dialog"
+      aria-modal="true"
+      :aria-label="title || 'Image preview'"
     >
-      <!-- Header / Close -->
-      <div class="absolute top-0 right-0 p-4 z-50">
+      <!-- Top bar -->
+      <div
+        class="flex h-14 shrink-0 items-center justify-between px-4 pt-[env(safe-area-inset-top)] sm:px-6"
+      >
+        <span class="text-sm tabular-nums text-white/60">
+          <template v-if="images.length > 1">
+            {{ currentIndex + 1 }} / {{ images.length }}
+          </template>
+        </span>
         <button
-          @click.stop="close"
-          class="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors backdrop-blur-sm"
+          type="button"
+          class="-mr-2 flex h-10 w-10 items-center justify-center rounded-full text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+          aria-label="Close"
+          @click="close"
         >
-          <X class="w-5 h-5" />
+          <X class="h-5 w-5" />
         </button>
       </div>
 
-      <!-- Main Content -->
+      <!-- Image stage -->
       <div
-        class="flex-1 flex items-center justify-center relative w-full h-full p-4 md:p-10"
-        @click.stop
+        class="relative flex min-h-0 flex-1 items-center justify-center px-4 sm:px-16"
+        @click.self="close"
         @touchstart="handleTouchStart"
         @touchend="handleTouchEnd"
       >
-        <!-- Prev Button (Desktop) -->
         <button
           v-if="images.length > 1"
-          @click.stop="prev"
-          class="hidden md:flex absolute left-4 md:left-8 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 text-white items-center justify-center transition-all hover:scale-105 backdrop-blur-sm z-30"
+          type="button"
+          class="absolute left-3 top-1/2 z-10 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full text-white/70 transition-colors hover:bg-white/10 hover:text-white sm:flex"
+          aria-label="Previous image"
+          @click="prev"
         >
-          <ChevronLeft class="w-6 h-6" />
+          <ChevronLeft class="h-6 w-6" />
         </button>
 
-        <!-- Image Container -->
-        <div
-          class="relative w-full h-full max-w-5xl max-h-[85vh] flex items-center justify-center"
+        <Transition
+          mode="out-in"
+          enter-active-class="transition-opacity duration-200 ease-out"
+          enter-from-class="opacity-0"
+          enter-to-class="opacity-100"
+          leave-active-class="transition-opacity duration-150 ease-in"
+          leave-from-class="opacity-100"
+          leave-to-class="opacity-0"
         >
-          <Transition
-            mode="out-in"
-            enter-active-class="transition duration-300 ease-out"
-            enter-from-class="opacity-0 scale-95"
-            enter-to-class="opacity-100 scale-100"
-            leave-active-class="transition duration-200 ease-in"
-            leave-from-class="opacity-100 scale-100"
-            leave-to-class="opacity-0 scale-95"
-          >
-            <div
-              v-if="images[currentIndex]"
-              :key="images[currentIndex]"
-              class="relative flex items-center justify-center w-full h-full"
-            >
-              <img
-                :src="images[currentIndex]"
-                class="max-w-full max-h-full object-contain rounded-lg shadow-2xl user-select-none"
-                alt="Theme preview"
-                @load="markLoaded"
-                @error="markLoaded"
-              />
-
-              <!-- Title/Description Overlay -->
-              <div
-                v-if="title || description"
-                class="absolute bottom-4 left-0 right-0 mx-auto max-w-2xl px-6 text-left z-20 pointer-events-none"
-              >
-                <div
-                  class="bg-black/60 backdrop-blur-sm text-white/90 p-4 rounded-xl shadow-lg border border-white/10 inline-block text-sm sm:text-base leading-relaxed max-h-[24vh] overflow-y-auto pointer-events-auto"
-                >
-                  <div v-if="title" class="font-bold text-white mb-1">
-                    {{ title }}
-                  </div>
-                  <div v-if="description" class="whitespace-pre-line">
-                    {{ description }}
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div
-              v-else
-              class="w-full h-full flex items-center justify-center text-gray-500"
-            >
-              <ImageIcon class="w-16 h-16 opacity-50" />
-              <p class="ml-4 text-white/50">No image available</p>
-            </div>
-          </Transition>
-
-          <!-- Loader -->
+          <img
+            v-if="images[currentIndex]"
+            :key="images[currentIndex]"
+            :src="images[currentIndex]"
+            :alt="title || 'Image preview'"
+            class="max-h-full max-w-full select-none object-contain"
+            draggable="false"
+            @load="markLoaded"
+            @error="markLoaded"
+          />
           <div
-            v-if="isLoading && images[currentIndex]"
-            class="absolute inset-0 flex items-center justify-center"
+            v-else
+            class="flex flex-col items-center gap-2 text-white/40"
           >
-            <div
-              class="w-10 h-10 border-4 border-white/20 border-t-white rounded-full animate-spin"
-            ></div>
+            <ImageIcon class="h-10 w-10" />
+            <p class="text-sm">No image available</p>
           </div>
+        </Transition>
+
+        <div
+          v-if="isLoading && images[currentIndex]"
+          class="pointer-events-none absolute inset-0 flex items-center justify-center"
+        >
+          <div
+            class="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-white"
+          />
         </div>
 
-        <!-- Next Button (Desktop) -->
         <button
           v-if="images.length > 1"
-          @click.stop="next"
-          class="hidden md:flex absolute right-4 md:right-8 top-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 text-white items-center justify-center transition-all hover:scale-105 backdrop-blur-sm z-30"
+          type="button"
+          class="absolute right-3 top-1/2 z-10 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full text-white/70 transition-colors hover:bg-white/10 hover:text-white sm:flex"
+          aria-label="Next image"
+          @click="next"
         >
-          <ChevronRight class="w-6 h-6" />
+          <ChevronRight class="h-6 w-6" />
         </button>
       </div>
 
-      <!-- Footer / Indicators -->
+      <!-- Caption + thumbnails -->
       <div
-        v-if="images.length > 1"
-        class="h-20 shrink-0 flex items-center justify-center gap-2 pb-6 px-4 z-40 overflow-x-auto"
-        @click.stop
+        class="shrink-0 space-y-4 px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-4 sm:px-6"
       >
-        <button
-          v-for="(img, index) in images"
-          :key="index"
-          @click="currentIndex = index"
-          class="relative w-12 h-12 md:w-16 md:h-16 rounded-lg overflow-hidden transition-all duration-300 border-2"
-          :class="
-            currentIndex === index
-              ? 'border-white opacity-100 scale-110'
-              : 'border-transparent opacity-40 hover:opacity-70'
-          "
+        <div v-if="title || description" class="mx-auto max-w-2xl">
+          <p v-if="title" class="text-base font-medium text-white">
+            {{ title }}
+          </p>
+          <p
+            v-if="description"
+            class="mt-1 whitespace-pre-line text-sm leading-relaxed text-white/60"
+            :class="isCaptionExpanded ? 'max-h-[30vh] overflow-y-auto' : 'line-clamp-2'"
+          >
+            {{ description }}
+          </p>
+          <button
+            v-if="description && description.length > 120"
+            type="button"
+            class="mt-1 text-sm text-white/80 underline-offset-2 hover:underline"
+            @click="isCaptionExpanded = !isCaptionExpanded"
+          >
+            {{ isCaptionExpanded ? "Show less" : "Show more" }}
+          </button>
+        </div>
+
+        <div
+          v-if="images.length > 1"
+          class="mx-auto flex max-w-2xl gap-2 overflow-x-auto"
         >
-          <img :src="img" class="w-full h-full object-cover" />
-        </button>
+          <button
+            v-for="(img, index) in images"
+            :key="index"
+            type="button"
+            class="h-12 w-12 shrink-0 overflow-hidden rounded-md transition-opacity"
+            :class="
+              currentIndex === index
+                ? 'opacity-100 ring-2 ring-white ring-offset-2 ring-offset-black'
+                : 'opacity-40 hover:opacity-70'
+            "
+            :aria-label="`Image ${index + 1}`"
+            :aria-current="currentIndex === index"
+            @click="currentIndex = index"
+          >
+            <img :src="img" alt="" class="h-full w-full object-cover" />
+          </button>
+        </div>
       </div>
-      <div v-else class="h-10"></div>
     </div>
   </Transition>
 </template>
