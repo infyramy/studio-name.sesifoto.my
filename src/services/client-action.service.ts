@@ -40,6 +40,7 @@ export interface ClientActionPayInvoice {
   dueDate: string | null;
   clientName: string | null;
   notes: string | null;
+  paymentTerms: string | null;
   subtotal: number;
   discount: number;
   tax: number;

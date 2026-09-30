@@ -317,6 +317,20 @@
         </article>
 
         <article
+          v-if="formattedPaymentTerms"
+          class="invoice-card mt-4"
+          :style="cardStyle"
+        >
+          <h3 class="text-base font-semibold">Payment terms</h3>
+          <p
+            class="mt-3 whitespace-pre-line text-sm leading-relaxed"
+            :style="{ color: 'var(--p-muted)' }"
+          >
+            {{ formattedPaymentTerms }}
+          </p>
+        </article>
+
+        <article
           v-if="invoice.notes"
           class="invoice-card mt-4"
           :style="cardStyle"
@@ -391,6 +405,30 @@ const showBreakdown = computed(() => {
   const inv = props.invoice;
   if (!inv) return false;
   return inv.discount > 0 || inv.tax > 0 || inv.rounding !== 0;
+});
+
+const PAYMENT_TERMS_LABELS: Record<string, string> = {
+  before_delivery: "Before delivery",
+  after_delivery: "After delivery",
+  deposit_50: "50% deposit",
+  net_7: "Net 7 days",
+  net_14: "Net 14 days",
+  net_30: "Net 30 days",
+  paid_in_full: "Paid in full",
+};
+
+const formattedPaymentTerms = computed(() => {
+  const raw = props.invoice?.paymentTerms?.trim();
+  if (!raw) return "";
+  const mapped = PAYMENT_TERMS_LABELS[raw];
+  if (mapped) return mapped;
+  if (raw === "Paid in full") return raw;
+  return raw
+    .replace(/\bRM\s*(\d+(?:\.\d+)?)\b/gi, (_, n) =>
+      formatMoney(Number(n), props.invoice?.currency || "MYR"),
+    )
+    .replace(/\s+/g, " ")
+    .trim();
 });
 
 const statusBadgeStyle = computed(() => {

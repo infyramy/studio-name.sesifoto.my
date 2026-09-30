@@ -14,6 +14,8 @@ export const RESERVED_PAGE_SLUGS = [
   "about-us",
   "client-portal",
   "portal-launch",
+  "client-action",
+  "quote",
 ] as const;
 
 export type ReservedPageSlug = (typeof RESERVED_PAGE_SLUGS)[number];

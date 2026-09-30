@@ -141,6 +141,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: "Invoice" },
   },
   {
+    path: "/quote/:token",
+    name: "public-quote",
+    component: () => import("@/pages/quote/[token].vue"),
+    meta: { title: "Quotation" },
+  },
+  {
     path: "/client-portal/:jobId/start",
     name: "client-portal-start",
     component: () => import("@/pages/client-portal/[id].vue"),

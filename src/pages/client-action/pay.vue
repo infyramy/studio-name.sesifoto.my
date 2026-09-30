@@ -188,8 +188,10 @@ import {
   clientActionService,
   type ClientActionPayData,
 } from "@/services/client-action.service";
+import { useStudioStore } from "@/stores/studio";
 
 const route = useRoute();
+const studioStore = useStudioStore();
 const data = ref<ClientActionPayData | null>(null);
 const { isDark, themeVars, setAccent, toggleDark } = usePortalTheme({
   accentOverride: () => data.value?.studio.brandColor,
@@ -238,6 +240,12 @@ function invoiceHref(invoiceId: string) {
   const params = new URLSearchParams();
   if (token.value) params.set("t", token.value);
   params.set("invoiceId", invoiceId);
+  // Localhost resolves studio via ?studio= — new tabs do not inherit sessionStorage.
+  const studio =
+    String(route.query.studio || "").trim() ||
+    studioStore.studio?.slug ||
+    "";
+  if (studio) params.set("studio", studio);
   return `/client-action/invoice?${params.toString()}`;
 }
 
