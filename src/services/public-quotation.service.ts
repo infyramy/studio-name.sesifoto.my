@@ -9,6 +9,15 @@ export interface PublicQuotation {
   validUntil: string | null;
   notes: string | null;
   terms: string | null;
+  paymentTerms?: string | null;
+  paymentSchedule?: string | null;
+  depositType?: string | null;
+  depositValue?: number | null;
+  paymentMilestones?: Array<{ label: string; amount: number }> | null;
+  eventTitle?: string | null;
+  pdfUrl?: string | null;
+  postAcceptPayUrl?: string | null;
+  postAcceptInvoiceUrl?: string | null;
   subtotal: number;
   discount: number;
   tax: number;

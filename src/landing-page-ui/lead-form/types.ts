@@ -10,6 +10,11 @@ export type LeadFormSectionKey =
   | "event-types"
   | "submit-footer";
 
+export type LeadFormServiceInterestOption = {
+  value: string;
+  label: string;
+};
+
 export type LeadFormPageConfig = {
   pageTemplate: "lead-form";
   showHero: boolean;
@@ -32,6 +37,8 @@ export type LeadFormPageConfig = {
   showSubmitFooter: boolean;
   submitLabel: string;
   privacyNote: string;
+  /** Injected from CRM settings on public lead-form page load */
+  serviceInterestOptions?: LeadFormServiceInterestOption[];
 };
 
 export type LeadFormPageConfigInput = Partial<LeadFormPageConfig> &
@@ -42,7 +49,7 @@ export type LeadFormSubmitPayload = {
   contactPhone: string;
   eventDate?: string;
   eventType?: string;
-  serviceInterest: "photo" | "video" | "photo_video";
+  serviceInterest: string;
   venue?: string;
   notes?: string;
   referralCode?: string;

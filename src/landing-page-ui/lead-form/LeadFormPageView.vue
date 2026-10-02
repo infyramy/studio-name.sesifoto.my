@@ -20,6 +20,10 @@ import type { HomePreviewLayout } from "../home-marketing/useHomeLayout";
 import { useLeadFormLayout } from "./useLeadFormLayout";
 import { useLandingPageStyles } from "../useLandingPageStyles";
 import { tLandingPage } from "../i18n";
+import {
+  defaultLeadServiceValue,
+  resolveLeadFormServiceOptions,
+} from "./serviceInterestOptions";
 
 const SESIFOTO_LOGO_SRC = "/brand/sesifoto.svg";
 const SESIFOTO_HOME_URL = "https://sesifoto.my";
@@ -62,6 +66,21 @@ const layout = useLeadFormLayout(previewLayoutRef);
 
 const t = computed(() => leadFormT(props.language));
 
+const serviceInterestOptionsList = computed(() =>
+  resolveLeadFormServiceOptions(props.leadForm, t.value),
+);
+
+watch(
+  serviceInterestOptionsList,
+  (options) => {
+    const values = options.map((o) => o.value);
+    if (!values.includes(serviceInterest.value)) {
+      serviceInterest.value = defaultLeadServiceValue(options);
+    }
+  },
+  { immediate: true },
+);
+
 const brandLabel = computed(
   () => props.leadForm.brandLabel?.trim() || props.styleConfig.studioName,
 );
@@ -76,7 +95,7 @@ const contactName = ref("");
 const contactPhone = ref("");
 const eventDate = ref("");
 const eventType = ref("");
-const serviceInterest = ref<"photo" | "video" | "photo_video">("photo_video");
+const serviceInterest = ref("");
 const venue = ref("");
 const notes = ref("");
 const submitting = ref(false);
@@ -126,6 +145,7 @@ function runValidation(): boolean {
       requireEventType: props.leadForm.showEventTypes,
     },
     leadFormValidationMessages(props.language),
+    serviceInterestOptionsList.value.map((o) => o.value),
   );
 
   (Object.keys(fieldErrors) as LeadFormFieldKey[]).forEach((key) => {
@@ -221,7 +241,7 @@ function markSubmitFailure(message?: string) {
 }
 
 function setServiceInterest(value: string) {
-  if (value === "photo" || value === "video" || value === "photo_video") {
+  if (serviceInterestOptionsList.value.some((o) => o.value === value)) {
     serviceInterest.value = value;
     clearFieldError("serviceInterest");
   }
@@ -505,18 +525,14 @@ defineExpose({ markSubmitSuccess, markSubmitFailure });
                 </label>
                 <div class="flex flex-wrap gap-2">
                   <button
-                    v-for="option in [
-                      { key: 'photo', label: t.photo },
-                      { key: 'video', label: t.video },
-                      { key: 'photo_video', label: t.both },
-                    ]"
-                    :key="option.key"
+                    v-for="option in serviceInterestOptionsList"
+                    :key="option.value"
                     type="button"
                     class="rounded-full border px-4 py-2 text-xs transition-colors"
                     :class="buttonRadiusClass"
-                    :aria-pressed="serviceInterest === option.key"
+                    :aria-pressed="serviceInterest === option.value"
                     :style="
-                      serviceInterest === option.key
+                      serviceInterest === option.value
                         ? {
                             backgroundColor: styleConfig.primaryColor,
                             color: styleConfig.primaryTextColor,
@@ -528,7 +544,7 @@ defineExpose({ markSubmitSuccess, markSubmitFailure });
                             backgroundColor: 'transparent',
                           }
                     "
-                    @click="setServiceInterest(option.key)"
+                    @click="setServiceInterest(option.value)"
                   >
                     {{ option.label }}
                   </button>

@@ -39,6 +39,9 @@ export interface PortalInvoice {
   total: number;
   paidAmount: number;
   balanceDue: number;
+  amountDueNow?: number;
+  paymentSchedule?: string | null;
+  paymentMilestones?: Array<{ label: string; amount: number }> | null;
   currency: string;
   status: "sent" | "overdue" | "paid";
   issueDate: string;

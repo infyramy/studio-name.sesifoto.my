@@ -64,6 +64,7 @@ export function isIsoDate(value: string): boolean {
 export function validateLeadForm(
   values: LeadFormValues,
   messages: LeadFormValidationMessages,
+  allowedServiceValues?: string[],
 ): LeadFormFieldErrors {
   const errors: LeadFormFieldErrors = {};
 
@@ -94,7 +95,11 @@ export function validateLeadForm(
     errors.eventType = messages.eventTypeRequired;
   }
 
-  if (!["photo", "video", "photo_video"].includes(values.serviceInterest)) {
+  const allowed =
+    allowedServiceValues?.length
+      ? allowedServiceValues
+      : ["photo", "video", "photo_video"];
+  if (!allowed.includes(values.serviceInterest)) {
     errors.serviceInterest = messages.serviceRequired;
   }
 

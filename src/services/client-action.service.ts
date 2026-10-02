@@ -34,6 +34,7 @@ export interface ClientActionPayInvoice {
   total: number;
   paidAmount: number;
   balanceDue: number;
+  amountDueNow?: number;
   currency: string;
   status: string;
   issueDate: string;
@@ -41,6 +42,8 @@ export interface ClientActionPayInvoice {
   clientName: string | null;
   notes: string | null;
   paymentTerms: string | null;
+  paymentSchedule?: string | null;
+  paymentMilestones?: Array<{ label: string; amount: number }> | null;
   subtotal: number;
   discount: number;
   tax: number;

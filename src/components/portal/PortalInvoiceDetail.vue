@@ -25,7 +25,13 @@
           Hi {{ clientFirstName }},
           <template v-if="invoice && invoice.balanceDue > 0">
             Your payment of
-            {{ formatMoney(invoice.balanceDue, invoice.currency) }} is due
+            {{
+              formatMoney(
+                installmentDue(invoice),
+                invoice.currency,
+              )
+            }}
+            is due
             <template v-if="invoice.dueDate">
               on {{ formatDateLong(invoice.dueDate) }}
             </template>
@@ -180,7 +186,7 @@
             {{
               activeCheckout === checkoutKey
                 ? "Opening checkout..."
-                : "Pay now"
+                : payButtonLabel(invoice)
             }}
           </button>
           <div
@@ -307,8 +313,17 @@
                 {{ formatMoney(invoice.paidAmount, invoice.currency) }}
               </span>
             </div>
+            <div
+              v-if="installmentDue(invoice) < invoice.balanceDue"
+              class="invoice-totals__row"
+            >
+              <span :style="{ color: 'var(--p-muted)' }">Due now</span>
+              <span class="tabular-nums">
+                {{ formatMoney(installmentDue(invoice), invoice.currency) }}
+              </span>
+            </div>
             <div class="invoice-totals__due">
-              <span>Amount due</span>
+              <span>Balance remaining</span>
               <span class="tabular-nums">
                 {{ formatMoney(invoice.balanceDue, invoice.currency) }}
               </span>
@@ -406,6 +421,22 @@ const showBreakdown = computed(() => {
   if (!inv) return false;
   return inv.discount > 0 || inv.tax > 0 || inv.rounding !== 0;
 });
+
+function installmentDue(invoice: PortalInvoice) {
+  const due =
+    invoice.amountDueNow != null && invoice.amountDueNow > 0
+      ? invoice.amountDueNow
+      : invoice.balanceDue;
+  return Math.min(invoice.balanceDue, Math.max(0, due));
+}
+
+function payButtonLabel(invoice: PortalInvoice) {
+  const due = installmentDue(invoice);
+  if (due > 0 && due < invoice.balanceDue) {
+    return `Pay ${formatMoney(due, invoice.currency)} now`;
+  }
+  return "Pay now";
+}
 
 const PAYMENT_TERMS_LABELS: Record<string, string> = {
   before_delivery: "Before delivery",

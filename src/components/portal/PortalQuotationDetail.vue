@@ -17,7 +17,11 @@
           <template v-if="quote.canRespond">
             please review this quotation of {{ money(quote.total) }}.
           </template>
-          <template v-else-if="quote.status === 'accepted'">
+          <template
+            v-else-if="
+              quote.status === 'accepted' || quote.status === 'converted'
+            "
+          >
             this quotation was accepted.
           </template>
           <template v-else-if="quote.status === 'declined'">
@@ -67,8 +71,12 @@
             <p class="quote-meta__value">{{ quote.studio.name }}</p>
           </div>
           <div>
-            <p class="quote-meta__label">To</p>
+            <p class="quote-meta__label">Client</p>
             <p class="quote-meta__value">{{ quote.clientName || "—" }}</p>
+          </div>
+          <div v-if="quote.eventTitle">
+            <p class="quote-meta__label">Event</p>
+            <p class="quote-meta__value">{{ quote.eventTitle }}</p>
           </div>
           <div>
             <p class="quote-meta__label">Issue date</p>
@@ -98,6 +106,16 @@
             />
             {{ acting === "accept" ? "Accepting..." : "Accept quotation" }}
           </button>
+          <a
+            v-if="quote.pdfUrl"
+            :href="quote.pdfUrl"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="quote-ghost inline-flex items-center justify-center"
+            :style="{ color: 'var(--p-muted)' }"
+          >
+            Download PDF
+          </a>
           <button
             type="button"
             class="quote-ghost"
@@ -112,6 +130,41 @@
             {{ acting === "decline" ? "Declining..." : "Decline" }}
           </button>
           <p v-if="actionError" class="quote-error">{{ actionError }}</p>
+        </template>
+        <template
+          v-else-if="
+            quote.status === 'accepted' ||
+            quote.status === 'converted' ||
+            quote.postAcceptPayUrl ||
+            quote.postAcceptInvoiceUrl
+          "
+        >
+          <div
+            class="quote-done-note"
+            :style="{
+              background:
+                'color-mix(in srgb, var(--p-accent-bg) 80%, transparent)',
+              color: 'var(--p-accent)',
+            }"
+          >
+            Quotation accepted — thank you!
+          </div>
+          <a
+            v-if="quote.postAcceptPayUrl"
+            :href="quote.postAcceptPayUrl"
+            class="quote-cta mt-3 inline-flex items-center justify-center"
+            :style="{ background: 'var(--p-text)', color: 'var(--p-shell)' }"
+          >
+            Continue to payment
+          </a>
+          <a
+            v-if="quote.postAcceptInvoiceUrl"
+            :href="quote.postAcceptInvoiceUrl"
+            class="quote-ghost mt-2 inline-flex items-center justify-center"
+            :style="{ color: 'var(--p-muted)' }"
+          >
+            View invoice
+          </a>
         </template>
         <div
           v-else
@@ -208,17 +261,43 @@
       </article>
 
       <article
-        v-if="quote.terms"
+        v-if="scheduleSummary"
         class="quote-card mt-4"
         :style="cardStyle"
       >
-        <h3 class="text-base font-semibold">Terms</h3>
+        <h3 class="text-base font-semibold">Payment schedule</h3>
         <p
-          class="mt-3 whitespace-pre-line text-sm leading-relaxed"
+          class="mt-2 text-sm"
           :style="{ color: 'var(--p-muted)' }"
         >
-          {{ quote.terms }}
+          {{ scheduleSummary }}
         </p>
+        <ul
+          v-if="quote.paymentMilestones?.length"
+          class="mt-3 space-y-2 text-sm"
+        >
+          <li
+            v-for="(row, index) in quote.paymentMilestones"
+            :key="index"
+            class="flex justify-between gap-3"
+          >
+            <span>{{ row.label }}</span>
+            <span class="tabular-nums font-medium">{{ money(row.amount) }}</span>
+          </li>
+        </ul>
+      </article>
+
+      <article
+        v-if="termsHtml"
+        class="quote-card mt-4"
+        :style="cardStyle"
+      >
+        <h3 class="text-base font-semibold">Terms &amp; conditions</h3>
+        <div
+          class="quote-terms mt-3 text-sm leading-relaxed"
+          :style="{ color: 'var(--p-muted)' }"
+          v-html="termsHtml"
+        />
       </article>
 
       <article
@@ -246,6 +325,7 @@
 import { computed } from "vue";
 import { Loader2 } from "lucide-vue-next";
 import type { PublicQuotation } from "@/services/public-quotation.service";
+import { useSanitize } from "@/composables/useSanitize";
 
 const props = defineProps<{
   quote: PublicQuotation;
@@ -257,6 +337,24 @@ const emit = defineEmits<{
   accept: [];
   decline: [];
 }>();
+
+const { sanitize } = useSanitize();
+
+function markdownHeadingsToHtml(raw: string) {
+  return raw.replace(
+    /^(#{1,6})\s+(.+)$/gm,
+    (_match, hashes: string, title: string) => {
+      const level = Math.min(hashes.length, 6);
+      return `<h${level}>${title.trim()}</h${level}>`;
+    },
+  );
+}
+
+const termsHtml = computed(() => {
+  const raw = props.quote.terms?.trim();
+  if (!raw) return "";
+  return sanitize(markdownHeadingsToHtml(raw));
+});
 
 const clientFirstName = computed(() => {
   const name = props.quote.clientName?.trim() || "there";
@@ -288,8 +386,40 @@ const showBreakdown = computed(
   () =>
     props.quote.discount > 0 ||
     props.quote.tax > 0 ||
-    props.quote.rounding !== 0,
+    props.quote.rounding !== 0 ||
+    props.quote.subtotal > 0,
 );
+
+const paymentTermsLabels: Record<string, string> = {
+  before_delivery: "Payment before delivery",
+  after_delivery: "Payment after delivery",
+  net_7: "Net 7 days",
+  net_14: "Net 14 days",
+  net_30: "Net 30 days",
+};
+
+const scheduleSummary = computed(() => {
+  const q = props.quote;
+  const terms = q.paymentTerms
+    ? paymentTermsLabels[q.paymentTerms] || q.paymentTerms
+    : "";
+  if (q.paymentSchedule === "deposit" && q.depositValue != null) {
+    const deposit =
+      q.depositType === "fixed"
+        ? money(Number(q.depositValue))
+        : `${q.depositValue}% deposit`;
+    return [terms, `Deposit schedule: ${deposit}, balance later`]
+      .filter(Boolean)
+      .join(" · ");
+  }
+  if (q.paymentSchedule === "custom") {
+    return [terms, "Custom instalment schedule"].filter(Boolean).join(" · ");
+  }
+  if (q.paymentSchedule === "full") {
+    return [terms, "Full payment"].filter(Boolean).join(" · ");
+  }
+  return terms || "";
+});
 
 const statusBadgeStyle = computed(() => {
   const status = props.quote.status;
@@ -592,6 +722,44 @@ function money(value: number) {
   text-align: center;
   font-size: 0.65rem;
   letter-spacing: 0.14em;
+}
+
+.quote-terms :deep(h1),
+.quote-terms :deep(h2),
+.quote-terms :deep(h3) {
+  margin: 0 0 0.75rem;
+  color: var(--p-text);
+  font-size: 1rem;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.quote-terms :deep(h1) {
+  font-size: 1.125rem;
+}
+
+.quote-terms :deep(p) {
+  margin: 0 0 0.75rem;
+}
+
+.quote-terms :deep(ul),
+.quote-terms :deep(ol) {
+  margin: 0 0 0.75rem;
+  padding-left: 1.25rem;
+}
+
+.quote-terms :deep(li) {
+  margin: 0.25rem 0;
+}
+
+.quote-terms :deep(strong) {
+  color: var(--p-text);
+  font-weight: 650;
+}
+
+.quote-terms :deep(a) {
+  color: var(--p-accent, #8b7355);
+  text-decoration: underline;
 }
 
 .portal-reveal {
