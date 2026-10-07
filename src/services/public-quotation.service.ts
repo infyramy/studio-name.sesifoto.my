@@ -16,6 +16,7 @@ export interface PublicQuotation {
   paymentMilestones?: Array<{ label: string; amount: number }> | null;
   eventTitle?: string | null;
   pdfUrl?: string | null;
+  termsPdfUrl?: string | null;
   postAcceptPayUrl?: string | null;
   postAcceptInvoiceUrl?: string | null;
   subtotal: number;

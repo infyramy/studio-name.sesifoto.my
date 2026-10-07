@@ -1,6 +1,7 @@
 export type LeadFormFieldKey =
   | "contactName"
   | "contactPhone"
+  | "contactEmail"
   | "eventDate"
   | "eventType"
   | "serviceInterest"
@@ -14,6 +15,8 @@ export type LeadFormValidationMessages = {
   nameTooShort: string;
   phoneRequired: string;
   phoneInvalid: string;
+  emailRequired: string;
+  emailInvalid: string;
   eventTypeRequired: string;
   eventDateInvalid: string;
   eventDatePast: string;
@@ -23,6 +26,7 @@ export type LeadFormValidationMessages = {
 export type LeadFormValues = {
   contactName: string;
   contactPhone: string;
+  contactEmail: string;
   eventDate: string;
   eventType: string;
   serviceInterest: string;
@@ -43,6 +47,10 @@ export function isValidLeadPhone(raw: string): boolean {
     digits = digits.slice(1);
   }
   return digits.length >= 8 && digits.length <= 11;
+}
+
+export function isValidLeadEmail(raw: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw.trim());
 }
 
 export function todayIsoDate(now = new Date()): string {
@@ -82,6 +90,13 @@ export function validateLeadForm(
     errors.contactPhone = messages.phoneInvalid;
   }
 
+  const email = values.contactEmail.trim();
+  if (!email) {
+    errors.contactEmail = messages.emailRequired;
+  } else if (!isValidLeadEmail(email)) {
+    errors.contactEmail = messages.emailInvalid;
+  }
+
   const date = values.eventDate.trim();
   if (date) {
     if (!isIsoDate(date)) {
@@ -112,6 +127,7 @@ export function firstFieldError(
   const order: LeadFormFieldKey[] = [
     "contactName",
     "contactPhone",
+    "contactEmail",
     "eventDate",
     "eventType",
     "serviceInterest",

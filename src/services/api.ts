@@ -252,6 +252,7 @@ export const api = {
     payload: {
       contactName: string;
       contactPhone: string;
+      contactEmail: string;
       eventDate?: string;
       eventType?: string;
       serviceInterest: "photo" | "video" | "photo_video";

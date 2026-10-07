@@ -23,7 +23,7 @@ export function buildLandingPageMeta(
     trimText(theme.mainTitle, 70) ||
     trimText(theme.studioName, 70) ||
     trimText(options?.studioName, 70) ||
-    "SesiFoto";
+    "Sesifoto";
 
   const rawDescription =
     trimText(theme.seoDescription, 200) || trimText(theme.description, 500);

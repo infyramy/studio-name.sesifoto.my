@@ -20,7 +20,7 @@ export interface Studio {
   default_language: "BM" | "EN";
   timezone: string;
   currency: string;
-  status: "trial" | "active" | "suspended";
+  status: "active" | "suspended" | "expired";
   settings: StudioSettings;
   created_at: string;
   updated_at: string;

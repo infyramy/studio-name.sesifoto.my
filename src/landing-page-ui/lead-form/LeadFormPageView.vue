@@ -93,6 +93,7 @@ const minEventDate = todayIsoDate();
 
 const contactName = ref("");
 const contactPhone = ref("");
+const contactEmail = ref("");
 const eventDate = ref("");
 const eventType = ref("");
 const serviceInterest = ref("");
@@ -139,6 +140,7 @@ function runValidation(): boolean {
     {
       contactName: contactName.value,
       contactPhone: contactPhone.value,
+      contactEmail: contactEmail.value,
       eventDate: eventDate.value,
       eventType: eventType.value,
       serviceInterest: serviceInterest.value,
@@ -205,6 +207,7 @@ async function onSubmit() {
   emit("submit", {
     contactName: contactName.value.trim(),
     contactPhone: contactPhone.value.trim(),
+    contactEmail: contactEmail.value.trim(),
     eventDate: eventDate.value || undefined,
     eventType: eventType.value || undefined,
     serviceInterest: serviceInterest.value,
@@ -220,6 +223,7 @@ function markSubmitSuccess() {
   submitSucceeded.value = true;
   contactName.value = "";
   contactPhone.value = "";
+  contactEmail.value = "";
   eventDate.value = "";
   eventType.value = "";
   venue.value = "";
@@ -469,6 +473,31 @@ defineExpose({ markSubmitSuccess, markSubmitFailure });
                 </p>
               </div>
 
+              <div id="lead-field-contactEmail">
+                <label
+                  class="mb-2 block text-[10px] font-semibold tracking-[0.15em] text-[var(--text-main)]"
+                >
+                  {{ t.emailLabel }}
+                </label>
+                <input
+                  v-model="contactEmail"
+                  type="email"
+                  autocomplete="email"
+                  :placeholder="t.emailPlaceholder"
+                  :aria-invalid="!!fieldErrors.contactEmail"
+                  :class="[
+                    fieldClass,
+                    fieldErrors.contactEmail ? fieldErrorClass : '',
+                  ]"
+                  @input="clearFieldError('contactEmail')"
+                />
+                <p
+                  v-if="fieldErrors.contactEmail"
+                  class="mt-1.5 text-xs text-red-600"
+                >
+                  {{ fieldErrors.contactEmail }}
+                </p>
+              </div>
               <div
                 :class="layout.dateTypeGridClass(leadForm.showEventTypes)"
               >
@@ -618,7 +647,7 @@ defineExpose({ markSubmitSuccess, markSubmitFailure });
             >
               <img
                 :src="SESIFOTO_LOGO_SRC"
-                alt="SesiFoto"
+                alt="Sesifoto"
                 class="h-8 w-8 rounded-md object-contain"
               />
               <span>{{ tLandingPage(language, "poweredBy") }}</span>

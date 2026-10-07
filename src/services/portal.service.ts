@@ -41,6 +41,8 @@ export interface PortalInvoice {
   balanceDue: number;
   amountDueNow?: number;
   paymentSchedule?: string | null;
+  depositType?: string | null;
+  depositValue?: number | null;
   paymentMilestones?: Array<{ label: string; amount: number }> | null;
   currency: string;
   status: "sent" | "overdue" | "paid";

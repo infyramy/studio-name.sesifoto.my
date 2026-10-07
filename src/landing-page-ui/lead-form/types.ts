@@ -47,6 +47,7 @@ export type LeadFormPageConfigInput = Partial<LeadFormPageConfig> &
 export type LeadFormSubmitPayload = {
   contactName: string;
   contactPhone: string;
+  contactEmail: string;
   eventDate?: string;
   eventType?: string;
   serviceInterest: string;

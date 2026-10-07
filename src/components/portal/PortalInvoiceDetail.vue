@@ -442,9 +442,9 @@ const PAYMENT_TERMS_LABELS: Record<string, string> = {
   before_delivery: "Before delivery",
   after_delivery: "After delivery",
   deposit_50: "50% deposit",
-  net_7: "Net 7 days",
-  net_14: "Net 14 days",
-  net_30: "Net 30 days",
+  net_7: "Due in 7 days",
+  net_14: "Due in 14 days",
+  net_30: "Due in 30 days",
   paid_in_full: "Paid in full",
 };
 
