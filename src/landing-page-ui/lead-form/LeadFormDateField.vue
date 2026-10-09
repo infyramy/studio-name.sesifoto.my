@@ -28,6 +28,7 @@ const props = withDefaults(
     disabled?: boolean;
     invalid?: boolean;
     clearLabel?: string;
+    dark?: boolean;
   }>(),
   {
     modelValue: "",
@@ -210,11 +211,16 @@ onBeforeUnmount(() => document.removeEventListener("mousedown", onDocPointer));
             isDisabledDay(day)
               ? 'cursor-not-allowed text-[var(--text-muted)] opacity-40'
               : 'hover:bg-[var(--icon-bg)] text-[var(--text-main)]',
-            selected && isSameDay(day, selected)
-              ? 'bg-[var(--text-main)] text-[var(--bg-main)] hover:bg-[var(--text-main)]'
-              : '',
             !isSameMonth(day, viewMonth) ? 'opacity-40' : '',
           ]"
+          :style="
+            selected && isSameDay(day, selected)
+              ? {
+                  backgroundColor: 'var(--text-main)',
+                  color: 'var(--bg-main)',
+                }
+              : undefined
+          "
           :disabled="isDisabledDay(day)"
           @click="selectDay(day)"
         >
