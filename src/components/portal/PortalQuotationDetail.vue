@@ -513,6 +513,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { Download, FileText, Loader2, X } from "lucide-vue-next";
+import { marked } from "marked";
 import type { PublicQuotation } from "@/services/public-quotation.service";
 import { useSanitize } from "@/composables/useSanitize";
 import { usePortalTheme } from "@/composables/usePortalTheme";
@@ -573,20 +574,10 @@ type ScheduleStep = {
   emphasis?: boolean;
 };
 
-function markdownHeadingsToHtml(raw: string) {
-  return raw.replace(
-    /^(#{1,6})\s+(.+)$/gm,
-    (_match, hashes: string, title: string) => {
-      const level = Math.min(hashes.length, 6);
-      return `<h${level}>${title.trim()}</h${level}>`;
-    },
-  );
-}
-
 const termsHtml = computed(() => {
   const raw = props.quote.terms?.trim();
   if (!raw) return "";
-  return sanitize(markdownHeadingsToHtml(raw));
+  return sanitize(marked.parse(raw, { async: false, gfm: true, breaks: true }));
 });
 
 function downloadTerms() {
@@ -1275,12 +1266,17 @@ function money(value: number) {
 
 .quote-terms :deep(h1),
 .quote-terms :deep(h2),
-.quote-terms :deep(h3) {
-  margin: 0 0 0.75rem;
+.quote-terms :deep(h3),
+.quote-terms :deep(h4) {
+  margin: 1.1rem 0 0.6rem;
   color: var(--p-text, #f2f5f3);
   font-size: 1rem;
   font-weight: 650;
   line-height: 1.35;
+}
+
+.quote-terms > :deep(:first-child) {
+  margin-top: 0;
 }
 
 .quote-terms :deep(h1) {
@@ -1299,8 +1295,22 @@ function money(value: number) {
   color: var(--p-text, #f2f5f3);
 }
 
+.quote-terms :deep(ul) {
+  list-style: disc;
+}
+
+.quote-terms :deep(ol) {
+  list-style: decimal;
+}
+
 .quote-terms :deep(li) {
   margin: 0.3rem 0;
+}
+
+.quote-terms :deep(hr) {
+  margin: 1rem 0;
+  border: 0;
+  border-top: 1px solid color-mix(in srgb, var(--p-border, #2a2f2c) 70%, transparent);
 }
 
 .quote-terms :deep(strong) {

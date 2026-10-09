@@ -203,6 +203,12 @@ function formatSignedAt(value: string) {
   margin: 0 0 0.9em;
   padding-left: 1.25rem;
 }
+.contract-body :deep(ul) {
+  list-style: disc;
+}
+.contract-body :deep(ol) {
+  list-style: decimal;
+}
 .contract-body :deep(li) {
   margin-bottom: 0.35em;
 }
@@ -212,8 +218,27 @@ function formatSignedAt(value: string) {
 }
 .contract-body :deep(h1),
 .contract-body :deep(h2),
-.contract-body :deep(h3) {
+.contract-body :deep(h3),
+.contract-body :deep(h4) {
   margin: 1.1em 0 0.45em;
   font-weight: 600;
+  line-height: 1.35;
+}
+.contract-body :deep(h1) {
+  font-size: 1.25rem;
+}
+.contract-body :deep(h2) {
+  font-size: 1.1rem;
+}
+.contract-body > :deep(:first-child) {
+  margin-top: 0;
+}
+.contract-body :deep(strong) {
+  font-weight: 600;
+}
+.contract-body :deep(hr) {
+  margin: 1.25em 0;
+  border: 0;
+  border-top: 1px solid #e5e5e5;
 }
 </style>
