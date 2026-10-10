@@ -3,6 +3,10 @@
   box-shadow: none;
 }
 
+.gallery-page .portal-display {
+  font-family: var(--g-display, "Cormorant Garamond"), Georgia, serif;
+}
+
 /* Custom gallery scrollbars — thin, theme-aware */
 .gallery-page,
 .film-rail {

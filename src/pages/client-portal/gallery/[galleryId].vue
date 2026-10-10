@@ -2,7 +2,7 @@
   <div
     ref="pageEl"
     class="gallery-page h-dvh overflow-y-auto transition-colors duration-300"
-    :style="[{ background: 'var(--p-shell)', color: 'var(--p-text)', fontFamily: '&quot;DM Sans&quot;, system-ui, sans-serif' }, themeVars]"
+    :style="[{ background: 'var(--p-shell)', color: 'var(--p-text)', fontFamily: 'var(--g-body), system-ui, sans-serif' }, themeVars, designVars]"
   >
     <div
       v-if="notice"
@@ -15,18 +15,44 @@
 
     <PortalLoadingState v-if="isLoading" label="Loading gallery" />
     <PortalErrorState
+      v-else-if="isExpired"
+      title="Gallery expired"
+      message="This gallery is no longer available. Contact your studio if you still need access."
+    />
+    <PortalErrorState
       v-else-if="loadError"
       title="Gallery unavailable"
       :message="loadError"
       action-label="Try again"
       @action="loadGallery"
     />
+    <GalleryPasscodeGate
+      v-else-if="lockedGallery"
+      :gallery="lockedGallery"
+      :loading="isUnlocking"
+      :error="unlockError"
+      :portal-path="portalPath"
+      @submit="unlockGallery"
+    />
     <template v-else-if="galleryForView">
+    <GalleryHero
+      v-if="design.heroTheme"
+      :theme="design.heroTheme"
+      :title="viewOptions.heroTitle || (activeDesignId === 'classic' ? clientName : galleryForView.title)"
+      :subtitle="viewOptions.heroSubtitle"
+      :eyebrow="galleryForView.galleryType || ''"
+      :meta-line="metaLine"
+      :cover-url="coverUrl"
+      :photos="heroPhotos"
+      :speed="design.heroSpeed ?? 50"
+      :hero-color="heroColor"
+    />
     <ClassicGalleryView
       v-if="activeDesignId === 'classic'"
       :gallery="galleryForView"
       :cover-url="coverUrl"
       :client-name="clientName"
+      :meta-line="metaLine"
       :accent-color="accentColor"
       :is-dark="isDark"
       :photo-count="photoCount"
@@ -40,6 +66,7 @@
       :is-revealed="isMediaRevealed"
       :is-hydrated="isMediaHydrated"
       :is-loaded="isMediaLoaded"
+      :options="viewOptions"
       @update:search-query="searchQuery = $event"
       @update:photo-open="photoOpen = $event"
       @toggle-theme="toggleTheme"
@@ -55,6 +82,7 @@
       :gallery="galleryForView"
       :cover-url="coverUrl"
       :client-name="clientName"
+      :meta-line="metaLine"
       :accent-color="accentColor"
       :is-dark="isDark"
       :photo-count="photoCount"
@@ -67,6 +95,7 @@
       :is-revealed="isMediaRevealed"
       :is-hydrated="isMediaHydrated"
       :is-loaded="isMediaLoaded"
+      :options="viewOptions"
       @update:search-query="searchQuery = $event"
       @toggle-theme="toggleTheme"
       @share="shareGallery"
@@ -81,6 +110,7 @@
       :gallery="galleryForView"
       :cover-url="coverUrl"
       :client-name="clientName"
+      :meta-line="metaLine"
       :accent-color="accentColor"
       :is-dark="isDark"
       :photo-count="photoCount"
@@ -93,6 +123,7 @@
       :is-revealed="isMediaRevealed"
       :is-hydrated="isMediaHydrated"
       :is-loaded="isMediaLoaded"
+      :options="viewOptions"
       @update:search-query="searchQuery = $event"
       @toggle-theme="toggleTheme"
       @share="shareGallery"
@@ -119,6 +150,16 @@
               {{ viewerIndex + 1 }} / {{ viewerItems.length }}
             </span>
             <div class="flex items-center gap-1">
+              <button
+                v-if="gallery?.allowPhotoSharing"
+                type="button"
+                class="flex h-10 w-10 items-center justify-center rounded-full text-white/65 transition hover:bg-white/10 hover:text-white"
+                aria-label="Share this photo"
+                title="Share this photo"
+                @click="shareCurrentItem"
+              >
+                <Share2 class="h-4 w-4" />
+              </button>
               <button
                 type="button"
                 class="flex h-10 w-10 items-center justify-center rounded-full text-white/65 transition hover:bg-white/10 hover:text-white"
@@ -195,7 +236,7 @@
     <!-- Selection tray -->
     <Transition name="selection-tray">
       <div
-        v-if="gallery.allowSelection && selectedIds.length"
+        v-if="gallery?.allowSelection && selectedIds.length"
         class="fixed inset-x-0 bottom-5 z-50 mx-auto flex w-[calc(100%-2rem)] max-w-md items-center justify-between gap-3 rounded-full bg-zinc-950 px-3 py-3 pl-5 text-white shadow-2xl shadow-black/25"
       >
         <p class="text-sm">
@@ -224,6 +265,75 @@
         </div>
       </div>
     </Transition>
+
+    <Teleport to="body">
+      <Transition name="viewer">
+        <div
+          v-if="downloadPrompt"
+          class="fixed inset-0 z-[260] flex items-end justify-center bg-black/55 p-4 sm:items-center"
+          @click.self="downloadPrompt = null"
+        >
+          <div
+            class="w-full max-w-sm rounded-2xl border p-5 shadow-2xl"
+            :style="{ background: 'var(--p-card)', borderColor: 'var(--p-border)', color: 'var(--p-text)' }"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="gallery-download-title"
+          >
+            <template v-if="downloadPrompt.kind === 'sign-in'">
+              <h2 id="gallery-download-title" class="text-base font-semibold">Sign in to download</h2>
+              <p class="mt-2 text-sm leading-relaxed" :style="{ color: 'var(--p-muted)' }">
+                Downloads are for the client only. Sign in to your client portal, then open this gallery again.
+              </p>
+              <div class="mt-5 flex justify-end gap-2">
+                <button
+                  type="button"
+                  class="rounded-full px-4 py-2 text-xs font-medium transition hover:opacity-70"
+                  @click="downloadPrompt = null"
+                >
+                  Not now
+                </button>
+                <RouterLink
+                  :to="portalPath"
+                  class="rounded-full px-4 py-2 text-xs font-semibold transition hover:brightness-110"
+                  :style="{ background: 'var(--p-accent)', color: 'var(--p-accent-text)' }"
+                >
+                  Sign in
+                </RouterLink>
+              </div>
+            </template>
+            <template v-else>
+              <h2 id="gallery-download-title" class="text-base font-semibold">Choose file size</h2>
+              <div class="mt-4 space-y-2">
+                <button
+                  v-for="option in qualityOptions"
+                  :key="option.id"
+                  type="button"
+                  class="flex w-full items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left transition hover:opacity-80"
+                  :style="{ borderColor: 'var(--p-border)' }"
+                  @click="confirmDownload(option.id)"
+                >
+                  <span>
+                    <span class="block text-sm font-medium">{{ option.label }}</span>
+                    <span class="block text-xs" :style="{ color: 'var(--p-muted)' }">{{ option.hint }}</span>
+                  </span>
+                  <Download class="h-4 w-4 shrink-0" :style="{ color: 'var(--p-accent)' }" />
+                </button>
+              </div>
+              <div class="mt-4 flex justify-end">
+                <button
+                  type="button"
+                  class="rounded-full px-4 py-2 text-xs font-medium transition hover:opacity-70"
+                  @click="downloadPrompt = null"
+                >
+                  Cancel
+                </button>
+              </div>
+            </template>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
     </template>
   </div>
 </template>
@@ -246,10 +356,14 @@ import {
   Maximize2,
   Pause,
   Play,
+  Share2,
   X,
 } from "lucide-vue-next";
 import {
+  galleryErrorInfo,
   galleryService,
+  type GalleryDownloadQuality,
+  type LockedGallery,
   type PublicGallery,
 } from "@/services/gallery.service";
 import PortalErrorState from "@/components/portal/PortalErrorState.vue";
@@ -257,10 +371,19 @@ import PortalLoadingState from "@/components/portal/PortalLoadingState.vue";
 import ClassicGalleryView from "@/components/client-gallery/ClassicGalleryView.vue";
 import MagazineGalleryView from "@/components/client-gallery/MagazineGalleryView.vue";
 import FilmStripGalleryView from "@/components/client-gallery/FilmStripGalleryView.vue";
+import GalleryHero from "@/components/client-gallery/GalleryHero.vue";
+import GalleryPasscodeGate from "@/components/client-gallery/GalleryPasscodeGate.vue";
 import {
   normalizeGalleryDesignId,
   type GalleryLayoutItem,
+  type GalleryViewOptions,
 } from "@/components/client-gallery/designs";
+import {
+  ensureGalleryFonts,
+  paletteThemeVars,
+  resolveGalleryFonts,
+  resolveGalleryPalette,
+} from "@/components/client-gallery/gallery-theme";
 import "@/components/client-gallery/gallery-layout.css";
 
 interface GalleryItem {
@@ -282,9 +405,27 @@ interface ViewerMedia {
 
 const route = useRoute();
 const galleryId = String(route.params.galleryId || "");
+const jobId = String(route.params.jobId || "");
 const gallery = ref<PublicGallery | null>(null);
+const lockedGallery = ref<LockedGallery | null>(null);
 const isLoading = ref(true);
 const loadError = ref("");
+const isExpired = ref(false);
+const isUnlocking = ref(false);
+const unlockError = ref("");
+const downloadPrompt = ref<
+  { kind: "sign-in" } | { kind: "quality"; mediaIds?: string[] } | null
+>(null);
+const qualityOptions: { id: GalleryDownloadQuality; label: string; hint: string }[] = [
+  { id: "web", label: "Web resolution", hint: "Smaller files, good for sharing online" },
+  { id: "high", label: "High resolution", hint: "Full size files, best for printing" },
+];
+
+const portalPath = computed(() => {
+  const studio = route.query.studio;
+  const base = `/client-portal/${jobId}`;
+  return studio ? `${base}?studio=${encodeURIComponent(String(studio))}` : base;
+});
 const notice = ref("");
 let noticeTimer = 0;
 const isDownloading = ref(false);
@@ -306,8 +447,44 @@ const canDownload = computed(
   () => !!gallery.value?.allowDownload && !fromPublicSite.value,
 );
 
+const viewOptions = computed<GalleryViewOptions>(() => ({
+  heroTitle: design.value.heroTitle?.trim() || "",
+  heroSubtitle: design.value.heroSubtitle?.trim() || "",
+  hideHero: !!design.value.heroTheme,
+  canToggleTheme: !palette.value,
+  canShare: gallery.value?.allowLinkSharing !== false,
+  photoGrid: design.value.gridStyle
+    ? {
+        gridStyle: design.value.gridStyle,
+        photoSize: design.value.photoSize ?? "medium",
+        photoGap: design.value.photoGap ?? "medium",
+      }
+    : null,
+}));
+
+const heroColor = computed(() => palette.value?.hero ?? "#111312");
+
+const design = computed(
+  () => gallery.value?.designSettings ?? lockedGallery.value?.designSettings ?? {},
+);
+const palette = computed(() =>
+  resolveGalleryPalette(
+    design.value,
+    gallery.value?.accentColor || lockedGallery.value?.accentColor || "",
+  ),
+);
+const galleryFonts = computed(() => resolveGalleryFonts(design.value));
+const designVars = computed(() => ({
+  "--g-display": `"${galleryFonts.value.display}"`,
+  "--g-body": `"${galleryFonts.value.body}"`,
+  ...(palette.value ? paletteThemeVars(palette.value) : {}),
+}));
+watch(galleryFonts, (fonts) => ensureGalleryFonts([fonts.display, fonts.body]), {
+  immediate: true,
+});
+
 const accentColor = computed(
-  () => gallery.value?.accentColor || resolvedAccent.value,
+  () => palette.value?.accent || gallery.value?.accentColor || resolvedAccent.value,
 );
 const activeDesignId = computed(() =>
   normalizeGalleryDesignId(gallery.value?.designId),
@@ -315,6 +492,20 @@ const activeDesignId = computed(() =>
 const clientName = computed(
   () => gallery.value?.job.contact?.name || gallery.value?.title || "Client gallery",
 );
+const metaLine = computed(() => {
+  const date = gallery.value?.galleryDate;
+  const formattedDate = date
+    ? new Date(date).toLocaleDateString("en-MY", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+        timeZone: "UTC",
+      })
+    : "";
+  return [formattedDate, gallery.value?.location?.trim()]
+    .filter(Boolean)
+    .join(" · ");
+});
 const allMedia = computed(
   () => gallery.value?.sections.flatMap((section) => section.media) || [],
 );
@@ -381,6 +572,10 @@ const coverUrl = computed(() => {
     .find((i) => i.type === "video");
   return firstVideo?.thumb || firstVideo?.url || "";
 });
+
+const heroPhotos = computed(() =>
+  allPhotos.value.slice(0, 8).map((photo) => photo.url),
+);
 
 const visibleGallerySections = computed(() => {
   const q = searchQuery.value.trim().toLowerCase();
@@ -646,17 +841,37 @@ function handleViewerKeydown(event: KeyboardEvent) {
 
 async function runZipDownload(mediaIds?: string[]) {
   if (!canDownload.value || !gallery.value || isDownloading.value) return;
+  const { download } = gallery.value;
+  if (download.requiresSignIn) {
+    downloadPrompt.value = { kind: "sign-in" };
+    return;
+  }
+  if (download.webRes && download.highRes) {
+    downloadPrompt.value = { kind: "quality", mediaIds };
+    return;
+  }
+  await startZipDownload(mediaIds, download.highRes ? "high" : "web");
+}
+
+function confirmDownload(quality: GalleryDownloadQuality) {
+  const prompt = downloadPrompt.value;
+  downloadPrompt.value = null;
+  if (prompt?.kind !== "quality") return;
+  void startZipDownload(prompt.mediaIds, quality);
+}
+
+async function startZipDownload(
+  mediaIds: string[] | undefined,
+  quality: GalleryDownloadQuality,
+) {
+  if (!gallery.value || isDownloading.value) return;
   isDownloading.value = true;
   showNotice("Preparing download…");
   try {
-    await galleryService.downloadZip(gallery.value.id, mediaIds);
+    await galleryService.downloadZip(gallery.value.id, { mediaIds, quality });
     showNotice("Download started");
   } catch (error: unknown) {
-    const message =
-      error instanceof Error && error.message
-        ? error.message
-        : "Download failed. Try again.";
-    showNotice(message);
+    showNotice(galleryErrorInfo(error).message || "Download failed. Try again.");
   } finally {
     isDownloading.value = false;
   }
@@ -671,9 +886,61 @@ function downloadSelected() {
   void runZipDownload([...selectedIds.value]);
 }
 
+function galleryLink(mediaId?: string) {
+  const url = new URL(window.location.href);
+  url.searchParams.delete("media");
+  if (mediaId) url.searchParams.set("media", mediaId);
+  return url.toString();
+}
+
 function shareGallery() {
-  navigator.clipboard.writeText(window.location.href).catch(() => {});
+  if (gallery.value?.allowLinkSharing === false) return;
+  navigator.clipboard.writeText(galleryLink()).catch(() => {});
   showNotice("Gallery link copied");
+}
+
+async function shareCurrentItem() {
+  const item = currentViewerItem.value;
+  if (!item || !gallery.value?.allowPhotoSharing) return;
+  const url = galleryLink(item.id);
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: gallery.value.title, url });
+      return;
+    } catch {
+      // cancelled or unsupported; fall back to copying
+    }
+  }
+  navigator.clipboard.writeText(url).catch(() => {});
+  showNotice("Photo link copied");
+}
+
+function openDeepLinkedMedia() {
+  const raw = route.query.media;
+  const mediaId = Array.isArray(raw) ? raw[0] : raw;
+  if (!mediaId) return;
+  const item = gallerySections.value
+    .flatMap((section) => section.items)
+    .find((entry) => entry.id === mediaId);
+  if (item) openLayoutItem(item);
+}
+
+async function unlockGallery(passcode: string) {
+  if (isUnlocking.value) return;
+  isUnlocking.value = true;
+  unlockError.value = "";
+  try {
+    await galleryService.unlock(galleryId, passcode);
+    await loadGallery();
+  } catch (error: unknown) {
+    const { status, message } = galleryErrorInfo(error);
+    unlockError.value =
+      status === 429
+        ? "Too many attempts. Wait a minute and try again."
+        : message || "Could not unlock this gallery.";
+  } finally {
+    isUnlocking.value = false;
+  }
 }
 
 async function loadGallery() {
@@ -683,17 +950,35 @@ async function loadGallery() {
   hydratedMediaIds.value = new Set();
   revealedMediaIds.value = new Set();
   loadedMediaIds.value = new Set();
+  isExpired.value = false;
   try {
-    gallery.value = await galleryService.getPublic(String(route.params.galleryId || galleryId));
-    setAccent(gallery.value?.accentColor);
+    let result = await galleryService.getPublic(galleryId);
+    const needsPortal = result.locked
+      ? true
+      : result.allowDownload && result.download.requiresSignIn;
+    if (needsPortal && jobId && (await galleryService.requestPortalAccess(jobId, galleryId))) {
+      result = await galleryService.getPublic(galleryId);
+    }
+    if (result.locked) {
+      lockedGallery.value = result;
+      gallery.value = null;
+      setAccent(result.accentColor);
+      return;
+    }
+    lockedGallery.value = null;
+    gallery.value = result;
+    setAccent(result.accentColor);
   } catch (error: unknown) {
-    loadError.value =
-      error instanceof Error && error.message
-        ? error.message
-        : "This gallery is missing or not published.";
+    const { status, message } = galleryErrorInfo(error);
+    if (status === 410) {
+      isExpired.value = true;
+    } else {
+      loadError.value = message || "This gallery is missing or not published.";
+    }
   } finally {
     isLoading.value = false;
     await refreshMediaObserver();
+    if (gallery.value) openDeepLinkedMedia();
   }
 }
 

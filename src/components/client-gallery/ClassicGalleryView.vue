@@ -11,12 +11,19 @@ import {
 } from "lucide-vue-next";
 import type { PublicGallery } from "@/services/gallery.service";
 import GalleryMediaTile from "./GalleryMediaTile.vue";
-import type { GalleryLayoutItem, GalleryLayoutSection } from "./designs";
+import GalleryLogo from "./GalleryLogo.vue";
+import GalleryPhotoGrid from "./GalleryPhotoGrid.vue";
+import type {
+  GalleryLayoutItem,
+  GalleryLayoutSection,
+  GalleryViewOptions,
+} from "./designs";
 
 defineProps<{
   gallery: PublicGallery;
   coverUrl: string;
   clientName: string;
+  metaLine: string;
   accentColor: string;
   isDark: boolean;
   photoCount: number;
@@ -30,6 +37,7 @@ defineProps<{
   isRevealed: (id: string) => boolean;
   isHydrated: (id: string) => boolean;
   isLoaded: (id: string) => boolean;
+  options: GalleryViewOptions;
 }>();
 
 const emit = defineEmits<{
@@ -56,7 +64,11 @@ function openItem(item: GalleryLayoutItem) {
 </script>
 
 <template>
-  <section class="relative h-dvh min-h-[420px] overflow-hidden">
+  <section
+    v-if="!options.hideHero"
+    class="relative h-dvh min-h-[420px] overflow-hidden"
+    :style="{ background: 'var(--g-hero, transparent)' }"
+  >
     <img
       v-if="coverUrl"
       :src="coverUrl"
@@ -70,12 +82,18 @@ function openItem(item: GalleryLayoutItem) {
     <div class="relative flex h-full items-center justify-center px-6 text-center text-white">
       <div class="gallery-hero-copy translate-y-5">
         <p class="mb-4 text-[11px] font-medium tracking-wide text-white/75">
-          Client gallery
+          {{ gallery.galleryType || "Client gallery" }}
         </p>
         <h1 class="portal-display text-4xl font-medium tracking-tight sm:text-6xl lg:text-7xl">
-          {{ clientName }}
+          {{ options.heroTitle || clientName }}
         </h1>
+        <p v-if="options.heroSubtitle" class="mt-4 text-base tracking-wide text-white/85 sm:text-lg">
+          {{ options.heroSubtitle }}
+        </p>
         <div class="mx-auto mt-6 h-px w-10 bg-white/70" />
+        <p v-if="metaLine" class="mt-5 text-sm tracking-wide text-white/80">
+          {{ metaLine }}
+        </p>
       </div>
     </div>
     <button
@@ -101,19 +119,7 @@ function openItem(item: GalleryLayoutItem) {
       </div>
 
       <div class="flex min-w-0 items-center justify-center gap-3">
-        <img
-          v-if="gallery.studio.logoUrl"
-          :src="gallery.studio.logoUrl"
-          :alt="gallery.studio.name"
-          class="h-7 w-7 rounded-sm object-contain bg-white/5"
-        />
-        <span
-          v-else
-          class="flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-[11px] font-semibold"
-          :style="{ backgroundColor: 'var(--p-accent-bg)', color: 'var(--p-accent)' }"
-        >
-          {{ gallery.studio.name[0] || "S" }}
-        </span>
+        <GalleryLogo :gallery="gallery" fallback />
         <span
           class="hidden truncate text-[11px] font-medium tracking-wide sm:inline"
           :style="{ color: 'var(--p-text)' }"
@@ -124,6 +130,7 @@ function openItem(item: GalleryLayoutItem) {
 
       <div class="flex items-center justify-end gap-1">
         <button
+          v-if="options.canToggleTheme"
           type="button"
           class="inline-flex h-9 w-9 items-center justify-center transition-colors hover:opacity-70"
           :style="{ color: 'var(--p-text)' }"
@@ -134,6 +141,7 @@ function openItem(item: GalleryLayoutItem) {
           <Moon v-else class="h-4 w-4" />
         </button>
         <button
+          v-if="options.canShare"
           type="button"
           class="inline-flex h-9 w-9 items-center justify-center transition-colors hover:opacity-70"
           :style="{ color: 'var(--p-text)' }"
@@ -167,13 +175,20 @@ function openItem(item: GalleryLayoutItem) {
         </p>
         <h2
           class="font-medium tracking-tight"
-          style="font-family: 'Cormorant Garamond', serif; font-size: 3rem; line-height: 1.1;"
+          style="font-family: var(--g-display, 'Cormorant Garamond'), serif; font-size: 3rem; line-height: 1.1;"
           :style="{ color: 'var(--p-text)' }"
         >
           {{ gallery.title }}
         </h2>
         <p class="mt-4 text-sm tracking-wide" :style="{ color: 'var(--p-muted)' }">
           {{ photoCount }} photographs · {{ videoCount }} videos
+        </p>
+        <p
+          v-if="gallery.description"
+          class="mt-4 max-w-xl whitespace-pre-line text-sm leading-relaxed"
+          :style="{ color: 'var(--p-muted)' }"
+        >
+          {{ gallery.description }}
         </p>
       </div>
 
@@ -236,7 +251,7 @@ function openItem(item: GalleryLayoutItem) {
               <Search class="mx-auto mb-4 h-5 w-5" :style="{ color: 'var(--p-muted)' }" />
               <p
                 class="font-medium tracking-tight"
-                style="font-family: 'Cormorant Garamond', serif; font-size: 1.8rem;"
+                style="font-family: var(--g-display, 'Cormorant Garamond'), serif; font-size: 1.8rem;"
                 :style="{ color: 'var(--p-text)' }"
               >
                 {{ searchQuery ? "No media found" : "No media shared yet" }}
@@ -260,12 +275,26 @@ function openItem(item: GalleryLayoutItem) {
                 <h3
                   v-if="sections.length > 1 || section.name"
                   class="mb-5 font-medium tracking-tight"
-                  style="font-family: 'Cormorant Garamond', serif; font-size: 2.2rem;"
+                  style="font-family: var(--g-display, 'Cormorant Garamond'), serif; font-size: 2.2rem;"
                   :style="{ color: 'var(--p-text)' }"
                 >
                   {{ section.name }}
                 </h3>
-                <div class="columns-2 gap-2 sm:columns-3 sm:gap-3 lg:columns-4">
+                <GalleryPhotoGrid
+                  v-if="options.photoGrid"
+                  :items="section.items"
+                  v-bind="options.photoGrid"
+                  :accent-color="accentColor"
+                  :allow-selection="gallery.allowSelection"
+                  :is-selected="isSelected"
+                  :is-revealed="isRevealed"
+                  :is-hydrated="isHydrated"
+                  :is-loaded="isLoaded"
+                  @open="openItem"
+                  @toggle-select="emit('toggleSelect', $event)"
+                  @load="emit('mediaLoad', $event)"
+                />
+                <div v-else class="columns-2 gap-2 sm:columns-3 sm:gap-3 lg:columns-4">
                   <GalleryMediaTile
                     v-for="(item, itemIndex) in section.items"
                     :key="item.id"

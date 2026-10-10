@@ -11,12 +11,19 @@ import {
 } from "lucide-vue-next";
 import type { PublicGallery } from "@/services/gallery.service";
 import GalleryMediaTile from "./GalleryMediaTile.vue";
-import type { GalleryLayoutItem, GalleryLayoutSection } from "./designs";
+import GalleryLogo from "./GalleryLogo.vue";
+import GalleryPhotoGrid from "./GalleryPhotoGrid.vue";
+import type {
+  GalleryLayoutItem,
+  GalleryLayoutSection,
+  GalleryViewOptions,
+} from "./designs";
 
 defineProps<{
   gallery: PublicGallery;
   coverUrl: string;
   clientName: string;
+  metaLine: string;
   accentColor: string;
   isDark: boolean;
   photoCount: number;
@@ -29,6 +36,7 @@ defineProps<{
   isRevealed: (id: string) => boolean;
   isHydrated: (id: string) => boolean;
   isLoaded: (id: string) => boolean;
+  options: GalleryViewOptions;
 }>();
 
 const emit = defineEmits<{
@@ -62,7 +70,11 @@ function restItems(section: GalleryLayoutSection) {
 </script>
 
 <template>
-  <section class="relative h-dvh min-h-[480px] overflow-hidden">
+  <section
+    v-if="!options.hideHero"
+    class="relative h-dvh min-h-[480px] overflow-hidden"
+    :style="{ background: 'var(--g-hero, transparent)' }"
+  >
     <img
       v-if="coverUrl"
       :src="coverUrl"
@@ -80,12 +92,24 @@ function restItems(section: GalleryLayoutSection) {
         </p>
         <h1
           class="portal-display font-medium leading-[0.92] tracking-tight"
-          style="font-family: 'Cormorant Garamond', serif; font-size: clamp(3.4rem, 10vw, 7.5rem);"
+          style="font-family: var(--g-display, 'Cormorant Garamond'), serif; font-size: clamp(3.4rem, 10vw, 7.5rem);"
         >
-          {{ gallery.title }}
+          {{ options.heroTitle || gallery.title }}
         </h1>
+        <p v-if="options.heroSubtitle" class="mt-5 text-lg tracking-wide text-white/85 sm:text-xl">
+          {{ options.heroSubtitle }}
+        </p>
         <p class="mt-6 max-w-xl text-sm tracking-wide text-white/75 sm:text-base">
           {{ clientName }} · {{ photoCount }} photographs · {{ videoCount }} videos
+        </p>
+        <p v-if="metaLine" class="mt-2 text-sm tracking-wide text-white/70">
+          {{ metaLine }}
+        </p>
+        <p
+          v-if="gallery.description"
+          class="mt-4 max-w-xl whitespace-pre-line text-sm leading-relaxed text-white/75 line-clamp-4"
+        >
+          {{ gallery.description }}
         </p>
       </div>
     </div>
@@ -105,11 +129,15 @@ function restItems(section: GalleryLayoutSection) {
     :style="{ background: 'color-mix(in srgb, var(--p-shell) 94%, transparent)', borderColor: 'color-mix(in srgb, var(--p-border) 40%, transparent)' }"
   >
     <div class="mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
-      <p class="min-w-0 truncate text-xs font-semibold tracking-wide" :style="{ color: 'var(--p-text)' }">
-        {{ clientName }}
-      </p>
+      <div class="flex min-w-0 items-center gap-3">
+        <GalleryLogo :gallery="gallery" />
+        <p class="min-w-0 truncate text-xs font-semibold tracking-wide" :style="{ color: 'var(--p-text)' }">
+          {{ clientName }}
+        </p>
+      </div>
       <div class="flex items-center gap-1">
         <button
+          v-if="options.canToggleTheme"
           type="button"
           class="inline-flex h-9 w-9 items-center justify-center transition-colors hover:opacity-70"
           :style="{ color: 'var(--p-text)' }"
@@ -120,6 +148,7 @@ function restItems(section: GalleryLayoutSection) {
           <Moon v-else class="h-4 w-4" />
         </button>
         <button
+          v-if="options.canShare"
           type="button"
           class="inline-flex h-9 w-9 items-center justify-center transition-colors hover:opacity-70"
           :style="{ color: 'var(--p-text)' }"
@@ -162,7 +191,7 @@ function restItems(section: GalleryLayoutSection) {
         </p>
         <h2
           class="font-medium tracking-tight"
-          style="font-family: 'Cormorant Garamond', serif; font-size: 2.6rem; line-height: 1.1;"
+          style="font-family: var(--g-display, 'Cormorant Garamond'), serif; font-size: 2.6rem; line-height: 1.1;"
           :style="{ color: 'var(--p-text)' }"
         >
           Spreads
@@ -192,7 +221,7 @@ function restItems(section: GalleryLayoutSection) {
     >
       <p
         class="font-medium tracking-tight"
-        style="font-family: 'Cormorant Garamond', serif; font-size: 2rem;"
+        style="font-family: var(--g-display, 'Cormorant Garamond'), serif; font-size: 2rem;"
         :style="{ color: 'var(--p-text)' }"
       >
         {{ searchQuery ? "No plates found" : "No media shared yet" }}
@@ -209,7 +238,7 @@ function restItems(section: GalleryLayoutSection) {
         <div class="mb-8 flex items-baseline justify-between gap-4">
           <h3
             class="font-medium tracking-tight"
-            style="font-family: 'Cormorant Garamond', serif; font-size: 2.4rem;"
+            style="font-family: var(--g-display, 'Cormorant Garamond'), serif; font-size: 2.4rem;"
             :style="{ color: 'var(--p-text)' }"
           >
             {{ section.name || `Chapter ${sectionIndex + 1}` }}
@@ -219,6 +248,21 @@ function restItems(section: GalleryLayoutSection) {
           </span>
         </div>
 
+        <GalleryPhotoGrid
+          v-if="options.photoGrid"
+          :items="section.items"
+          v-bind="options.photoGrid"
+          :accent-color="accentColor"
+          :allow-selection="gallery.allowSelection"
+          :is-selected="isSelected"
+          :is-revealed="isRevealed"
+          :is-hydrated="isHydrated"
+          :is-loaded="isLoaded"
+          @open="openItem"
+          @toggle-select="emit('toggleSelect', $event)"
+          @load="emit('mediaLoad', $event)"
+        />
+        <template v-else>
         <article v-if="featuredItem(section)" class="mb-8">
           <GalleryMediaTile
             :item="featuredItem(section)!"
@@ -269,6 +313,7 @@ function restItems(section: GalleryLayoutSection) {
             />
           </div>
         </div>
+        </template>
       </section>
     </div>
   </main>

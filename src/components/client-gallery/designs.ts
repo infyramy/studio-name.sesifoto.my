@@ -1,4 +1,8 @@
-import type { CrmGalleryDesignId } from "@/services/gallery.service";
+import type {
+  CrmGalleryDesignId,
+  GalleryGridStyle,
+  GallerySizeStep,
+} from "@/services/gallery.service";
 
 export type { CrmGalleryDesignId };
 
@@ -32,3 +36,19 @@ export type GalleryLayoutSection = {
   name: string;
   items: GalleryLayoutItem[];
 };
+
+export type GalleryPhotoGridLayout = {
+  gridStyle: GalleryGridStyle;
+  photoSize: GallerySizeStep;
+  photoGap: GallerySizeStep;
+};
+
+/** Design + permission switches shared by every site template. */
+export interface GalleryViewOptions {
+  heroTitle: string;
+  heroSubtitle: string;
+  hideHero: boolean;
+  canToggleTheme: boolean;
+  canShare: boolean;
+  photoGrid: GalleryPhotoGridLayout | null;
+}

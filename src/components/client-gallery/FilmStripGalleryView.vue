@@ -9,12 +9,19 @@ import {
 } from "lucide-vue-next";
 import type { PublicGallery } from "@/services/gallery.service";
 import GalleryMediaTile from "./GalleryMediaTile.vue";
-import type { GalleryLayoutItem, GalleryLayoutSection } from "./designs";
+import GalleryLogo from "./GalleryLogo.vue";
+import GalleryPhotoGrid from "./GalleryPhotoGrid.vue";
+import type {
+  GalleryLayoutItem,
+  GalleryLayoutSection,
+  GalleryViewOptions,
+} from "./designs";
 
 defineProps<{
   gallery: PublicGallery;
   coverUrl: string;
   clientName: string;
+  metaLine: string;
   accentColor: string;
   isDark: boolean;
   photoCount: number;
@@ -27,6 +34,7 @@ defineProps<{
   isRevealed: (id: string) => boolean;
   isHydrated: (id: string) => boolean;
   isLoaded: (id: string) => boolean;
+  options: GalleryViewOptions;
 }>();
 
 const emit = defineEmits<{
@@ -56,12 +64,7 @@ function frameLabel(index: number) {
   >
     <div class="mx-auto flex h-14 max-w-[100vw] items-center gap-3 px-4 sm:px-6 lg:px-8">
       <div class="flex min-w-0 flex-1 items-center gap-3">
-        <img
-          v-if="gallery.studio.logoUrl"
-          :src="gallery.studio.logoUrl"
-          :alt="gallery.studio.name"
-          class="h-7 w-7 shrink-0 rounded-sm object-contain bg-white/5"
-        />
+        <GalleryLogo :gallery="gallery" />
         <div class="min-w-0">
           <p class="truncate text-xs font-semibold tracking-wide" :style="{ color: 'var(--p-text)' }">
             {{ gallery.title }}
@@ -87,6 +90,7 @@ function frameLabel(index: number) {
 
       <div class="flex shrink-0 items-center gap-0.5">
         <button
+          v-if="options.canToggleTheme"
           type="button"
           class="inline-flex h-9 w-9 items-center justify-center transition-colors hover:opacity-70"
           :style="{ color: 'var(--p-text)' }"
@@ -97,6 +101,7 @@ function frameLabel(index: number) {
           <Moon v-else class="h-4 w-4" />
         </button>
         <button
+          v-if="options.canShare"
           type="button"
           class="inline-flex h-9 w-9 items-center justify-center transition-colors hover:opacity-70"
           :style="{ color: 'var(--p-text)' }"
@@ -131,10 +136,13 @@ function frameLabel(index: number) {
 
   <main class="gallery-reveal gallery-reveal-content pb-16 pt-6">
     <div
-      v-if="coverUrl"
+      v-if="coverUrl && !options.hideHero"
       class="mx-auto mb-10 max-w-7xl px-4 sm:px-6 lg:px-8"
     >
-      <div class="relative aspect-[21/9] overflow-hidden sm:aspect-[2.6/1]">
+      <div
+        class="relative aspect-[21/9] overflow-hidden sm:aspect-[2.6/1]"
+        :style="{ background: 'var(--g-hero, transparent)' }"
+      >
         <img
           :src="coverUrl"
           :alt="`${clientName} gallery cover`"
@@ -146,17 +154,31 @@ function frameLabel(index: number) {
         <div class="absolute inset-0 bg-gradient-to-r from-black/55 via-black/15 to-transparent" />
         <div class="absolute inset-y-0 left-0 flex max-w-lg flex-col justify-end p-6 text-white sm:p-8">
           <p class="mb-2 text-[10px] font-medium tracking-[0.18em] text-white/70">
-            Film strip
+            {{ gallery.galleryType || "Film strip" }}
           </p>
           <h1
             class="portal-display font-medium tracking-tight"
-            style="font-family: 'Cormorant Garamond', serif; font-size: clamp(2rem, 4vw, 3.2rem); line-height: 1.05;"
+            style="font-family: var(--g-display, 'Cormorant Garamond'), serif; font-size: clamp(2rem, 4vw, 3.2rem); line-height: 1.05;"
           >
-            {{ gallery.title }}
+            {{ options.heroTitle || gallery.title }}
           </h1>
+          <p v-if="options.heroSubtitle" class="mt-2 text-sm tracking-wide text-white/85 sm:text-base">
+            {{ options.heroSubtitle }}
+          </p>
+          <p v-if="metaLine" class="mt-2 text-xs tracking-wide text-white/75 sm:text-sm">
+            {{ metaLine }}
+          </p>
         </div>
       </div>
     </div>
+
+    <p
+      v-if="gallery.description"
+      class="mx-auto mb-10 max-w-7xl whitespace-pre-line px-4 text-sm leading-relaxed sm:px-6 lg:px-8"
+      :style="{ color: 'var(--p-muted)' }"
+    >
+      {{ gallery.description }}
+    </p>
 
     <div class="relative mb-6 px-4 sm:hidden">
       <Search class="absolute left-4 top-1/2 h-3.5 w-3.5 -translate-y-1/2" :style="{ color: 'var(--p-muted)' }" />
@@ -177,7 +199,7 @@ function frameLabel(index: number) {
     >
       <p
         class="font-medium tracking-tight"
-        style="font-family: 'Cormorant Garamond', serif; font-size: 2rem;"
+        style="font-family: var(--g-display, 'Cormorant Garamond'), serif; font-size: 2rem;"
         :style="{ color: 'var(--p-text)' }"
       >
         {{ searchQuery ? "No frames found" : "No media shared yet" }}
@@ -197,7 +219,7 @@ function frameLabel(index: number) {
         <div class="mx-auto mb-4 flex max-w-7xl items-baseline justify-between gap-4 px-4 sm:px-6 lg:px-8">
           <h2
             class="font-medium tracking-tight"
-            style="font-family: 'Cormorant Garamond', serif; font-size: 1.85rem;"
+            style="font-family: var(--g-display, 'Cormorant Garamond'), serif; font-size: 1.85rem;"
             :style="{ color: 'var(--p-text)' }"
           >
             {{ section.name || `Reel ${sectionIndex + 1}` }}
@@ -207,7 +229,23 @@ function frameLabel(index: number) {
           </span>
         </div>
 
+        <div v-if="options.photoGrid" class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <GalleryPhotoGrid
+            :items="section.items"
+            v-bind="options.photoGrid"
+            :accent-color="accentColor"
+            :allow-selection="gallery.allowSelection"
+            :is-selected="isSelected"
+            :is-revealed="isRevealed"
+            :is-hydrated="isHydrated"
+            :is-loaded="isLoaded"
+            @open="openItem"
+            @toggle-select="emit('toggleSelect', $event)"
+            @load="emit('mediaLoad', $event)"
+          />
+        </div>
         <div
+          v-else
           class="film-rail flex gap-3 overflow-x-auto px-4 pb-4 sm:gap-4 sm:px-6 lg:px-8"
           style="scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch;"
         >
