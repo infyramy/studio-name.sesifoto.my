@@ -29,6 +29,8 @@ export interface ClientActionTermsData {
 
 export interface ClientActionPayInvoice {
   id: string;
+  /** Stable id shared by every version; used in invoice links. */
+  versionGroupId?: string;
   number: string;
   title: string;
   total: number;

@@ -1055,9 +1055,19 @@ function textEditClass() {
 
               <div class="w-full flex flex-col items-center mt-2">
                 <div class="w-12 h-px bg-[var(--border-color)] mb-3 opacity-50" />
-                <div class="text-[10px] text-[var(--text-muted)] opacity-70">
-                  {{ t("poweredBy") }}
-                </div>
+                <a
+                  href="https://sesifoto.my"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="inline-flex flex-col items-center gap-2 text-[10px] text-[var(--text-muted)] opacity-70 transition-opacity hover:opacity-100"
+                >
+                  <img
+                    src="/brand/sesifoto.svg"
+                    alt="Sesifoto"
+                    class="h-7 w-7 rounded-md object-contain"
+                  />
+                  <span>{{ t("poweredBy") }}</span>
+                </a>
               </div>
             </footer>
           </div>

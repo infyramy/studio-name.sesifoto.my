@@ -106,10 +106,18 @@ const { isDark, themeVars, setAccent, toggleDark } = usePortalTheme({
     portalData.value?.accentColor || portalData.value?.studio.brandColor,
 });
 
-const invoice = computed<PortalInvoice | null>(
-  () =>
-    portalData.value?.invoices.find((inv) => inv.id === invoiceId.value)
-    ?? null,
+/** Matches any version id or the group id, so older links open the active version. */
+function findInvoice(data: PortalData | null) {
+  return (
+    data?.invoices.find(
+      (inv) =>
+        inv.id === invoiceId.value || inv.versionGroupId === invoiceId.value,
+    ) ?? null
+  );
+}
+
+const invoice = computed<PortalInvoice | null>(() =>
+  findInvoice(portalData.value),
 );
 
 const heroUrl = computed(
@@ -153,7 +161,7 @@ async function load(options: { quiet?: boolean } = {}) {
     const data = await portalService.getPortalData(jobId.value);
     portalData.value = data;
     setAccent(data.accentColor || data.studio.brandColor);
-    if (!data.invoices.some((inv) => inv.id === invoiceId.value)) {
+    if (!findInvoice(data)) {
       error.value = "Invoice not found for this booking.";
     } else if (!options.quiet) {
       error.value = "";

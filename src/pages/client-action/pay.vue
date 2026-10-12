@@ -115,7 +115,7 @@
             <a
               v-for="invoice in data.invoices"
               :key="invoice.id"
-              :href="invoiceHref(invoice.id)"
+              :href="invoiceHref(invoice.versionGroupId || invoice.id)"
               target="_blank"
               rel="noopener noreferrer"
               class="pay-row pay-row--link"
@@ -174,7 +174,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { Loader2, Moon, Sun } from "lucide-vue-next";
 import {
   useClientActionInvoicePaymentReturn,
@@ -191,6 +191,7 @@ import {
 import { useStudioStore } from "@/stores/studio";
 
 const route = useRoute();
+const router = useRouter();
 const studioStore = useStudioStore();
 const data = ref<ClientActionPayData | null>(null);
 const { isDark, themeVars, setAccent, toggleDark } = usePortalTheme({
@@ -323,8 +324,21 @@ function payAll() {
   return startCheckout({ scope: "all" }, "all");
 }
 
+/** A single invoice opens directly; the list only helps when a job has several. */
+async function openSingleInvoice() {
+  const invoices = data.value?.invoices ?? [];
+  if (invoices.length !== 1) return false;
+  const [only] = invoices;
+  await router.replace({
+    path: "/client-action/invoice",
+    query: { ...route.query, invoiceId: only.versionGroupId || only.id },
+  });
+  return true;
+}
+
 onMounted(async () => {
   await load();
+  if (pageReady.value && (await openSingleInvoice())) return;
   if (pageReady.value) await handleReturn();
 });
 

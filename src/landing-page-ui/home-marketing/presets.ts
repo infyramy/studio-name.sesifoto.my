@@ -11,6 +11,13 @@ export const DEFAULT_HOME_PACKAGES: HomeFeaturedPackage[] = [];
 
 export function createDefaultHomeMarketingContent(): HomeMarketingContent {
   return {
+    homeLayout: "links",
+    showHomeBookingButton: true,
+    showHomeServicesButton: true,
+    showHomePortfolioButton: true,
+    homeBookingButtonLabel: "",
+    homeServicesButtonLabel: "",
+    homePortfolioButtonLabel: "",
     heroTagline: "Your Memory, In Eternity",
     heroSubtitle: "Wedding photography & videography",
     homeSectionOrder: [...DEFAULT_HOME_SECTION_ORDER],

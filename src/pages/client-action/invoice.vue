@@ -107,10 +107,20 @@ const { isDark, themeVars, setAccent, toggleDark } = usePortalTheme({
   accentOverride: () => data.value?.studio.brandColor,
 });
 
-const invoice = computed<PortalInvoice | null>(() => {
-  const found = data.value?.invoices.find((inv) => inv.id === invoiceId.value);
-  return (found as PortalInvoice | undefined) ?? null;
-});
+/** Links carry the invoice's version group id, so they always open the active version. */
+function findInvoice(payload: ClientActionPayData | null) {
+  const invoices = payload?.invoices ?? [];
+  const match = invoices.find(
+    (inv) =>
+      inv.id === invoiceId.value || inv.versionGroupId === invoiceId.value,
+  );
+  if (match) return match;
+  return invoices.length === 1 ? invoices[0] : null;
+}
+
+const invoice = computed<PortalInvoice | null>(
+  () => (findInvoice(data.value) as PortalInvoice | null) ?? null,
+);
 
 const checkoutKey = computed(() =>
   invoice.value ? `invoice:${invoice.value.id}` : "",
@@ -125,7 +135,7 @@ function openTerms() {
 }
 
 async function load(options: { quiet?: boolean } = {}) {
-  if (!token.value || !invoiceId.value) {
+  if (!token.value) {
     error.value = "This invoice link is missing or invalid.";
     isLoading.value = false;
     return;
@@ -139,7 +149,7 @@ async function load(options: { quiet?: boolean } = {}) {
     const payload = await clientActionService.getPay(token.value);
     data.value = payload;
     setAccent(payload.studio.brandColor);
-    if (!payload.invoices.some((inv) => inv.id === invoiceId.value)) {
+    if (!findInvoice(payload)) {
       error.value = "Invoice not found for this payment link.";
     } else if (!options.quiet) {
       error.value = "";

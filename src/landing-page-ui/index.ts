@@ -33,6 +33,7 @@ export * from "./templates/lookbook";
 export { default as LandingPageView } from "./LandingPageView.vue";
 export { default as LandingPageBootState } from "./LandingPageBootState.vue";
 export { default as MarketingHomePageView } from "./home-marketing/MarketingHomePageView.vue";
+export { default as LinksHomePageView } from "./home-marketing/LinksHomePageView.vue";
 export { default as PortfolioPageView } from "./portfolio/PortfolioPageView.vue";
 export { default as ServicesPageView } from "./services/ServicesPageView.vue";
 export { default as LeadFormPageView } from "./lead-form/LeadFormPageView.vue";

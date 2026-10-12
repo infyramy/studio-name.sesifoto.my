@@ -12,6 +12,7 @@ import type {
 
 const MAX_TEXT = 500;
 const MAX_LABEL = 120;
+const MAX_BUTTON_LABEL = 40;
 const MAX_PRICE = 40;
 const MAX_FEATURED_PACKAGES = 6;
 const MAX_GALLERY_ITEMS = 24;
@@ -143,6 +144,28 @@ export function normalizeHomeMarketingContent(
   const featuredPackages = normalizePackages(src.featuredPackages);
 
   return {
+    homeLayout:
+      src.homeLayout === "full" || src.homeLayout === "links"
+        ? src.homeLayout
+        : defaults.homeLayout,
+    showHomeBookingButton: coerceBoolean(
+      src.showHomeBookingButton,
+      defaults.showHomeBookingButton,
+    ),
+    showHomeServicesButton: coerceBoolean(
+      src.showHomeServicesButton,
+      defaults.showHomeServicesButton,
+    ),
+    showHomePortfolioButton: coerceBoolean(
+      src.showHomePortfolioButton,
+      defaults.showHomePortfolioButton,
+    ),
+    homeBookingButtonLabel: trim(src.homeBookingButtonLabel, MAX_BUTTON_LABEL),
+    homeServicesButtonLabel: trim(src.homeServicesButtonLabel, MAX_BUTTON_LABEL),
+    homePortfolioButtonLabel: trim(
+      src.homePortfolioButtonLabel,
+      MAX_BUTTON_LABEL,
+    ),
     heroTagline: trim(src.heroTagline, MAX_TEXT) || defaults.heroTagline,
     heroSubtitle: trim(src.heroSubtitle, MAX_TEXT) || defaults.heroSubtitle,
     homeSectionOrder: normalizeHomeSectionOrder(src.homeSectionOrder),

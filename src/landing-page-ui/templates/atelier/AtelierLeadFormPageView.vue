@@ -70,17 +70,6 @@ const serviceInterestOptionsList = computed(() =>
   resolveLeadFormServiceOptions(props.leadForm, t.value),
 );
 
-watch(
-  serviceInterestOptionsList,
-  (options) => {
-    const values = options.map((o) => o.value);
-    if (!values.includes(serviceInterest.value)) {
-      serviceInterest.value = defaultLeadServiceValue(options);
-    }
-  },
-  { immediate: true },
-);
-
 const brandLabel = computed(
   () => props.leadForm.brandLabel?.trim() || props.styleConfig.studioName,
 );
@@ -104,6 +93,17 @@ const submitSucceeded = ref(false);
 const submitMessage = ref<string | null>(null);
 const submitError = ref<string | null>(null);
 const fieldErrors = reactive<LeadFormFieldErrors>({});
+
+watch(
+  serviceInterestOptionsList,
+  (options) => {
+    const values = options.map((o) => o.value);
+    if (!values.includes(serviceInterest.value)) {
+      serviceInterest.value = defaultLeadServiceValue(options);
+    }
+  },
+  { immediate: true },
+);
 
 const recentWorkIndex = ref(0);
 

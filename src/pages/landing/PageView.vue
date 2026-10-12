@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import {
   MarketingHomePageView,
+  LinksHomePageView,
   PortfolioPageView,
   LeadFormPageView,
   EditorialHomePageView,
@@ -70,6 +71,10 @@ const galleryInitialIndex = ref(0);
 
 const language = computed<StudioLanguage>(() =>
   studioStore.currentLanguage === "EN" ? "en" : "bm",
+);
+
+const isLinksHome = computed(
+  () => !isTemplatePage.value && theme.value?.homeLayout === "links",
 );
 
 const isEditorial = computed(() =>
@@ -326,6 +331,16 @@ function onLeadGallery(index: number) {
       :error="pageError"
       label="Loading"
       @retry="retryLoad"
+    />
+    <LinksHomePageView
+      v-else-if="isLinksHome && theme"
+      :config="theme"
+      :language="language"
+      mode="live"
+      :product-entitlements="productEntitlements"
+      @navigate="onNavigate"
+      @language-change="onLanguageChange"
+      @retry-load="retryLoad"
     />
     <template v-else-if="isEditorial">
       <EditorialPortfolioPageView

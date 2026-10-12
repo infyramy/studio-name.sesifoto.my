@@ -34,6 +34,8 @@ export interface PortalInvoicePayment {
 
 export interface PortalInvoice {
   id: string;
+  /** Stable id shared by every version; used in invoice links. */
+  versionGroupId?: string;
   number: string;
   title: string;
   total: number;

@@ -29,7 +29,18 @@ export type HomeCtaPresetId =
 
 export type { HomeSectionKey } from "./section-order";
 
+/** `links` = link-in-bio home; `full` = multi-section home of the selected design. */
+export type HomeLayout = "links" | "full";
+
 export type HomeMarketingContent = {
+  homeLayout: HomeLayout;
+  showHomeBookingButton: boolean;
+  showHomeServicesButton: boolean;
+  showHomePortfolioButton: boolean;
+  /** Custom link-page button labels. Empty uses the translated default. */
+  homeBookingButtonLabel: string;
+  homeServicesButtonLabel: string;
+  homePortfolioButtonLabel: string;
   heroTagline: string;
   heroSubtitle: string;
   homeSectionOrder: HomeSectionKey[];

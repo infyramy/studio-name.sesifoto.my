@@ -118,16 +118,6 @@
             />
             {{ acting === "accept" ? "Accepting..." : "Accept quotation" }}
           </button>
-          <a
-            v-if="quote.pdfUrl"
-            :href="quote.pdfUrl"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="quote-ghost inline-flex items-center justify-center"
-            :style="{ color: 'var(--p-muted)' }"
-          >
-            Download quotation
-          </a>
           <button
             type="button"
             class="quote-ghost"
@@ -190,6 +180,27 @@
                     : "Quotation closed"
           }}
         </div>
+        <div v-if="quote.pdfUrl" class="quote-doc-actions">
+          <a
+            :href="quote.pdfUrl"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="quote-ghost"
+            :style="{ color: 'var(--p-muted)' }"
+          >
+            Download quotation
+          </a>
+          <button
+            type="button"
+            class="quote-ghost"
+            :style="{ color: 'var(--p-muted)' }"
+            :disabled="isPrinting"
+            @click="printQuotation"
+          >
+            {{ isPrinting ? "Opening print..." : "Print quotation" }}
+          </button>
+        </div>
+        <p v-if="printError" class="quote-error">{{ printError }}</p>
       </article>
 
       <article class="quote-card mt-4" :style="cardStyle">
@@ -517,6 +528,7 @@ import { marked } from "marked";
 import type { PublicQuotation } from "@/services/public-quotation.service";
 import { useSanitize } from "@/composables/useSanitize";
 import { usePortalTheme } from "@/composables/usePortalTheme";
+import { printInvoiceBlob } from "@/composables/useInvoicePage";
 import PortalOverlay from "./PortalOverlay.vue";
 
 const props = defineProps<{
@@ -557,6 +569,25 @@ function proceedConfirm() {
   if (!confirmAction.value || props.acting) return;
   const action = confirmAction.value;
   emit(action);
+}
+
+const isPrinting = ref(false);
+const printError = ref("");
+
+async function printQuotation() {
+  if (!props.quote.pdfUrl || isPrinting.value) return;
+  isPrinting.value = true;
+  printError.value = "";
+  try {
+    const response = await fetch(props.quote.pdfUrl);
+    if (!response.ok) throw new Error("Unable to load the quotation PDF.");
+    await printInvoiceBlob(await response.blob());
+  } catch (caught: unknown) {
+    printError.value =
+      caught instanceof Error ? caught.message : "Unable to print quotation.";
+  } finally {
+    isPrinting.value = false;
+  }
 }
 
 watch(
@@ -975,6 +1006,12 @@ function money(value: number) {
 .quote-ghost:disabled {
   pointer-events: none;
   opacity: 0.5;
+}
+
+.quote-doc-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem;
 }
 
 .quote-error {
