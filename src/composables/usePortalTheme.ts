@@ -1,4 +1,4 @@
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import {
   blendPortalHex,
   deriveAccessiblePortalAccent,
@@ -29,6 +29,19 @@ function readStoredAccent(): string | null {
   }
 }
 
+/** Freezes CSS colour transitions so the circular reveal shows the final theme. */
+const THEME_SWITCHING_CLASS = "portal-theme-switching";
+
+function revealOrigin(event?: Event) {
+  const button =
+    event?.target instanceof Element ? event.target.closest("button") : null;
+  if (button) {
+    const rect = button.getBoundingClientRect();
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+  }
+  return { x: window.innerWidth - 40, y: 40 };
+}
+
 const isDark = ref(readStoredDark());
 const accentColor = ref<string | null>(readStoredAccent());
 
@@ -55,8 +68,50 @@ export function usePortalTheme(options: { accentOverride?: () => string | null |
     if (next) accentColor.value = next;
   }
 
-  function toggleDark() {
-    isDark.value = !isDark.value;
+  function toggleDark(event?: Event) {
+    const apply = () => {
+      isDark.value = !isDark.value;
+    };
+    const reduceMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    if (typeof document.startViewTransition !== "function" || reduceMotion) {
+      apply();
+      return;
+    }
+
+    const { x, y } = revealOrigin(event);
+    const radius = Math.hypot(
+      Math.max(x, window.innerWidth - x),
+      Math.max(y, window.innerHeight - y),
+    );
+    const root = document.documentElement;
+    root.classList.add(THEME_SWITCHING_CLASS);
+
+    const transition = document.startViewTransition(async () => {
+      apply();
+      await nextTick();
+    });
+    transition.ready
+      .then(() => {
+        root.animate(
+          {
+            clipPath: [
+              `circle(0px at ${x}px ${y}px)`,
+              `circle(${radius}px at ${x}px ${y}px)`,
+            ],
+          },
+          {
+            duration: 560,
+            easing: "cubic-bezier(0.65, 0, 0.35, 1)",
+            pseudoElement: "::view-transition-new(root)",
+          },
+        );
+      })
+      .catch(() => {});
+    transition.finished.finally(() => {
+      root.classList.remove(THEME_SWITCHING_CLASS);
+    });
   }
 
   const resolvedAccent = computed(() => {

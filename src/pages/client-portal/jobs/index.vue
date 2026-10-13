@@ -13,8 +13,7 @@
           :aria-label="isDark ? 'Switch to light mode' : 'Switch to dark mode'"
           @click="toggleDark"
         >
-          <Sun v-if="isDark" class="h-4 w-4" />
-          <Moon v-else class="h-4 w-4" />
+          <PortalThemeIcon :is-dark="isDark" />
         </button>
         <button type="button" class="jobs__logout" @click="logout">
           Log out
@@ -67,15 +66,18 @@
         </button>
       </li>
     </ul>
+
+    <PoweredBySesifoto class="mt-16" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
-import { Moon, Sun } from "lucide-vue-next";
+import PortalThemeIcon from "@/components/portal/PortalThemeIcon.vue";
 import PortalErrorState from "@/components/portal/PortalErrorState.vue";
 import PortalLoadingState from "@/components/portal/PortalLoadingState.vue";
+import PoweredBySesifoto from "@/components/PoweredBySesifoto.vue";
 import { usePortalTheme } from "@/composables/usePortalTheme";
 import {
   PortalApiError,

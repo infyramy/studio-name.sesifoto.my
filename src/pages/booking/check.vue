@@ -5,6 +5,7 @@ import { useStudioStore } from "@/stores/studio";
 import { api } from "@/services/api";
 import { format } from "date-fns";
 import { useTranslation } from "@/composables/useTranslation";
+import PoweredBySesifoto from "@/components/PoweredBySesifoto.vue";
 import {
   ArrowLeft,
   ChevronDown,
@@ -687,6 +688,8 @@ const getWhatsAppUrl = computed(() => {
         </div>
       </div>
     </main>
+
+    <PoweredBySesifoto class="py-8" />
   </div>
 </template>
 

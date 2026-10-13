@@ -3,6 +3,7 @@ import { ref, computed, onMounted, watch, nextTick } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import { useStudioStore } from "@/stores/studio";
 import { useTranslation } from "@/composables/useTranslation";
+import PoweredBySesifoto from "@/components/PoweredBySesifoto.vue";
 import { api } from "@/services/api";
 import { format } from "date-fns";
 import type { Booking } from "@/types";
@@ -649,6 +650,8 @@ const getWhatsAppUrl = computed(() => {
         </section>
       </div>
     </div>
+
+    <PoweredBySesifoto class="py-8" />
 
     <div
       v-if="booking && !isLoading && !error"

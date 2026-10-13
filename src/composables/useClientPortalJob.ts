@@ -21,7 +21,7 @@ export type PortalPasscodeSubmit =
 
 export interface ClientPortalJobContext {
   isDark: Ref<boolean>;
-  toggleDark: () => void;
+  toggleDark: (event?: Event) => void;
   isLoading: Ref<boolean>;
   accessExpired: Ref<boolean>;
   error: Ref<string | null>;

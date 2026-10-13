@@ -28,8 +28,7 @@
               :aria-label="isDark ? 'Switch to light mode' : 'Switch to dark mode'"
               @click="toggleDark"
             >
-              <Sun v-if="isDark" class="h-4 w-4" />
-              <Moon v-else class="h-4 w-4" />
+              <PortalThemeIcon :is-dark="isDark" />
             </button>
           </header>
 
@@ -71,14 +70,7 @@
           </div>
           </form>
 
-          <footer class="gate__footer">
-            <span class="gate__footer-label">Platform by</span>
-            <img
-              :src="sesifotoLogo"
-              alt="Sesifoto"
-              class="gate__footer-logo"
-            />
-          </footer>
+          <PoweredBySesifoto class="mt-16" />
         </div>
       </main>
 
@@ -99,12 +91,10 @@ import {
   EyeOff,
   KeyRound,
   Loader2,
-  Moon,
-  Sun,
 } from "lucide-vue-next";
-import sesifotoLogoDark from "@/assets/logo/full-dark.png";
-import sesifotoLogoLight from "@/assets/logo/full-light.png";
+import PortalThemeIcon from "@/components/portal/PortalThemeIcon.vue";
 import PortalLoadingState from "@/components/portal/PortalLoadingState.vue";
+import PoweredBySesifoto from "@/components/PoweredBySesifoto.vue";
 import { usePortalTheme } from "@/composables/usePortalTheme";
 import { PortalApiError, portalService } from "@/services/portal.service";
 import { useStudioStore } from "@/stores/studio";
@@ -131,10 +121,6 @@ const studioInitial = computed(
   () => (gate.value?.studioName || studioName.value).charAt(0).toUpperCase(),
 );
 const heroUrl = computed(() => gate.value?.heroUrl || "");
-const sesifotoLogo = computed(() =>
-  isDark.value ? sesifotoLogoLight : sesifotoLogoDark,
-);
-
 function nextJobId(): string {
   const value = route.query.nextJob;
   return Array.isArray(value) ? String(value[0] || "") : String(value || "");
@@ -501,27 +487,6 @@ async function submit() {
   text-align: center;
   font-size: 0.78rem;
   color: var(--p-muted);
-}
-
-.gate__footer {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-top: 4rem;
-  opacity: 0.8;
-}
-
-.gate__footer-label {
-  font-size: 0.65rem;
-  letter-spacing: 0.14em;
- 
-  color: var(--p-muted);
-}
-
-.gate__footer-logo {
-  height: 1.35rem;
-  width: auto;
-  opacity: 0.9;
 }
 
 @keyframes gate-in {

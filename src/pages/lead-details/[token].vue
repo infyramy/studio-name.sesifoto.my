@@ -37,6 +37,7 @@
       >
         View quotation
       </a>
+      <PoweredBySesifoto class="mt-12" />
     </div>
 
     <div
@@ -55,6 +56,7 @@
       >
         View quotation
       </a>
+      <PoweredBySesifoto class="mt-12" />
     </div>
 
     <div v-else-if="form" class="mx-auto flex min-h-dvh max-w-lg flex-col px-5 pb-10 pt-8">
@@ -381,6 +383,8 @@
           <span v-else>Continue</span>
         </button>
       </div>
+
+      <PoweredBySesifoto class="mt-auto pt-12" />
     </div>
     <PortalOverlay
       :open="sessionEditorOpen"
@@ -507,6 +511,7 @@ import { CalendarDays, Check, Trash2 } from "lucide-vue-next";
 import PortalErrorState from "@/components/portal/PortalErrorState.vue";
 import PortalLoadingState from "@/components/portal/PortalLoadingState.vue";
 import PortalOverlay from "@/components/portal/PortalOverlay.vue";
+import PoweredBySesifoto from "@/components/PoweredBySesifoto.vue";
 import LeadFormDateField from "@/landing-page-ui/lead-form/LeadFormDateField.vue";
 import LeadFormSelectField from "@/landing-page-ui/lead-form/LeadFormSelectField.vue";
 import { usePortalTheme } from "@/composables/usePortalTheme";

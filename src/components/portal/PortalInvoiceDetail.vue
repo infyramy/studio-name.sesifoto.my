@@ -11,6 +11,15 @@
         class="invoice-hero__img"
       />
       <div class="invoice-hero__veil" />
+      <button
+        type="button"
+        class="portal-hero-theme-toggle print:hidden"
+        :aria-label="isDark ? 'Switch to light mode' : 'Switch to dark mode'"
+        :title="isDark ? 'Light mode' : 'Dark mode'"
+        @click="emit('toggleTheme', $event)"
+      >
+        <PortalThemeIcon :is-dark="!!isDark" icon-class="h-[1.125rem] w-[1.125rem]" />
+      </button>
       <div class="invoice-hero__content">
         <div class="invoice-hero__brand">
           <img
@@ -83,10 +92,10 @@
         </div>
 
         <article class="invoice-card invoice-print-root" :style="cardStyle">
-          <div class="flex items-start justify-between gap-4">
+          <div class="flex items-start justify-between gap-3 sm:gap-4">
             <div class="min-w-0">
-              <div class="flex flex-wrap items-center gap-2">
-                <h2 class="text-lg font-semibold tracking-tight sm:text-xl">
+              <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <h2 class="break-words text-lg font-semibold tracking-tight sm:text-xl">
                   Invoice #{{ invoice.number }}
                 </h2>
                 <span
@@ -98,44 +107,25 @@
               </div>
               <p
                 v-if="invoice.title"
-                class="mt-1 text-sm"
+                class="mt-1 break-words text-sm"
                 :style="{ color: 'var(--p-muted)' }"
               >
                 {{ invoice.title }}
               </p>
             </div>
-            <div class="flex shrink-0 items-center gap-1 print:hidden">
+            <div class="hidden shrink-0 items-center gap-1 sm:flex print:hidden">
               <button
+                v-for="action in documentActions"
+                :key="action.key"
                 type="button"
                 class="invoice-icon-btn"
-                data-tooltip="Print"
-                aria-label="Print invoice"
-                :disabled="isPrinting"
-                @click="emit('print')"
+                :data-tooltip="action.label"
+                :aria-label="action.ariaLabel"
+                :disabled="action.disabled"
+                @click="action.run"
               >
-                <Loader2 v-if="isPrinting" class="h-4 w-4 animate-spin" />
-                <Printer v-else class="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                class="invoice-icon-btn"
-                data-tooltip="Download"
-                aria-label="Download invoice"
-                :disabled="isDownloading"
-                @click="emit('download')"
-              >
-                <Loader2 v-if="isDownloading" class="h-4 w-4 animate-spin" />
-                <Download v-else class="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                class="invoice-icon-btn"
-                data-tooltip="Receipt"
-                aria-label="View payment receipt"
-                :disabled="!hasReceipt"
-                @click="emit('receipt')"
-              >
-                <ReceiptText class="h-4 w-4" />
+                <Loader2 v-if="action.busy" class="h-4 w-4 animate-spin" />
+                <component :is="action.icon" v-else class="h-4 w-4" />
               </button>
             </div>
           </div>
@@ -199,136 +189,119 @@
           >
             Paid in full
           </div>
+
+          <div class="invoice-actions sm:hidden print:hidden">
+            <button
+              v-for="action in documentActions"
+              :key="action.key"
+              type="button"
+              class="invoice-action"
+              :aria-label="action.ariaLabel"
+              :disabled="action.disabled"
+              @click="action.run"
+            >
+              <Loader2 v-if="action.busy" class="h-4 w-4 animate-spin" />
+              <component :is="action.icon" v-else class="h-4 w-4" />
+              <span>{{ action.label }}</span>
+            </button>
+          </div>
         </article>
 
         <article class="invoice-card mt-4" :style="cardStyle">
-          <h3 class="text-base font-semibold">Items</h3>
-
-          <div class="invoice-table-wrap mt-5">
-            <div class="invoice-table-head">
-              <span>Item</span>
-              <span class="text-center">Qty</span>
-              <span class="text-right">Price</span>
-              <span class="text-right">Amount</span>
-            </div>
-
-            <div
-              v-if="!(invoice.items || []).length"
-              class="py-8 text-center text-sm"
-              :style="{ color: 'var(--p-muted)' }"
-            >
-              No line items on this invoice.
-            </div>
-
-            <div
-              v-for="item in invoice.items || []"
-              :key="item.id"
-              class="invoice-table-row"
-            >
-              <div class="min-w-0">
-                <p class="text-sm font-semibold leading-snug">
-                  {{ item.description }}
-                </p>
-                <p
-                  v-if="item.detail"
-                  class="mt-1 whitespace-pre-line text-xs leading-relaxed"
-                  :style="{ color: 'var(--p-muted)' }"
-                >
-                  {{ item.detail }}
-                </p>
-              </div>
-              <p class="text-center text-sm tabular-nums">
-                {{ formatQty(item.quantity) }}
-              </p>
-              <p class="text-right text-sm tabular-nums">
-                {{ formatMoney(item.unitPrice, invoice.currency) }}
-              </p>
-              <p class="text-right text-sm font-medium tabular-nums">
-                {{ formatMoney(item.amount, invoice.currency) }}
-              </p>
-            </div>
+          <div class="invoice-lines__head">
+            <span>Item</span>
+            <span>Amount</span>
           </div>
 
-          <div class="invoice-totals">
-            <div
-              v-if="showBreakdown"
-              class="invoice-totals__row"
-            >
-              <span :style="{ color: 'var(--p-muted)' }">Subtotal</span>
-              <span class="tabular-nums">
-                {{ formatMoney(invoice.subtotal, invoice.currency) }}
-              </span>
+          <p
+            v-if="!lines.length"
+            class="invoice-lines__empty"
+            :style="{ color: 'var(--p-muted)' }"
+          >
+            No line items on this invoice.
+          </p>
+
+          <ul v-else class="invoice-lines">
+            <li v-for="line in lines" :key="line.id" class="invoice-line">
+              <p class="invoice-line__name">
+                {{ line.name }}
+                <span class="invoice-line__qty">
+                  × {{ formatQty(line.quantity) }}
+                </span>
+              </p>
+              <p class="invoice-line__amount">
+                {{ formatMoney(line.amount, invoice.currency) }}
+              </p>
+              <div v-if="line.blocks.length" class="invoice-line__detail">
+                <template v-for="(block, blockIndex) in line.blocks" :key="blockIndex">
+                  <p v-if="block.kind === 'paragraph'" class="whitespace-pre-line">{{ block.text }}</p>
+                  <ul v-else class="invoice-line__list">
+                    <li
+                      v-for="(entry, entryIndex) in block.items"
+                      :key="entryIndex"
+                      :class="{ 'invoice-line__group': entry.children.length }"
+                    >
+                      {{ entry.text }}
+                      <ul v-if="entry.children.length" class="invoice-line__sublist">
+                        <li v-for="(child, childIndex) in entry.children" :key="childIndex">
+                          {{ child }}
+                        </li>
+                      </ul>
+                    </li>
+                  </ul>
+                </template>
+              </div>
+            </li>
+          </ul>
+
+          <dl class="invoice-summary">
+            <div class="invoice-summary__row">
+              <dt>Subtotal</dt>
+              <dd>{{ formatMoney(invoice.subtotal, invoice.currency) }}</dd>
             </div>
-            <div
-              v-if="invoice.discount > 0"
-              class="invoice-totals__row"
-            >
-              <span :style="{ color: 'var(--p-muted)' }">Discount</span>
-              <span class="tabular-nums">
-                −{{ formatMoney(invoice.discount, invoice.currency) }}
-              </span>
+            <div v-if="invoice.discount > 0" class="invoice-summary__row">
+              <dt>Discount</dt>
+              <dd>−{{ formatMoney(invoice.discount, invoice.currency) }}</dd>
             </div>
-            <div
-              v-if="invoice.tax > 0"
-              class="invoice-totals__row"
-            >
-              <span :style="{ color: 'var(--p-muted)' }">Tax</span>
-              <span class="tabular-nums">
-                {{ formatMoney(invoice.tax, invoice.currency) }}
-              </span>
+            <div v-if="invoice.tax > 0" class="invoice-summary__row">
+              <dt>Tax</dt>
+              <dd>{{ formatMoney(invoice.tax, invoice.currency) }}</dd>
             </div>
-            <div
-              v-if="invoice.rounding !== 0"
-              class="invoice-totals__row"
-            >
-              <span :style="{ color: 'var(--p-muted)' }">Rounding</span>
-              <span class="tabular-nums">
-                {{ formatMoney(invoice.rounding, invoice.currency) }}
-              </span>
+            <div v-if="invoice.rounding !== 0" class="invoice-summary__row">
+              <dt>Rounding</dt>
+              <dd>{{ formatMoney(invoice.rounding, invoice.currency) }}</dd>
             </div>
-            <div class="invoice-totals__row">
-              <span :style="{ color: 'var(--p-muted)' }">Total</span>
-              <span class="tabular-nums">
-                {{ formatMoney(invoice.total, invoice.currency) }}
-              </span>
+            <div class="invoice-summary__row invoice-summary__total">
+              <dt>Total</dt>
+              <dd>{{ formatMoney(invoice.total, invoice.currency) }}</dd>
             </div>
             <div
               v-for="payment in invoice.payments || []"
               :key="payment.id"
-              class="invoice-totals__row"
+              class="invoice-summary__row"
             >
-              <span :style="{ color: 'var(--p-muted)' }">
-                Payment on {{ formatDateLong(payment.paidAt) }}
-              </span>
-              <span class="tabular-nums">
-                {{ formatMoney(payment.amount, invoice.currency) }}
-              </span>
+              <dt>Paid {{ formatDateLong(payment.paidAt) }}</dt>
+              <dd>−{{ formatMoney(payment.amount, invoice.currency) }}</dd>
             </div>
             <div
               v-if="!(invoice.payments || []).length && invoice.paidAmount > 0"
-              class="invoice-totals__row"
+              class="invoice-summary__row"
             >
-              <span :style="{ color: 'var(--p-muted)' }">Paid</span>
-              <span class="tabular-nums">
-                {{ formatMoney(invoice.paidAmount, invoice.currency) }}
-              </span>
+              <dt>Paid</dt>
+              <dd>−{{ formatMoney(invoice.paidAmount, invoice.currency) }}</dd>
+            </div>
+            <div class="invoice-summary__row invoice-summary__due">
+              <dt>Amount due</dt>
+              <dd>{{ formatMoney(invoice.balanceDue, invoice.currency) }}</dd>
             </div>
             <div
               v-if="installmentDue(invoice) < invoice.balanceDue"
-              class="invoice-totals__row"
+              class="invoice-summary__row"
             >
-              <span :style="{ color: 'var(--p-muted)' }">Due now</span>
-              <span class="tabular-nums">
-                {{ formatMoney(installmentDue(invoice), invoice.currency) }}
-              </span>
+              <dt>Due now</dt>
+              <dd>{{ formatMoney(installmentDue(invoice), invoice.currency) }}</dd>
             </div>
-            <div class="invoice-totals__due">
-              <span>Balance remaining</span>
-              <span class="tabular-nums">
-                {{ formatMoney(invoice.balanceDue, invoice.currency) }}
-              </span>
-            </div>
-          </div>
+          </dl>
         </article>
 
         <article
@@ -359,12 +332,7 @@
           </p>
         </article>
 
-        <p
-          class="invoice-powered print:hidden"
-          :style="{ color: 'var(--p-muted)' }"
-        >
-          Powered by Sesifoto
-        </p>
+        <PoweredBySesifoto class="mt-10" />
       </template>
     </main>
   </div>
@@ -373,8 +341,11 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { Download, Loader2, Printer, ReceiptText } from "lucide-vue-next";
+import PoweredBySesifoto from "@/components/PoweredBySesifoto.vue";
+import PortalThemeIcon from "@/components/portal/PortalThemeIcon.vue";
 import { invoiceStatusLabel } from "@/composables/useInvoicePage";
 import type { PortalInvoice } from "@/services/portal.service";
+import { parseInvoiceLine } from "@/utils/invoice-line";
 
 const props = defineProps<{
   invoice: PortalInvoice | null;
@@ -391,6 +362,7 @@ const props = defineProps<{
   checkoutKey?: string;
   isDownloading?: boolean;
   isPrinting?: boolean;
+  isDark?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -398,6 +370,7 @@ const emit = defineEmits<{
   download: [];
   print: [];
   receipt: [];
+  toggleTheme: [event: MouseEvent];
 }>();
 
 const clientFirstName = computed(() => {
@@ -416,11 +389,44 @@ const hasReceipt = computed(() => {
   return inv.paidAmount > 0 || (inv.payments || []).length > 0;
 });
 
-const showBreakdown = computed(() => {
-  const inv = props.invoice;
-  if (!inv) return false;
-  return inv.discount > 0 || inv.tax > 0 || inv.rounding !== 0;
-});
+const documentActions = computed(() => [
+  {
+    key: "print",
+    label: "Print",
+    ariaLabel: "Print invoice",
+    icon: Printer,
+    busy: !!props.isPrinting,
+    disabled: !!props.isPrinting,
+    run: () => emit("print"),
+  },
+  {
+    key: "download",
+    label: "Download",
+    ariaLabel: "Download invoice",
+    icon: Download,
+    busy: !!props.isDownloading,
+    disabled: !!props.isDownloading,
+    run: () => emit("download"),
+  },
+  {
+    key: "receipt",
+    label: "Receipt",
+    ariaLabel: "View payment receipt",
+    icon: ReceiptText,
+    busy: false,
+    disabled: !hasReceipt.value,
+    run: () => emit("receipt"),
+  },
+]);
+
+const lines = computed(() =>
+  (props.invoice?.items || []).map((item) => ({
+    id: item.id,
+    quantity: item.quantity,
+    amount: item.amount,
+    ...parseInvoiceLine(item.description, item.detail),
+  })),
+);
 
 function installmentDue(invoice: PortalInvoice) {
   const due =
@@ -603,15 +609,25 @@ function formatMoney(value: number, currency: string | null) {
   z-index: 2;
   margin: -2.5rem auto 0;
   max-width: 42rem;
-  padding: 0 1.25rem 3rem;
+  padding: 0 1rem 3rem;
 }
 
 .invoice-card {
   border-radius: 0.75rem;
   border-width: 1px;
   border-style: solid;
-  padding: 1.5rem;
+  padding: 1.25rem;
   box-shadow: 0 12px 40px -28px rgba(0, 0, 0, 0.45);
+}
+
+@media (min-width: 640px) {
+  .invoice-main {
+    padding: 0 1.25rem 3rem;
+  }
+
+  .invoice-card {
+    padding: 1.5rem;
+  }
 }
 
 .invoice-icon-btn {
@@ -668,35 +684,63 @@ function formatMoney(value: number, currency: string | null) {
 }
 
 .invoice-meta {
-  margin-top: 1.75rem;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1.25rem 1rem;
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
 }
 
-@media (min-width: 640px) {
-  .invoice-meta {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
+.invoice-meta > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.6rem 0;
+  border-top: 1px solid color-mix(in srgb, var(--p-border) 28%, transparent);
 }
 
 .invoice-meta__label {
-  font-size: 0.65rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
+  flex-shrink: 0;
+  font-size: 0.8125rem;
   color: var(--p-muted);
 }
 
 .invoice-meta__value {
-  margin-top: 0.35rem;
+  min-width: 0;
   font-size: 0.875rem;
   font-weight: 500;
   line-height: 1.35;
-  word-break: break-word;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+@media (min-width: 640px) {
+  .invoice-meta {
+    margin-top: 1.75rem;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1.25rem 1rem;
+  }
+
+  .invoice-meta > div {
+    display: block;
+    padding: 0;
+    border-top: 0;
+  }
+
+  .invoice-meta__label {
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+  }
+
+  .invoice-meta__value {
+    margin-top: 0.35rem;
+    text-align: left;
+  }
 }
 
 .invoice-pay {
-  margin-top: 1.75rem;
+  margin-top: 1.25rem;
   display: inline-flex;
   height: 3rem;
   width: 100%;
@@ -719,7 +763,7 @@ function formatMoney(value: number, currency: string | null) {
 }
 
 .invoice-paid-note {
-  margin-top: 1.75rem;
+  margin-top: 1.25rem;
   display: flex;
   height: 3rem;
   align-items: center;
@@ -730,20 +774,47 @@ function formatMoney(value: number, currency: string | null) {
   letter-spacing: 0.08em;
 }
 
-.invoice-table-wrap {
-  overflow-x: auto;
+@media (min-width: 640px) {
+  .invoice-pay,
+  .invoice-paid-note {
+    margin-top: 1.75rem;
+  }
 }
 
-.invoice-table-head,
-.invoice-table-row {
+.invoice-actions {
+  margin-top: 0.75rem;
   display: grid;
-  grid-template-columns: minmax(0, 1.6fr) 3rem 5.5rem 5.5rem;
-  gap: 0.75rem;
-  align-items: start;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
 }
 
-.invoice-table-head {
-  border-bottom: 1px solid color-mix(in srgb, var(--p-border) 45%, transparent);
+.invoice-action {
+  display: inline-flex;
+  height: 2.75rem;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border: 1px solid color-mix(in srgb, var(--p-border) 45%, transparent);
+  border-radius: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--p-text);
+  transition: background-color 0.15s ease;
+}
+
+.invoice-action:active {
+  background: color-mix(in srgb, var(--p-border) 30%, transparent);
+}
+
+.invoice-action:disabled {
+  opacity: 0.45;
+}
+
+.invoice-lines__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
   padding-bottom: 0.65rem;
   font-size: 0.65rem;
   font-weight: 600;
@@ -751,43 +822,181 @@ function formatMoney(value: number, currency: string | null) {
   color: var(--p-muted);
 }
 
-.invoice-table-row {
-  border-bottom: 1px solid color-mix(in srgb, var(--p-border) 30%, transparent);
-  padding: 1rem 0;
+.invoice-lines,
+.invoice-lines__empty {
+  border-top: 1px solid color-mix(in srgb, var(--p-border) 45%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--p-border) 45%, transparent);
 }
 
-.invoice-totals {
-  margin-top: 1.25rem;
-  margin-left: auto;
-  display: flex;
-  width: 100%;
-  max-width: 18rem;
-  flex-direction: column;
-  gap: 0.55rem;
+.invoice-lines__empty {
+  padding: 2rem 0;
+  text-align: center;
   font-size: 0.875rem;
 }
 
-.invoice-totals__row,
-.invoice-totals__due {
+.invoice-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 1rem;
+  padding: 1rem 0;
+}
+
+.invoice-line + .invoice-line {
+  border-top: 1px solid color-mix(in srgb, var(--p-border) 28%, transparent);
+}
+
+.invoice-line__name {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.invoice-line__qty {
+  margin-left: 0.25rem;
+  font-size: 0.8125rem;
+  font-weight: 400;
+  color: var(--p-muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.invoice-line__amount {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  line-height: 1.4;
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.invoice-line__detail {
+  grid-column: 1 / -1;
+  margin-top: 0.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  color: var(--p-muted);
+  overflow-wrap: anywhere;
+}
+
+@media (min-width: 640px) {
+  .invoice-line__detail {
+    grid-column: 1;
+  }
+}
+
+.invoice-line__list,
+.invoice-line__sublist {
+  display: flex;
+  flex-direction: column;
+}
+
+.invoice-line__list {
+  gap: 0.2rem;
+}
+
+.invoice-line__list > li,
+.invoice-line__sublist > li {
+  position: relative;
+  padding-left: 0.9rem;
+}
+
+.invoice-line__list > li::before {
+  content: "";
+  position: absolute;
+  left: 0.15rem;
+  top: calc(0.775em - 0.125rem);
+  height: 0.25rem;
+  width: 0.25rem;
+  border-radius: 9999px;
+  background: currentColor;
+  opacity: 0.7;
+}
+
+.invoice-line__group {
+  font-weight: 500;
+  color: color-mix(in srgb, var(--p-text) 82%, var(--p-muted));
+}
+
+.invoice-line__group + li {
+  margin-top: 0.3rem;
+}
+
+.invoice-line__sublist {
+  margin-top: 0.1rem;
+  font-weight: 400;
+  color: var(--p-muted);
+}
+
+.invoice-line__sublist > li::before {
+  content: "";
+  position: absolute;
+  left: 0.1rem;
+  top: 0.775em;
+  height: 1px;
+  width: 0.4rem;
+  background: currentColor;
+  opacity: 0.6;
+}
+
+.invoice-summary {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+}
+
+@media (min-width: 640px) {
+  .invoice-summary {
+    margin-left: auto;
+    max-width: 20rem;
+  }
+}
+
+.invoice-summary__row {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 1rem;
 }
 
-.invoice-totals__due {
+.invoice-summary__row dt {
+  min-width: 0;
+  color: var(--p-muted);
+}
+
+.invoice-summary__row dd {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.invoice-summary__total {
+  font-weight: 600;
+}
+
+.invoice-summary__total dt {
+  color: var(--p-text);
+}
+
+.invoice-summary__due {
   margin-top: 0.35rem;
-  padding-top: 0.75rem;
+  padding-top: 0.85rem;
   border-top: 1px solid color-mix(in srgb, var(--p-border) 45%, transparent);
   font-size: 1rem;
   font-weight: 700;
 }
 
-.invoice-powered {
-  margin-top: 2rem;
-  text-align: center;
-  font-size: 0.65rem;
-  letter-spacing: 0.14em;
+.invoice-summary__due dt {
+  color: var(--p-text);
+}
+
+.invoice-summary__due dd {
+  font-size: 1.25rem;
+  letter-spacing: -0.01em;
 }
 
 .portal-reveal {

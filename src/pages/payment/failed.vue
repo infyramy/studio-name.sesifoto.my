@@ -3,6 +3,7 @@ import { computed } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import { useStudioStore } from "@/stores/studio";
 import { useTranslation } from "@/composables/useTranslation";
+import PoweredBySesifoto from "@/components/PoweredBySesifoto.vue";
 import { XCircle, Home, MessageCircle, ArrowRight } from "lucide-vue-next";
 
 const router = useRouter();
@@ -148,6 +149,8 @@ const getWhatsAppUrl = computed(() => {
         </button>
       </div>
     </div>
+
+    <PoweredBySesifoto class="relative z-10 mt-8" />
   </div>
 </template>
 

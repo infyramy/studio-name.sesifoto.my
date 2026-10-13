@@ -45,8 +45,7 @@
           :aria-label="isDark ? 'Switch to light mode' : 'Switch to dark mode'"
           @click="toggleDark"
         >
-          <Sun v-if="isDark" class="h-4 w-4" />
-          <Moon v-else class="h-4 w-4" />
+          <PortalThemeIcon :is-dark="isDark" />
         </button>
       </header>
 
@@ -168,6 +167,8 @@
       >
         Open client portal
       </a>
+
+      <PoweredBySesifoto class="mt-12" />
     </main>
   </div>
 </template>
@@ -175,7 +176,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { Loader2, Moon, Sun } from "lucide-vue-next";
+import { Loader2 } from "lucide-vue-next";
+import PortalThemeIcon from "@/components/portal/PortalThemeIcon.vue";
 import {
   useClientActionInvoicePaymentReturn,
   useInvoicePageChrome,
@@ -183,6 +185,7 @@ import {
 import { usePortalTheme } from "@/composables/usePortalTheme";
 import PortalErrorState from "@/components/portal/PortalErrorState.vue";
 import PortalLoadingState from "@/components/portal/PortalLoadingState.vue";
+import PoweredBySesifoto from "@/components/PoweredBySesifoto.vue";
 import {
   ClientActionApiError,
   clientActionService,

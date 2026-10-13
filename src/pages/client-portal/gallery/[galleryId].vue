@@ -727,8 +727,8 @@ function clearSelection() {
   selectedIds.value = [];
 }
 
-function toggleTheme() {
-  toggleDark();
+function toggleTheme(event: MouseEvent) {
+  toggleDark(event);
 }
 
 function showNotice(message: string) {

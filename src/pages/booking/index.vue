@@ -37,6 +37,7 @@ import type {
 } from "@/types";
 import Modal from "@/components/Modal.vue";
 import ImageCarousel from "@/components/ImageCarousel.vue";
+import PoweredBySesifoto from "@/components/PoweredBySesifoto.vue";
 import { marked } from "marked";
 import {
   useBookingSession,
@@ -5492,6 +5493,8 @@ watch(
         </Transition>
       </main>
     </div>
+
+    <PoweredBySesifoto class="py-8" />
 
     <!-- Bottom Action Bar -->
     <div v-if="!bookingClosed" class="bk-sticky-bar">

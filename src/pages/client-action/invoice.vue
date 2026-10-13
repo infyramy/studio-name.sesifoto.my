@@ -25,17 +25,6 @@
       @action="openTerms"
     />
     <template v-else-if="data">
-      <div class="absolute right-4 top-4 z-20 print:hidden">
-        <button
-          type="button"
-          class="portal-icon-btn"
-          :aria-label="isDark ? 'Switch to light mode' : 'Switch to dark mode'"
-          @click="toggleDark"
-        >
-          <Sun v-if="isDark" class="h-4 w-4" />
-          <Moon v-else class="h-4 w-4" />
-        </button>
-      </div>
       <PortalInvoiceDetail
         :invoice="invoice"
         :studio-name="data.studio.name"
@@ -46,6 +35,8 @@
         :checkout-key="checkoutKey"
         :is-downloading="isDownloading"
         :is-printing="isPrinting"
+        :is-dark="isDark"
+        @toggle-theme="toggleDark"
         @pay="onPay"
         @download="onDownload"
         @print="onPrint"
@@ -66,7 +57,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
-import { Moon, Sun } from "lucide-vue-next";
 import PortalErrorState from "@/components/portal/PortalErrorState.vue";
 import PortalInvoiceDetail from "@/components/portal/PortalInvoiceDetail.vue";
 import PortalInvoiceReceiptDialog from "@/components/portal/PortalInvoiceReceiptDialog.vue";

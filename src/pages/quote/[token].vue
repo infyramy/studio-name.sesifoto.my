@@ -12,22 +12,12 @@
     />
 
     <template v-else-if="quote">
-      <div class="absolute right-4 top-4 z-20">
-        <button
-          type="button"
-          class="portal-icon-btn"
-          :aria-label="isDark ? 'Switch to light mode' : 'Switch to dark mode'"
-          @click="toggleDark"
-        >
-          <Sun v-if="isDark" class="h-4 w-4" />
-          <Moon v-else class="h-4 w-4" />
-        </button>
-      </div>
-
       <PortalQuotationDetail
         :quote="quote"
         :acting="acting"
         :action-error="actionError"
+        :is-dark="isDark"
+        @toggle-theme="toggleDark"
         @accept="accept"
         @decline="decline"
       />
@@ -38,7 +28,6 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
-import { Moon, Sun } from "lucide-vue-next";
 import PortalErrorState from "@/components/portal/PortalErrorState.vue";
 import PortalLoadingState from "@/components/portal/PortalLoadingState.vue";
 import PortalQuotationDetail from "@/components/portal/PortalQuotationDetail.vue";

@@ -2,6 +2,15 @@
   <div class="quote-page portal-reveal">
     <section class="quote-hero quote-hero--fallback">
       <div class="quote-hero__veil" />
+      <button
+        type="button"
+        class="portal-hero-theme-toggle print:hidden"
+        :aria-label="isDark ? 'Switch to light mode' : 'Switch to dark mode'"
+        :title="isDark ? 'Light mode' : 'Dark mode'"
+        @click="emit('toggleTheme', $event)"
+      >
+        <PortalThemeIcon :is-dark="!!isDark" icon-class="h-[1.125rem] w-[1.125rem]" />
+      </button>
       <div class="quote-hero__content">
         <div class="quote-hero__brand">
           <img
@@ -380,9 +389,7 @@
         </p>
       </article>
 
-      <p class="quote-powered" :style="{ color: 'var(--p-muted)' }">
-        Powered by Sesifoto
-      </p>
+      <PoweredBySesifoto class="mt-10" />
     </main>
 
     <Teleport to="body">
@@ -529,17 +536,21 @@ import type { PublicQuotation } from "@/services/public-quotation.service";
 import { useSanitize } from "@/composables/useSanitize";
 import { usePortalTheme } from "@/composables/usePortalTheme";
 import { printInvoiceBlob } from "@/composables/useInvoicePage";
+import PoweredBySesifoto from "@/components/PoweredBySesifoto.vue";
+import PortalThemeIcon from "@/components/portal/PortalThemeIcon.vue";
 import PortalOverlay from "./PortalOverlay.vue";
 
 const props = defineProps<{
   quote: PublicQuotation;
   acting?: "accept" | "decline" | null;
   actionError?: string;
+  isDark?: boolean;
 }>();
 
 const emit = defineEmits<{
   accept: [];
   decline: [];
+  toggleTheme: [event: MouseEvent];
 }>();
 
 const { sanitize } = useSanitize();
@@ -1083,13 +1094,6 @@ function money(value: number) {
   border-top: 1px solid color-mix(in srgb, var(--p-border) 45%, transparent);
   font-size: 1rem;
   font-weight: 700;
-}
-
-.quote-powered {
-  margin-top: 2rem;
-  text-align: center;
-  font-size: 0.65rem;
-  letter-spacing: 0.14em;
 }
 
 .quote-terms-btn {

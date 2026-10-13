@@ -70,8 +70,7 @@
                   :aria-label="isDark ? 'Switch to light mode' : 'Switch to dark mode'"
                   @click="toggleDark"
                 >
-                  <Sun v-if="isDark" class="h-4 w-4" />
-                  <Moon v-else class="h-4 w-4" />
+                  <PortalThemeIcon :is-dark="isDark" />
                 </button>
                 <div ref="actionsMenuEl" class="relative">
                   <button
@@ -140,6 +139,8 @@
           </header>
 
           <RouterView />
+
+          <PoweredBySesifoto class="mt-4 pb-8" />
         </div>
 
         <nav
@@ -208,18 +209,18 @@ import {
   Home,
   KeyRound,
   Link,
-  Moon,
   MoreHorizontal,
   ReceiptText,
   Share2,
-  Sun,
 } from "lucide-vue-next";
+import PortalThemeIcon from "@/components/portal/PortalThemeIcon.vue";
 import PortalContractDialog from "@/components/portal/PortalContractDialog.vue";
 import PortalErrorState from "@/components/portal/PortalErrorState.vue";
 import PortalInstallHelpDialog from "@/components/portal/PortalInstallHelpDialog.vue";
 import PortalInvoicePdfDialog from "@/components/portal/PortalInvoicePdfDialog.vue";
 import PortalLoadingState from "@/components/portal/PortalLoadingState.vue";
 import PortalPasscodeDialog from "@/components/portal/PortalPasscodeDialog.vue";
+import PoweredBySesifoto from "@/components/PoweredBySesifoto.vue";
 import { useClientPortalJobProvide } from "@/composables/useClientPortalJob";
 
 const route = useRoute();

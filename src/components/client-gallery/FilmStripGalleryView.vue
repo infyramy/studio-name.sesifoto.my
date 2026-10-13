@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import {
   Download,
-  Moon,
   Play,
   Search,
   Share2,
-  Sun,
 } from "lucide-vue-next";
+import PortalThemeIcon from "@/components/portal/PortalThemeIcon.vue";
 import type { PublicGallery } from "@/services/gallery.service";
+import PoweredBySesifoto from "@/components/PoweredBySesifoto.vue";
 import GalleryMediaTile from "./GalleryMediaTile.vue";
 import GalleryLogo from "./GalleryLogo.vue";
 import GalleryPhotoGrid from "./GalleryPhotoGrid.vue";
@@ -39,7 +39,7 @@ defineProps<{
 
 const emit = defineEmits<{
   "update:searchQuery": [value: string];
-  toggleTheme: [];
+  toggleTheme: [event: MouseEvent];
   share: [];
   download: [];
   present: [];
@@ -95,10 +95,9 @@ function frameLabel(index: number) {
           class="inline-flex h-9 w-9 items-center justify-center transition-colors hover:opacity-70"
           :style="{ color: 'var(--p-text)' }"
           :aria-label="isDark ? 'Switch to light mode' : 'Switch to dark mode'"
-          @click="emit('toggleTheme')"
+          @click="emit('toggleTheme', $event)"
         >
-          <Sun v-if="isDark" class="h-4 w-4" />
-          <Moon v-else class="h-4 w-4" />
+          <PortalThemeIcon :is-dark="isDark" />
         </button>
         <button
           v-if="options.canShare"
@@ -289,20 +288,6 @@ function frameLabel(index: number) {
     class="border-t py-10 transition-colors duration-300"
     :style="{ borderColor: 'color-mix(in srgb, var(--p-border) 40%, transparent)', background: 'var(--p-shell)' }"
   >
-    <a
-      href="https://sesifoto.my"
-      target="_blank"
-      rel="noopener noreferrer"
-      class="mx-auto flex w-fit flex-col items-center gap-2 text-center text-[10px] tracking-wide transition-opacity hover:opacity-80"
-      :style="{ color: 'var(--p-muted)' }"
-    >
-      <span>Powered by</span>
-      <img
-        src="/brand/sesifoto.svg"
-        alt=""
-        class="h-8 w-8 rounded-md object-contain"
-      />
-      <span class="font-semibold" :style="{ color: 'var(--p-text)' }">Sesifoto</span>
-    </a>
+    <PoweredBySesifoto />
   </footer>
 </template>
