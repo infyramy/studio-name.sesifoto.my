@@ -4,39 +4,28 @@ import path from 'path'
 import type { Plugin } from 'vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
-// Vite plugin to inject build version into HTML
-const injectBuildVersion = (): Plugin => {
-  // Generate build version once per build
-  const buildVersion = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
-  
-  return {
-    name: 'inject-build-version',
-    transformIndexHtml: {
-      order: 'pre',
-      handler(html: string) {
-        // Inject version as a meta tag
-        const versionMeta = `  <meta name="app-version" content="${buildVersion}">\n`
-        
-        // Insert before closing head tag
-        return html.replace('</head>', versionMeta + '</head>')
-      }
-    },
-    generateBundle() {
-      // Also write version to a JSON file for API access if needed
-      this.emitFile({
-        type: 'asset',
-        fileName: 'version.json',
-        source: JSON.stringify({ 
-          version: buildVersion, 
-          timestamp: new Date().toISOString() 
-        })
-      })
-    }
-  }
-}
+const buildId =
+  process.env.VITE_APP_BUILD_ID ||
+  `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+
+// The bundle and version.json share one build ID so open tabs can detect a newer deploy.
+const emitVersionFile = (): Plugin => ({
+  name: 'emit-version-file',
+  apply: 'build',
+  generateBundle() {
+    this.emitFile({
+      type: 'asset',
+      fileName: 'version.json',
+      source: JSON.stringify({ buildId, builtAt: new Date().toISOString() }) + '\n',
+    })
+  },
+})
 
 // https://vite.dev/config/
 export default defineConfig({
+  define: {
+    'import.meta.env.VITE_APP_BUILD_ID': JSON.stringify(buildId),
+  },
   plugins: [
     vue(),
     VitePWA({
@@ -111,7 +100,7 @@ export default defineConfig({
         navigateFallbackDenylist: [/^\/api\//],
       },
     }),
-    injectBuildVersion(),
+    emitVersionFile(),
   ],
   resolve: {
     alias: {

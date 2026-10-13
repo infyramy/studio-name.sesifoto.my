@@ -42,6 +42,12 @@ RUN echo 'server { \
         add_header Expires "0"; \
     } \
     \
+    # Build ID polled by open tabs, plus service worker files, must always be fresh \
+    location ~ ^/(version\.json|sw\.js|registerSW\.js|manifest\.webmanifest)$ { \
+        add_header Cache-Control "no-cache, no-store, must-revalidate"; \
+        try_files $uri =404; \
+    } \
+    \
     # Cache static assets (Vite adds hashes to filenames, so safe to cache) \
     location ~* \.(jpg|jpeg|png|gif|ico|css|js|svg|webp)$ { \
         expires 1y; \
