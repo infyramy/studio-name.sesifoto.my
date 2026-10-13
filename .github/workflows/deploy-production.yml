@@ -72,14 +72,10 @@ jobs:
         env:
           SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_USER: ${{ secrets.SSH_USER }}
-          # Same server as office; the client app has its own site folder
-          REMOTE_PATH: ${{ vars.PROD_REMOTE_PATH }}
+          # Separate from staging's REMOTE_PATH var so they never collide
+          REMOTE_PATH: ${{ vars.PROD_REMOTE_PATH || '/home/slug.sesifoto.my' }}
         run: |
           set -euo pipefail
-          if [ -z "${REMOTE_PATH:-}" ]; then
-            echo "::error::Repository variable PROD_REMOTE_PATH is not set (client app site folder on the server)."
-            exit 1
-          fi
           DEPLOY_KEY="${HOME}/.ssh/deploy_key"
           SSH_OPTS="-i ${DEPLOY_KEY} -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o BatchMode=yes -o PasswordAuthentication=no -o PreferredAuthentications=publickey -o ConnectTimeout=30"
 
