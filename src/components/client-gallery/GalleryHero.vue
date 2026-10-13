@@ -7,9 +7,6 @@ import { readablePortalAccentText } from "@/utils/portal-color";
 const props = defineProps<{
   theme: GalleryHeroTheme;
   title: string;
-  subtitle: string;
-  eyebrow: string;
-  metaLine: string;
   coverUrl: string;
   photos: string[];
   /** 0 (calm) – 100 (lively) */
@@ -32,16 +29,63 @@ const images = computed(() => {
   const list = [props.coverUrl, ...props.photos].filter(Boolean);
   return [...new Set(list)];
 });
-const stackImages = computed(() => images.value.slice(0, 5));
+const PILE_SIZE = 5;
+/** Max landing offset, as a percentage of the photo size, so photos stay inside the pile box. */
+const PILE_SPREAD_X = 28;
+const PILE_SPREAD_Y = 30;
+const pileStack = ref<{ key: number; src: string; x: string; y: string }[]>([]);
+const pileCards = computed(() => [...pileStack.value].reverse());
 
-const PILE_ANGLES = [-8, 6, -3, 10, -12];
+const randomBetween = (min: number, max: number) => min + Math.random() * (max - min);
+let pileCount = 0;
+let pileTimer: ReturnType<typeof setInterval> | null = null;
+
+const prefersReducedMotion = () =>
+  !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
+function stopPile() {
+  if (pileTimer) clearInterval(pileTimer);
+  pileTimer = null;
+}
+
+function dropPhoto() {
+  const size = Math.min(images.value.length, PILE_SIZE);
+  const card = {
+    key: pileCount,
+    src: images.value[pileCount % images.value.length],
+    x: `${randomBetween(-PILE_SPREAD_X, PILE_SPREAD_X).toFixed(1)}%`,
+    y: `${randomBetween(-PILE_SPREAD_Y, PILE_SPREAD_Y).toFixed(1)}%`,
+  };
+  pileCount++;
+  pileStack.value = [card, ...pileStack.value].slice(0, size);
+}
+
+function schedulePile() {
+  stopPile();
+  if (props.theme !== "pile" || images.value.length < 2 || prefersReducedMotion()) return;
+  pileTimer = setInterval(dropPhoto, 1800 * pace.value);
+}
+
+function resetPile() {
+  stopPile();
+  pileStack.value = [];
+  pileCount = 0;
+  if (props.theme !== "pile" || !images.value.length) return;
+  const initial = prefersReducedMotion() ? Math.min(images.value.length, PILE_SIZE) : 1;
+  for (let i = 0; i < initial; i++) dropPhoto();
+  schedulePile();
+}
+/** `top` is relative to the full collage height, which spans two screens. */
 const COLLAGE_SPOTS = [
-  { left: "6%", top: "12%", width: "22%", rotate: -6 },
-  { left: "72%", top: "8%", width: "20%", rotate: 5 },
-  { left: "10%", top: "62%", width: "18%", rotate: 4 },
-  { left: "70%", top: "60%", width: "22%", rotate: -4 },
-  { left: "38%", top: "4%", width: "14%", rotate: 3 },
-  { left: "42%", top: "74%", width: "15%", rotate: -3 },
+  { left: "0%", top: "12.5%", width: "35%", aspect: "6/5" },
+  { left: "58%", top: "-3%", width: "27%", aspect: "2/3" },
+  { left: "17%", top: "33.5%", width: "21%", aspect: "5/4" },
+  { left: "81%", top: "32%", width: "21%", aspect: "3/4" },
+  { left: "40%", top: "52%", width: "22%", aspect: "4/5" },
+  { left: "4%", top: "60%", width: "26%", aspect: "3/4" },
+  { left: "70%", top: "66%", width: "28%", aspect: "6/5" },
+  { left: "30%", top: "82%", width: "24%", aspect: "5/4" },
+  { left: "78%", top: "90%", width: "18%", aspect: "3/4" },
 ];
 const collagePhotos = computed(() =>
   COLLAGE_SPOTS.slice(0, images.value.length).map((spot, index) => ({
@@ -60,7 +104,8 @@ function stopSlides() {
 
 function startSlides() {
   stopSlides();
-  if (props.theme !== "slideshow" || images.value.length < 2) return;
+  const slides = props.theme === "slideshow" || props.theme === "scroll-title";
+  if (!slides || images.value.length < 2) return;
   if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
   slideTimer = setInterval(() => {
     slideIndex.value = (slideIndex.value + 1) % images.value.length;
@@ -73,37 +118,43 @@ function scrollPast() {
 }
 
 watch(() => [props.theme, pace.value, images.value.length], startSlides);
-onMounted(startSlides);
-onUnmounted(stopSlides);
+watch(() => [props.theme, images.value.length], resetPile);
+watch(pace, schedulePile);
+onMounted(() => {
+  startSlides();
+  resetPile();
+});
+onUnmounted(() => {
+  stopSlides();
+  stopPile();
+});
 </script>
 
 <template>
   <section
     ref="heroEl"
-    class="gallery-hero relative h-dvh min-h-[480px] overflow-hidden"
+    class="gallery-hero relative"
+    :class="theme === 'collage' ? 'h-[200dvh] min-h-[960px] overflow-clip' : 'h-dvh min-h-[480px] overflow-hidden'"
     :data-theme="theme"
     :style="rootStyle"
   >
-    <!-- 1. Animated cardboard photo pile -->
+    <!-- 1. Animated centered photo pile -->
     <template v-if="theme === 'pile'">
       <div class="absolute inset-0" :style="{ background: 'var(--hero-bg)' }" />
-      <div class="absolute inset-0 flex items-center justify-center pb-24">
-        <div class="relative h-[52vh] w-[min(78vw,420px)]">
+      <div class="absolute inset-0 flex items-center justify-center">
+        <div class="relative aspect-[3/2] w-[min(60vw,560px)]">
           <img
-            v-for="(src, index) in stackImages"
-            :key="src"
-            :src="src"
+            v-for="photo in pileCards"
+            :key="photo.key"
+            :src="photo.src"
             alt=""
             class="pile-photo absolute inset-0 h-full w-full object-cover"
-            :style="{ '--angle': `${PILE_ANGLES[index % PILE_ANGLES.length]}deg`, '--i': index }"
+            :style="{ '--tx': photo.x, '--ty': photo.y }"
           />
         </div>
       </div>
-      <div class="hero-copy absolute inset-x-0 bottom-0 px-6 pb-16 text-center" :style="{ color: 'var(--hero-text)' }">
-        <p v-if="eyebrow" class="mb-3 text-[11px] font-medium tracking-[0.18em] opacity-70">{{ eyebrow }}</p>
-        <h1 class="hero-title text-4xl sm:text-6xl">{{ title }}</h1>
-        <p v-if="subtitle" class="mt-3 text-base opacity-85">{{ subtitle }}</p>
-        <p v-if="metaLine" class="mt-3 text-sm tracking-wide opacity-70">{{ metaLine }}</p>
+      <div class="absolute inset-0 z-10 flex items-center justify-center px-6 text-center" :style="{ color: 'var(--hero-text)' }">
+        <h1 class="hero-title pile-title max-w-[92vw] text-5xl leading-none sm:text-7xl lg:text-8xl">{{ title }}</h1>
       </div>
     </template>
 
@@ -121,54 +172,42 @@ onUnmounted(stopSlides);
         />
       </TransitionGroup>
       <div class="absolute inset-0 bg-gradient-to-b from-black/20 via-black/10 to-black/60" />
-      <div class="hero-copy relative flex h-full flex-col items-center justify-center px-6 text-center text-white">
-        <p v-if="eyebrow" class="mb-4 text-[11px] font-medium tracking-[0.18em] text-white/75">{{ eyebrow }}</p>
+      <div class="hero-copy relative flex h-full items-center justify-center px-6 text-center text-white">
         <h1 class="hero-title text-4xl sm:text-6xl lg:text-7xl">{{ title }}</h1>
-        <p v-if="subtitle" class="mt-4 text-base text-white/85 sm:text-lg">{{ subtitle }}</p>
-        <p v-if="metaLine" class="mt-4 text-sm tracking-wide text-white/75">{{ metaLine }}</p>
-      </div>
-      <div v-if="images.length > 1" class="absolute bottom-20 left-1/2 flex -translate-x-1/2 gap-1.5">
-        <button
-          v-for="(src, index) in images"
-          :key="src"
-          type="button"
-          class="h-1.5 rounded-full bg-white transition-all"
-          :class="index === slideIndex ? 'w-5 opacity-100' : 'w-1.5 opacity-45'"
-          :aria-label="`Show photo ${index + 1}`"
-          @click="slideIndex = index; startSlides()"
-        />
       </div>
     </template>
 
     <!-- 3. Scrolling title over image -->
     <template v-else-if="theme === 'scroll-title'">
-      <img v-if="coverUrl" :src="coverUrl" alt="" class="absolute inset-0 h-full w-full object-cover" />
-      <div v-else class="absolute inset-0" :style="{ background: 'var(--hero-bg)' }" />
+      <div class="absolute inset-0" :style="{ background: 'var(--hero-bg)' }" />
+      <TransitionGroup name="hero-fade">
+        <img
+          v-for="(src, index) in images"
+          v-show="index === slideIndex"
+          :key="src"
+          :src="src"
+          alt=""
+          class="slide-photo absolute inset-0 h-full w-full object-cover"
+        />
+      </TransitionGroup>
       <div class="absolute inset-0 bg-black/35" />
-      <div class="absolute inset-x-0 top-1/2 -translate-y-1/2 overflow-hidden text-white" aria-hidden="true">
+      <div class="absolute inset-x-0 top-[64%] -translate-y-1/2 overflow-hidden text-white" aria-hidden="true">
         <div class="marquee flex w-max whitespace-nowrap">
           <span v-for="n in 4" :key="n" class="hero-title px-8 text-[18vw] leading-none sm:text-[12vw]">
             {{ title }}
           </span>
         </div>
       </div>
-      <div class="hero-copy absolute inset-x-0 bottom-0 px-6 pb-20 text-center text-white">
-        <h1 class="sr-only">{{ title }}</h1>
-        <p v-if="subtitle" class="text-base text-white/90 sm:text-lg">{{ subtitle }}</p>
-        <p v-if="metaLine" class="mt-2 text-sm tracking-wide text-white/75">{{ metaLine }}</p>
-      </div>
+      <h1 class="sr-only">{{ title }}</h1>
     </template>
 
     <!-- 4. Split title and portrait -->
     <template v-else-if="theme === 'split'">
-      <div class="grid h-full grid-rows-[auto_1fr] md:grid-cols-2 md:grid-rows-1" :style="{ background: 'var(--hero-bg)', color: 'var(--hero-text)' }">
-        <div class="hero-copy flex flex-col justify-center px-8 pb-8 pt-24 md:px-14 md:py-0">
-          <p v-if="eyebrow" class="mb-4 text-[11px] font-medium tracking-[0.18em] opacity-70">{{ eyebrow }}</p>
-          <h1 class="hero-title text-5xl leading-[0.95] sm:text-7xl">{{ title }}</h1>
-          <p v-if="subtitle" class="mt-5 text-lg opacity-85">{{ subtitle }}</p>
-          <p v-if="metaLine" class="mt-4 text-sm tracking-wide opacity-70">{{ metaLine }}</p>
+      <div class="grid h-full grid-rows-[1fr_auto] md:grid-cols-2 md:grid-rows-1" :style="{ background: 'var(--hero-bg)', color: 'var(--hero-text)' }">
+        <div class="hero-copy order-2 flex flex-col justify-end px-8 pb-20 pt-8 md:order-1 md:px-10 md:pb-16 md:pt-0">
+          <h1 class="hero-title max-w-md text-4xl leading-tight sm:text-5xl">{{ title }}</h1>
         </div>
-        <div class="relative min-h-0 overflow-hidden">
+        <div class="relative order-1 min-h-0 overflow-hidden md:order-2">
           <img v-if="coverUrl" :src="coverUrl" alt="" class="split-photo absolute inset-0 h-full w-full object-cover" />
         </div>
       </div>
@@ -179,55 +218,40 @@ onUnmounted(stopSlides);
       <img v-if="coverUrl" :src="coverUrl" alt="" class="absolute inset-0 h-full w-full scale-110 object-cover blur-md" />
       <div class="absolute inset-0" :style="{ background: 'color-mix(in srgb, var(--hero-bg) 60%, transparent)' }" />
       <div class="relative flex h-full flex-col items-center justify-center gap-8 px-6 pb-10 text-center text-white">
-        <div class="portrait-card relative aspect-[3/4] h-[50vh] max-h-[520px] overflow-hidden shadow-2xl ring-1 ring-white/30">
+        <div class="portrait-card relative aspect-[3/4] h-[50vh] max-h-[520px] overflow-hidden border-[10px] shadow-2xl" :style="{ borderColor: 'var(--hero-bg)' }">
           <img v-if="coverUrl" :src="coverUrl" alt="" class="h-full w-full object-cover" />
         </div>
         <div class="hero-copy">
-          <p v-if="eyebrow" class="mb-3 text-[11px] font-medium tracking-[0.18em] text-white/75">{{ eyebrow }}</p>
           <h1 class="hero-title text-4xl sm:text-6xl">{{ title }}</h1>
-          <p v-if="subtitle" class="mt-3 text-base text-white/85">{{ subtitle }}</p>
-          <p v-if="metaLine" class="mt-3 text-sm tracking-wide text-white/75">{{ metaLine }}</p>
         </div>
       </div>
     </template>
 
-    <!-- 6. Collage – floating photos -->
+    <!-- 6. Collage · Floating photos -->
     <template v-else-if="theme === 'collage'">
       <div class="absolute inset-0" :style="{ background: 'var(--hero-bg)' }" />
       <img
-        v-for="(photo, index) in collagePhotos"
+        v-for="photo in collagePhotos"
         :key="photo.src"
         :src="photo.src"
         alt=""
-        class="collage-photo absolute aspect-[4/5] object-cover shadow-xl"
-        :style="{
-          left: photo.left,
-          top: photo.top,
-          width: photo.width,
-          '--angle': `${photo.rotate}deg`,
-          '--i': index,
-        }"
+        class="absolute object-cover opacity-70"
+        :style="{ left: photo.left, top: photo.top, width: photo.width, aspectRatio: photo.aspect }"
       />
-      <div class="hero-copy relative flex h-full flex-col items-center justify-center px-6 text-center" :style="{ color: 'var(--hero-text)' }">
-        <p v-if="eyebrow" class="mb-4 text-[11px] font-medium tracking-[0.18em] opacity-70">{{ eyebrow }}</p>
-        <h1 class="hero-title max-w-3xl text-5xl sm:text-7xl">{{ title }}</h1>
-        <p v-if="subtitle" class="mt-4 text-lg opacity-85">{{ subtitle }}</p>
-        <p v-if="metaLine" class="mt-3 text-sm tracking-wide opacity-70">{{ metaLine }}</p>
+      <div class="hero-copy sticky top-0 z-10 flex h-dvh min-h-[480px] items-center justify-center px-6 text-center" :style="{ color: 'var(--hero-text)' }">
+        <h1 class="hero-title text-4xl uppercase leading-none sm:text-6xl lg:text-7xl">{{ title }}</h1>
       </div>
     </template>
 
-    <!-- 7. Organic – slowly shifting portrait -->
+    <!-- 7. Organic · Slowly shifting portrait -->
     <template v-else>
       <div class="absolute inset-0" :style="{ background: 'var(--hero-bg)' }" />
-      <div class="relative flex h-full flex-col items-center justify-center gap-8 px-6 pb-10 md:flex-row md:gap-16" :style="{ color: 'var(--hero-text)' }">
-        <div class="organic-blob relative aspect-[4/5] h-[46vh] max-h-[520px] overflow-hidden">
-          <img v-if="coverUrl" :src="coverUrl" alt="" class="h-full w-full object-cover" />
+      <div class="relative flex h-full flex-col items-center justify-center gap-8 px-6 pb-16" :style="{ color: 'var(--hero-text)' }">
+        <div class="organic-blob relative aspect-[20/21] h-[62vh] max-h-[600px] max-w-[88vw] overflow-hidden">
+          <img v-if="coverUrl" :src="coverUrl" alt="" class="organic-photo absolute -inset-[8%] h-[116%] w-[116%] max-w-none object-cover" />
         </div>
-        <div class="hero-copy max-w-md text-center md:text-left">
-          <p v-if="eyebrow" class="mb-4 text-[11px] font-medium tracking-[0.18em] opacity-70">{{ eyebrow }}</p>
+        <div class="hero-copy max-w-xl text-center">
           <h1 class="hero-title text-5xl leading-[0.95] sm:text-6xl">{{ title }}</h1>
-          <p v-if="subtitle" class="mt-4 text-lg opacity-85">{{ subtitle }}</p>
-          <p v-if="metaLine" class="mt-3 text-sm tracking-wide opacity-70">{{ metaLine }}</p>
         </div>
       </div>
     </template>
@@ -256,11 +280,14 @@ onUnmounted(stopSlides);
 }
 
 .pile-photo {
-  border: 10px solid #fff;
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
-  animation: pile-drop calc(900ms * var(--hero-pace)) cubic-bezier(0.22, 1, 0.36, 1) both;
-  animation-delay: calc(var(--i) * 260ms * var(--hero-pace));
-  transform: rotate(var(--angle));
+  box-shadow: 0 24px 50px rgba(0, 0, 0, 0.45);
+  transform: translate(var(--tx), var(--ty));
+}
+
+.pile-title {
+  text-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.35),
+    0 4px 32px color-mix(in srgb, var(--hero-bg) 75%, transparent);
 }
 
 .slide-photo {
@@ -289,16 +316,15 @@ onUnmounted(stopSlides);
   animation: portrait-rise calc(1.1s * var(--hero-pace)) cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-.collage-photo {
-  border: 6px solid #fff;
-  transform: rotate(var(--angle));
-  animation: float calc(7s * var(--hero-pace)) ease-in-out infinite alternate;
-  animation-delay: calc(var(--i) * -1.3s);
+.organic-blob {
+  border-radius: 30% 70% 62% 38% / 34% 38% 62% 66%;
+  animation:
+    blob calc(18s * var(--hero-pace)) ease-in-out infinite,
+    blob-turn calc(26s * var(--hero-pace)) ease-in-out infinite alternate;
 }
 
-.organic-blob {
-  border-radius: 46% 54% 52% 48% / 55% 45% 55% 45%;
-  animation: blob calc(14s * var(--hero-pace)) ease-in-out infinite alternate;
+.organic-photo {
+  animation: blob-counter calc(26s * var(--hero-pace)) ease-in-out infinite alternate;
 }
 
 @keyframes hero-copy-in {
@@ -309,17 +335,6 @@ onUnmounted(stopSlides);
   to {
     opacity: 1;
     transform: none;
-  }
-}
-
-@keyframes pile-drop {
-  from {
-    opacity: 0;
-    transform: translateY(-60px) rotate(calc(var(--angle) * 2)) scale(1.08);
-  }
-  to {
-    opacity: 1;
-    transform: rotate(var(--angle));
   }
 }
 
@@ -352,36 +367,48 @@ onUnmounted(stopSlides);
   }
 }
 
-@keyframes float {
-  from {
-    transform: rotate(var(--angle)) translateY(0);
+@keyframes blob {
+  0%,
+  100% {
+    border-radius: 30% 70% 62% 38% / 34% 38% 62% 66%;
   }
-  to {
-    transform: rotate(calc(var(--angle) * -0.5)) translateY(-18px);
+  25% {
+    border-radius: 52% 48% 70% 30% / 44% 58% 42% 56%;
+  }
+  50% {
+    border-radius: 38% 62% 44% 56% / 60% 36% 64% 40%;
+  }
+  75% {
+    border-radius: 64% 36% 54% 46% / 38% 52% 48% 62%;
   }
 }
 
-@keyframes blob {
-  0% {
-    border-radius: 46% 54% 52% 48% / 55% 45% 55% 45%;
+@keyframes blob-turn {
+  from {
+    transform: rotate(-6deg);
   }
-  50% {
-    border-radius: 58% 42% 38% 62% / 42% 58% 42% 58%;
+  to {
+    transform: rotate(6deg);
   }
-  100% {
-    border-radius: 40% 60% 60% 40% / 60% 40% 60% 40%;
+}
+
+@keyframes blob-counter {
+  from {
+    transform: rotate(6deg) scale(1.02);
+  }
+  to {
+    transform: rotate(-6deg) scale(1.06);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .hero-copy,
-  .pile-photo,
   .slide-photo,
   .marquee,
   .split-photo,
   .portrait-card,
-  .collage-photo,
-  .organic-blob {
+  .organic-blob,
+  .organic-photo {
     animation: none;
   }
 }

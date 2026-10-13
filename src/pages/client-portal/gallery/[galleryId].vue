@@ -36,12 +36,8 @@
     />
     <template v-else-if="galleryForView">
     <GalleryHero
-      v-if="design.heroTheme"
-      :theme="design.heroTheme"
+      :theme="heroTheme"
       :title="viewOptions.heroTitle || (activeDesignId === 'classic' ? clientName : galleryForView.title)"
-      :subtitle="viewOptions.heroSubtitle"
-      :eyebrow="galleryForView.galleryType || ''"
-      :meta-line="metaLine"
       :cover-url="coverUrl"
       :photos="heroPhotos"
       :speed="design.heroSpeed ?? 50"
@@ -450,7 +446,7 @@ const canDownload = computed(
 const viewOptions = computed<GalleryViewOptions>(() => ({
   heroTitle: design.value.heroTitle?.trim() || "",
   heroSubtitle: design.value.heroSubtitle?.trim() || "",
-  hideHero: !!design.value.heroTheme,
+  hideHero: true,
   canToggleTheme: !palette.value,
   canShare: gallery.value?.allowLinkSharing !== false,
   photoGrid: design.value.gridStyle
@@ -467,6 +463,7 @@ const heroColor = computed(() => palette.value?.hero ?? "#111312");
 const design = computed(
   () => gallery.value?.designSettings ?? lockedGallery.value?.designSettings ?? {},
 );
+const heroTheme = computed(() => design.value.heroTheme ?? "pile");
 const palette = computed(() =>
   resolveGalleryPalette(
     design.value,
