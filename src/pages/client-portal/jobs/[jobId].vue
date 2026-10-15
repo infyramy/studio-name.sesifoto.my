@@ -260,12 +260,13 @@ const {
 
 const portalNavigation = [
   { label: "Overview", name: "client-portal-job-overview", icon: Home },
-  { label: "Contract", name: "client-portal-job-contract", icon: FileText },
+  { label: "Documents", name: "client-portal-job-documents", icon: FileText },
   { label: "Payment", name: "client-portal-job-payment", icon: ReceiptText },
   { label: "Gallery", name: "client-portal-job-link", icon: Link },
 ];
 
 function isNavActive(name: string) {
+  if (route.name === "client-portal-job-form") return name === "client-portal-job-documents";
   return route.name === name;
 }
 </script>

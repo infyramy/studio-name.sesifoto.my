@@ -85,6 +85,24 @@
         </RouterLink>
       </section>
 
+      <RouterLink
+        v-if="documentTodos.length"
+        :to="{ name: 'client-portal-job-documents', params: { jobId: currentJobId } }"
+        class="mb-16 flex items-center justify-between gap-4 border px-5 py-4 transition hover:opacity-80"
+        :style="{ borderColor: 'color-mix(in srgb, var(--p-accent) 40%, transparent)', background: 'var(--p-accent-bg)' }"
+      >
+        <span class="flex min-w-0 items-center gap-4">
+          <ClipboardList class="h-5 w-5 shrink-0" :style="{ color: 'var(--p-accent)' }" />
+          <span class="min-w-0">
+            <span class="block text-sm font-semibold tracking-wide">Action needed in Documents</span>
+            <span class="mt-1 block text-xs tracking-wide" :style="{ color: 'var(--p-muted)' }">
+              {{ documentTodos.join(" · ") }}
+            </span>
+          </span>
+        </span>
+        <ArrowRight class="h-4 w-4 shrink-0" />
+      </RouterLink>
+
       <section class="mb-20">
         <div class="mb-10 flex items-end justify-between border-b pb-4" :style="{ borderColor: 'color-mix(in srgb, var(--p-border) 40%, transparent)' }">
           <div>
@@ -241,12 +259,14 @@ import {
   ArrowRight,
   CalendarDays,
   Check,
+  ClipboardList,
   Clock,
   Mail,
   MapPin,
   Phone,
   Users,
 } from "lucide-vue-next";
+import { computed } from "vue";
 import { useClientPortalJob } from "@/composables/useClientPortalJob";
 
 const {
@@ -259,6 +279,20 @@ const {
   formatTimeRange,
   formatMoney,
 } = useClientPortalJob();
+
+const documentTodos = computed(() => {
+  const data = portalData.value;
+  if (!data) return [];
+  const todos: string[] = [];
+  if (data.agreement.requireTerms && !data.agreement.complete) {
+    todos.push(data.agreement.requireSignature ? "Sign the terms" : "Accept the terms");
+  }
+  const pendingForms = (data.forms ?? []).filter((form) => form.status === "pending").length;
+  if (pendingForms) {
+    todos.push(`${pendingForms} ${pendingForms === 1 ? "form" : "forms"} to fill in`);
+  }
+  return todos;
+});
 
 function crewInitials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);

@@ -1,4 +1,9 @@
 import { ofetch } from "ofetch";
+import type {
+  PortalEInvoice,
+  PortalForm,
+  PortalFormAnswers,
+} from "@/services/portal.service";
 
 export interface ClientActionStudio {
   name: string;
@@ -65,6 +70,7 @@ export interface ClientActionPayInvoice {
     paidAt: string;
     method: string;
   }>;
+  eInvoice?: PortalEInvoice | null;
 }
 
 export interface ClientActionPayData {
@@ -81,6 +87,15 @@ export interface ClientActionPayData {
   invoices: ClientActionPayInvoice[];
   termsComplete: boolean;
   portalUrl: string | null;
+}
+
+export interface ClientActionFormsData {
+  jobId: string;
+  title: string;
+  studio: ClientActionStudio;
+  clientName: string | null;
+  portalUrl: string | null;
+  forms: PortalForm[];
 }
 
 export interface ClientActionCheckoutResult {
@@ -209,6 +224,42 @@ export const clientActionService = {
       api(`/client-action/pay/payment-intents/${encodeURIComponent(intentId)}`, {
         query: { t: token },
         signal: options.signal,
+      }),
+    );
+  },
+
+  getForms(token: string): Promise<ClientActionFormsData> {
+    return request(
+      api<ClientActionFormsData>("/client-action/forms", {
+        query: { t: token },
+      }),
+    );
+  },
+
+  saveForm(
+    token: string,
+    formId: string,
+    answers: PortalFormAnswers,
+  ): Promise<PortalForm> {
+    return request(
+      api<PortalForm>(`/client-action/forms/${encodeURIComponent(formId)}`, {
+        method: "PUT",
+        query: { t: token },
+        body: { answers },
+      }),
+    );
+  },
+
+  submitForm(
+    token: string,
+    formId: string,
+    answers: PortalFormAnswers,
+  ): Promise<PortalForm> {
+    return request(
+      api<PortalForm>(`/client-action/forms/${encodeURIComponent(formId)}/submit`, {
+        method: "POST",
+        query: { t: token },
+        body: { answers },
       }),
     );
   },

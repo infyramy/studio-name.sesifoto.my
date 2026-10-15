@@ -103,10 +103,14 @@ const routes: RouteRecordRaw[] = [
         meta: { title: "Overview" },
       },
       {
+        path: "documents",
+        name: "client-portal-job-documents",
+        component: () => import("@/pages/client-portal/jobs/documents.vue"),
+        meta: { title: "Documents" },
+      },
+      {
         path: "contract",
-        name: "client-portal-job-contract",
-        component: () => import("@/pages/client-portal/jobs/contract.vue"),
-        meta: { title: "Contract" },
+        redirect: { name: "client-portal-job-documents" },
       },
       {
         path: "payment",
@@ -119,6 +123,12 @@ const routes: RouteRecordRaw[] = [
         name: "client-portal-job-link",
         component: () => import("@/pages/client-portal/jobs/link.vue"),
         meta: { title: "Gallery" },
+      },
+      {
+        path: "forms/:formId",
+        name: "client-portal-job-form",
+        component: () => import("@/pages/client-portal/jobs/form.vue"),
+        meta: { title: "Form" },
       },
     ],
   },
@@ -133,6 +143,12 @@ const routes: RouteRecordRaw[] = [
     name: "client-action-pay",
     component: () => import("@/pages/client-action/pay.vue"),
     meta: { title: "Payment" },
+  },
+  {
+    path: "/client-action/forms",
+    name: "client-action-forms",
+    component: () => import("@/pages/client-action/forms.vue"),
+    meta: { title: "Forms" },
   },
   {
     path: "/client-action/invoice",

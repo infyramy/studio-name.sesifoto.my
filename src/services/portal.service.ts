@@ -32,6 +32,14 @@ export interface PortalInvoicePayment {
   method: string;
 }
 
+/** Validated LHDN e-Invoice shown to the client. */
+export interface PortalEInvoice {
+  documentUuid: string;
+  validationUrl: string;
+  validatedAt: string | null;
+  qrDataUrl: string;
+}
+
 export interface PortalInvoice {
   id: string;
   /** Stable id shared by every version; used in invoice links. */
@@ -59,6 +67,7 @@ export interface PortalInvoice {
   rounding: number;
   items: PortalInvoiceItem[];
   payments: PortalInvoicePayment[];
+  eInvoice?: PortalEInvoice | null;
 }
 
 export interface PortalDeliveryLink {
@@ -101,6 +110,67 @@ export interface PortalGalleryPreview {
   path: string;
 }
 
+export type PortalFormFieldType =
+  | "short_text"
+  | "long_text"
+  | "number"
+  | "date"
+  | "time"
+  | "single_choice"
+  | "multiple_choice"
+  | "dropdown"
+  | "phone"
+  | "email"
+  | "heading";
+
+export interface PortalFormField {
+  id: string;
+  type: PortalFormFieldType;
+  label: string;
+  helpText?: string;
+  required: boolean;
+  options?: string[];
+}
+
+export type PortalFormAnswers = Record<string, string | string[]>;
+
+export type PortalFormStatus = "pending" | "submitted";
+
+export interface PortalFormSummary {
+  id: string;
+  title: string;
+  status: PortalFormStatus;
+  submittedAt: string | null;
+}
+
+export interface PortalForm extends PortalFormSummary {
+  description: string | null;
+  fields: PortalFormField[];
+  answers: PortalFormAnswers;
+  updatedAt: string;
+}
+
+export type PortalQuotationStatus =
+  | "draft"
+  | "sent"
+  | "accepted"
+  | "declined"
+  | "approved"
+  | "converted"
+  | "superseded";
+
+export interface PortalQuotation {
+  id: string;
+  number: string;
+  title: string;
+  status: PortalQuotationStatus;
+  total: number;
+  currency: string;
+  issueDate: string;
+  validUntil: string | null;
+  url: string;
+}
+
 export interface PortalData {
   jobId: string;
   title: string;
@@ -139,6 +209,8 @@ export interface PortalData {
   contracts: PortalContract[];
   inspirationImages: PortalInspirationImage[];
   galleries: PortalGalleryPreview[];
+  forms: PortalFormSummary[];
+  quotations: PortalQuotation[];
   agreement: {
     requireTerms: boolean;
     requireSignature: boolean;
@@ -456,6 +528,45 @@ export const portalService = {
       portalApi<PortalPaymentIntent>(
         `/portal/${encodeURIComponent(jobId)}/payment-intents/${encodeURIComponent(intentId)}`,
         { signal: options.signal },
+      ),
+    );
+  },
+
+  getForm(
+    jobId: string,
+    formId: string,
+    options: PortalRequestOptions = {},
+  ): Promise<PortalForm> {
+    return portalRequest(
+      portalApi<PortalForm>(
+        `/portal/${encodeURIComponent(jobId)}/forms/${encodeURIComponent(formId)}`,
+        { signal: options.signal },
+      ),
+    );
+  },
+
+  saveForm(
+    jobId: string,
+    formId: string,
+    answers: PortalFormAnswers,
+  ): Promise<PortalForm> {
+    return portalRequest(
+      portalApi<PortalForm>(
+        `/portal/${encodeURIComponent(jobId)}/forms/${encodeURIComponent(formId)}`,
+        { method: "PUT", body: { answers } },
+      ),
+    );
+  },
+
+  submitForm(
+    jobId: string,
+    formId: string,
+    answers: PortalFormAnswers,
+  ): Promise<PortalForm> {
+    return portalRequest(
+      portalApi<PortalForm>(
+        `/portal/${encodeURIComponent(jobId)}/forms/${encodeURIComponent(formId)}/submit`,
+        { method: "POST", body: { answers } },
       ),
     );
   },

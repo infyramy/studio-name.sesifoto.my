@@ -25,6 +25,15 @@ export type GalleryGridStyle =
   | "mosaic";
 export type GallerySizeStep = "small" | "medium" | "large";
 export type GalleryDownloadQuality = "web" | "high";
+export type GallerySelectionStatus = "open" | "submitted";
+
+export interface GallerySelection {
+  limit: number | null;
+  status: GallerySelectionStatus;
+  submittedAt: string | null;
+  pickedMediaIds: string[];
+  requiresSignIn: boolean;
+}
 
 export interface GalleryDesignSettings {
   heroTitle?: string | null;
@@ -82,6 +91,7 @@ export interface PublicGallery {
     clientOnly: boolean;
     requiresSignIn: boolean;
   };
+  selection: GallerySelection;
   designSettings: GalleryDesignSettings | null;
   galleryType: string | null;
   description: string | null;
@@ -194,6 +204,34 @@ export const galleryService = {
     } catch {
       return false;
     }
+  },
+
+  async addPick(id: string, mediaId: string): Promise<GallerySelection> {
+    return api<GallerySelection>(
+      `/gallery/${encodeURIComponent(id)}/picks/${encodeURIComponent(mediaId)}`,
+      { method: "PUT", headers: accessHeaders(id) },
+    );
+  },
+
+  async removePick(id: string, mediaId: string): Promise<GallerySelection> {
+    return api<GallerySelection>(
+      `/gallery/${encodeURIComponent(id)}/picks/${encodeURIComponent(mediaId)}`,
+      { method: "DELETE", headers: accessHeaders(id) },
+    );
+  },
+
+  async clearPicks(id: string): Promise<GallerySelection> {
+    return api<GallerySelection>(
+      `/gallery/${encodeURIComponent(id)}/picks`,
+      { method: "DELETE", headers: accessHeaders(id) },
+    );
+  },
+
+  async submitPicks(id: string): Promise<GallerySelection> {
+    return api<GallerySelection>(
+      `/gallery/${encodeURIComponent(id)}/picks/submit`,
+      { method: "POST", headers: accessHeaders(id) },
+    );
   },
 
   /**

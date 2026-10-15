@@ -232,23 +232,37 @@
     <!-- Selection tray -->
     <Transition name="selection-tray">
       <div
-        v-if="gallery?.allowSelection && selectedIds.length"
+        v-if="canPick && (selectedIds.length || picksLocked)"
         class="fixed inset-x-0 bottom-5 z-50 mx-auto flex w-[calc(100%-2rem)] max-w-md items-center justify-between gap-3 rounded-full bg-zinc-950 px-3 py-3 pl-5 text-white shadow-2xl shadow-black/25"
       >
-        <p class="text-sm">
+        <p class="min-w-0 text-sm">
           <span class="font-semibold">{{ selectedIds.length }}</span>
-          <span class="ml-1 text-white/60">selected</span>
+          <template v-if="picksLocked">
+            <span class="ml-1 text-white/60">
+              picks submitted<template v-if="submittedDateLabel"> on {{ submittedDateLabel }}</template>
+            </span>
+          </template>
+          <template v-else>
+            <span class="ml-1 text-white/60">
+              picked<template v-if="pickLimit"> · limit {{ pickLimit }}</template>
+            </span>
+            <span v-if="overLimitBy" class="block text-[11px] text-amber-300">
+              {{ overLimitBy }} over limit, studio may charge extra
+            </span>
+          </template>
         </p>
-        <div class="flex items-center gap-1">
+        <div class="flex shrink-0 items-center gap-1">
           <button
+            v-if="!picksLocked"
             type="button"
-            class="rounded-full px-3 py-2 text-xs text-white/65 transition hover:bg-white/10 hover:text-white"
+            class="rounded-full px-3 py-2 text-xs text-white/65 transition hover:bg-white/10 hover:text-white disabled:opacity-50"
+            :disabled="isSavingPicks"
             @click="clearSelection"
           >
             Clear
           </button>
           <button
-            v-if="canDownload"
+            v-if="canDownload && selectedIds.length"
             type="button"
             class="flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold text-white transition hover:brightness-110 disabled:opacity-50"
             :style="{ backgroundColor: accentColor }"
@@ -257,6 +271,15 @@
           >
             <Download class="h-3.5 w-3.5" />
             {{ isDownloading ? "Preparing…" : "Download" }}
+          </button>
+          <button
+            v-if="!picksLocked"
+            type="button"
+            class="rounded-full bg-white px-4 py-2 text-xs font-semibold text-zinc-950 transition hover:bg-white/90 disabled:opacity-50"
+            :disabled="isSavingPicks"
+            @click="openSubmitConfirm"
+          >
+            Submit
           </button>
         </div>
       </div>
@@ -267,6 +290,7 @@
         <div
           v-if="downloadPrompt"
           class="fixed inset-0 z-[260] flex items-end justify-center bg-black/55 p-4 sm:items-center"
+          :style="overlayVars"
           @click.self="downloadPrompt = null"
         >
           <div
@@ -277,9 +301,15 @@
             aria-labelledby="gallery-download-title"
           >
             <template v-if="downloadPrompt.kind === 'sign-in'">
-              <h2 id="gallery-download-title" class="text-base font-semibold">Sign in to download</h2>
+              <h2 id="gallery-download-title" class="text-base font-semibold">
+                {{ downloadPrompt.reason === "pick" ? "Sign in to pick photos" : "Sign in to download" }}
+              </h2>
               <p class="mt-2 text-sm leading-relaxed" :style="{ color: 'var(--p-muted)' }">
-                Downloads are for the client only. Sign in to your client portal, then open this gallery again.
+                {{
+                  downloadPrompt.reason === "pick"
+                    ? "Picks are saved to your client portal. Sign in, then open this gallery again."
+                    : "Downloads are for the client only. Sign in to your client portal, then open this gallery again."
+                }}
               </p>
               <div class="mt-5 flex justify-end gap-2">
                 <button
@@ -330,6 +360,52 @@
         </div>
       </Transition>
     </Teleport>
+    <Teleport to="body">
+      <Transition name="viewer">
+        <div
+          v-if="showSubmitConfirm"
+          class="fixed inset-0 z-[260] flex items-end justify-center bg-black/55 p-4 sm:items-center"
+          :style="overlayVars"
+          @click.self="showSubmitConfirm = false"
+        >
+          <div
+            class="w-full max-w-sm rounded-2xl border p-5 shadow-2xl"
+            :style="{ background: 'var(--p-card)', borderColor: 'var(--p-border)', color: 'var(--p-text)' }"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="gallery-submit-title"
+          >
+            <h2 id="gallery-submit-title" class="text-base font-semibold">
+              Submit {{ selectedIds.length }} {{ selectedIds.length === 1 ? "pick" : "picks" }}?
+            </h2>
+            <p class="mt-2 text-sm leading-relaxed" :style="{ color: 'var(--p-muted)' }">
+              You can't change them after this unless the studio reopens your list.
+            </p>
+            <p v-if="overLimitBy" class="mt-2 text-sm leading-relaxed text-amber-600">
+              You picked {{ overLimitBy }} more than the limit of {{ pickLimit }}. Your studio may charge for extra photos.
+            </p>
+            <div class="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                class="rounded-full px-4 py-2 text-xs font-medium transition hover:opacity-70"
+                @click="showSubmitConfirm = false"
+              >
+                Not yet
+              </button>
+              <button
+                type="button"
+                class="rounded-full px-4 py-2 text-xs font-semibold transition hover:brightness-110 disabled:opacity-50"
+                :style="{ background: 'var(--p-accent)', color: 'var(--p-accent-text)' }"
+                :disabled="isSavingPicks"
+                @click="submitPicks"
+              >
+                {{ isSavingPicks ? "Submitting…" : "Submit picks" }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
     </template>
   </div>
 </template>
@@ -359,6 +435,7 @@ import {
   galleryErrorInfo,
   galleryService,
   type GalleryDownloadQuality,
+  type GallerySelection,
   type LockedGallery,
   type PublicGallery,
 } from "@/services/gallery.service";
@@ -410,7 +487,9 @@ const isExpired = ref(false);
 const isUnlocking = ref(false);
 const unlockError = ref("");
 const downloadPrompt = ref<
-  { kind: "sign-in" } | { kind: "quality"; mediaIds?: string[] } | null
+  | { kind: "sign-in"; reason: "download" | "pick" }
+  | { kind: "quality"; mediaIds?: string[] }
+  | null
 >(null);
 const qualityOptions: { id: GalleryDownloadQuality; label: string; hint: string }[] = [
   { id: "web", label: "Web resolution", hint: "Smaller files, good for sharing online" },
@@ -433,10 +512,43 @@ const fromPublicSite = computed(() => {
   return value === "site";
 });
 
+const selectedIds = ref<string[]>([]);
+const selection = computed(() => gallery.value?.selection ?? null);
+const picksLocked = computed(
+  () =>
+    selection.value?.status === "submitted" && !selection.value.requiresSignIn,
+);
+const canPick = computed(
+  () => !!gallery.value?.allowSelection && !fromPublicSite.value,
+);
+const pickLimit = computed(() => selection.value?.limit ?? null);
+const overLimitBy = computed(() =>
+  pickLimit.value && selectedIds.value.length > pickLimit.value
+    ? selectedIds.value.length - pickLimit.value
+    : 0,
+);
+const submittedDateLabel = computed(() => {
+  const at = selection.value?.submittedAt;
+  return at
+    ? new Date(at).toLocaleDateString("en-MY", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      })
+    : "";
+});
+const isSavingPicks = ref(false);
+const showSubmitConfirm = ref(false);
+
+/** Public-site visitors cannot download or pick; submitted picks are read-only. */
 const galleryForView = computed(() => {
   if (!gallery.value) return null;
-  if (!fromPublicSite.value) return gallery.value;
-  return { ...gallery.value, allowDownload: false };
+  if (!fromPublicSite.value && !picksLocked.value) return gallery.value;
+  return {
+    ...gallery.value,
+    allowDownload: fromPublicSite.value ? false : gallery.value.allowDownload,
+    allowSelection: false,
+  };
 });
 
 const canDownload = computed(
@@ -476,6 +588,12 @@ const designVars = computed(() => ({
   "--g-body": `"${galleryFonts.value.body}"`,
   ...(palette.value ? paletteThemeVars(palette.value) : {}),
 }));
+/** Teleported overlays sit outside the page root, so they need the theme vars too. */
+const overlayVars = computed(() => [
+  themeVars.value,
+  designVars.value,
+  { fontFamily: "var(--g-body), system-ui, sans-serif" },
+]);
 watch(galleryFonts, (fonts) => ensureGalleryFonts([fonts.display, fonts.body]), {
   immediate: true,
 });
@@ -547,7 +665,6 @@ const videoCount = computed(
 
 const searchQuery = ref("");
 const photoOpen = ref(true);
-const selectedIds = ref<string[]>([]);
 const pageEl = ref<HTMLElement | null>(null);
 const viewerOverlay = ref<HTMLElement | null>(null);
 const showViewer = ref(false);
@@ -633,11 +750,63 @@ function isSelected(id: string) {
   return selectedIds.value.includes(id);
 }
 
-function toggleSelect(id: string) {
-  if (isSelected(id)) {
-    selectedIds.value = selectedIds.value.filter((s) => s !== id);
-  } else {
-    selectedIds.value = [...selectedIds.value, id];
+function applySelection(next: GallerySelection) {
+  if (gallery.value) gallery.value.selection = next;
+}
+
+function handlePickError(error: unknown) {
+  const { status, message } = galleryErrorInfo(error);
+  if (status === 401) {
+    downloadPrompt.value = { kind: "sign-in", reason: "pick" };
+    return;
+  }
+  showNotice(message || "Could not save your picks. Try again.");
+  if (status === 403 || status === 409) void loadGallery();
+}
+
+function setPicked(id: string, picked: boolean) {
+  const rest = selectedIds.value.filter((s) => s !== id);
+  selectedIds.value = picked ? [...rest, id] : rest;
+}
+
+/** Without portal sign-in, ticks stay local (for downloading a subset) and are not saved. */
+async function toggleSelect(id: string) {
+  if (!gallery.value || !canPick.value || picksLocked.value) return;
+  if (isSavingPicks.value) return;
+  const wasSelected = isSelected(id);
+  setPicked(id, !wasSelected);
+  if (gallery.value.selection.requiresSignIn) return;
+  try {
+    applySelection(
+      wasSelected
+        ? await galleryService.removePick(gallery.value.id, id)
+        : await galleryService.addPick(gallery.value.id, id),
+    );
+  } catch (error: unknown) {
+    setPicked(id, wasSelected);
+    handlePickError(error);
+  }
+}
+
+function openSubmitConfirm() {
+  if (gallery.value?.selection.requiresSignIn) {
+    downloadPrompt.value = { kind: "sign-in", reason: "pick" };
+    return;
+  }
+  showSubmitConfirm.value = true;
+}
+
+async function submitPicks() {
+  if (!gallery.value || isSavingPicks.value) return;
+  isSavingPicks.value = true;
+  try {
+    applySelection(await galleryService.submitPicks(gallery.value.id));
+    showNotice("Picks sent to your studio");
+  } catch (error: unknown) {
+    handlePickError(error);
+  } finally {
+    showSubmitConfirm.value = false;
+    isSavingPicks.value = false;
   }
 }
 
@@ -720,8 +889,20 @@ async function refreshMediaObserver() {
   setupMediaObserver();
 }
 
-function clearSelection() {
+async function clearSelection() {
+  if (!gallery.value || picksLocked.value || isSavingPicks.value) return;
+  const previous = selectedIds.value;
   selectedIds.value = [];
+  if (gallery.value.selection.requiresSignIn) return;
+  isSavingPicks.value = true;
+  try {
+    applySelection(await galleryService.clearPicks(gallery.value.id));
+  } catch (error: unknown) {
+    selectedIds.value = previous;
+    handlePickError(error);
+  } finally {
+    isSavingPicks.value = false;
+  }
 }
 
 function toggleTheme(event: MouseEvent) {
@@ -840,7 +1021,7 @@ async function runZipDownload(mediaIds?: string[]) {
   if (!canDownload.value || !gallery.value || isDownloading.value) return;
   const { download } = gallery.value;
   if (download.requiresSignIn) {
-    downloadPrompt.value = { kind: "sign-in" };
+    downloadPrompt.value = { kind: "sign-in", reason: "download" };
     return;
   }
   if (download.webRes && download.highRes) {
@@ -952,7 +1133,8 @@ async function loadGallery() {
     let result = await galleryService.getPublic(galleryId);
     const needsPortal = result.locked
       ? true
-      : result.allowDownload && result.download.requiresSignIn;
+      : (result.allowDownload && result.download.requiresSignIn) ||
+        (result.allowSelection && result.selection.requiresSignIn);
     if (needsPortal && jobId && (await galleryService.requestPortalAccess(jobId, galleryId))) {
       result = await galleryService.getPublic(galleryId);
     }
@@ -964,6 +1146,9 @@ async function loadGallery() {
     }
     lockedGallery.value = null;
     gallery.value = result;
+    selectedIds.value = result.allowSelection
+      ? [...result.selection.pickedMediaIds]
+      : [];
     setAccent(result.accentColor);
   } catch (error: unknown) {
     const { status, message } = galleryErrorInfo(error);

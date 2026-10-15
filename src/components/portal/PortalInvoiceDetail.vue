@@ -332,6 +332,41 @@
           </p>
         </article>
 
+        <article
+          v-if="invoice.eInvoice"
+          class="invoice-card mt-4"
+          :style="cardStyle"
+        >
+          <h3 class="text-base font-semibold">LHDN e-Invoice</h3>
+          <div class="mt-3 flex items-start gap-4">
+            <a
+              :href="invoice.eInvoice.validationUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="shrink-0"
+            >
+              <img
+                :src="invoice.eInvoice.qrDataUrl"
+                alt="Scan to verify this e-Invoice on MyInvois"
+                class="h-24 w-24 rounded bg-white p-1"
+              />
+            </a>
+            <div class="min-w-0 text-sm leading-relaxed" :style="{ color: 'var(--p-muted)' }">
+              <p>Validated by LHDN<template v-if="invoice.eInvoice.validatedAt"> on {{ formatDateLong(invoice.eInvoice.validatedAt) }}</template>.</p>
+              <p class="mt-1 break-all text-xs">UUID: {{ invoice.eInvoice.documentUuid }}</p>
+              <a
+                :href="invoice.eInvoice.validationUrl"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="mt-2 inline-block text-xs font-semibold underline print:hidden"
+                :style="{ color: 'var(--p-text)' }"
+              >
+                Verify on MyInvois
+              </a>
+            </div>
+          </div>
+        </article>
+
         <PoweredBySesifoto class="mt-10" />
       </template>
     </main>
