@@ -130,10 +130,16 @@
           class="action__cta"
           :style="{ background: 'var(--p-text)', color: 'var(--p-shell)' }"
           :disabled="isSubmitting"
+          :aria-busy="isSubmitting || undefined"
         >
+          <Loader2
+            v-if="isSubmitting"
+            class="mr-2 h-4 w-4 animate-spin"
+            aria-hidden="true"
+          />
           {{
             isSubmitting
-              ? "Saving..."
+              ? "Saving"
               : data.requireSignature
                 ? "Agree and sign"
                 : "Agree and continue"
@@ -167,7 +173,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
-import { Check } from "lucide-vue-next";
+import { Check, Loader2 } from "lucide-vue-next";
 import PortalThemeIcon from "@/components/portal/PortalThemeIcon.vue";
 import { useSanitize } from "@/composables/useSanitize";
 import { usePortalTheme } from "@/composables/usePortalTheme";

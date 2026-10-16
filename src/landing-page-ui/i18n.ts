@@ -14,7 +14,7 @@ export const LANDING_PAGE_I18N = {
     googleMaps: "Google Maps",
     galleryTitle: "Gallery",
     galleryDesc: "View our gallery",
-    loading: "Loading…",
+    loading: "Loading",
     tryAgain: "Try again",
     preview: "Preview",
     customize: "Customize",

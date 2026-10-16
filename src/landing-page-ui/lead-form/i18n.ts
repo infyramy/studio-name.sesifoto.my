@@ -28,7 +28,7 @@ export const LEAD_FORM_I18N = {
     submitError: "Failed to send. Please try again.",
     previewOnly: "Preview only — form not submitted.",
     crmRequired: "Inquiry form is not available right now.",
-    sending: "Sending...",
+    sending: "Sending",
     clearDate: "Clear date",
     nameRequired: "Please enter your name.",
     nameTooShort: "Name must be at least 2 characters.",

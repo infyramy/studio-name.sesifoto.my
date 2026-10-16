@@ -486,7 +486,7 @@ export const translationsEN: Translations = {
   ok: "OK",
   yes: "Yes",
   no: "No",
-  loading: "Loading...",
+  loading: "Loading",
   error: "Error",
   success: "Success",
 
@@ -569,7 +569,7 @@ export const translationsEN: Translations = {
   payFullPaymentLabel: "Pay Full Payment",
   next: "Next",
   checkNow: "Check Now",
-  checking: "Checking...",
+  checking: "Checking",
   checkStatus: "Check Status",
   enterBookingDetailsToCheckStatus:
     "Enter your booking details to check the latest status.",

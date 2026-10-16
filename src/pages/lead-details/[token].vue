@@ -378,7 +378,7 @@
           :disabled="submitting"
           @click="onPrimary"
         >
-          <span v-if="submitting">Submitting…</span>
+          <span v-if="submitting">Submitting</span>
           <span v-else-if="currentStep === steps.length - 1">Submit</span>
           <span v-else>Continue</span>
         </button>

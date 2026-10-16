@@ -394,12 +394,18 @@
               </button>
               <button
                 type="button"
-                class="rounded-full px-4 py-2 text-xs font-semibold transition hover:brightness-110 disabled:opacity-50"
+                class="inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold transition hover:brightness-110 disabled:opacity-50"
                 :style="{ background: 'var(--p-accent)', color: 'var(--p-accent-text)' }"
                 :disabled="isSavingPicks"
+                :aria-busy="isSavingPicks || undefined"
                 @click="submitPicks"
               >
-                {{ isSavingPicks ? "Submitting…" : "Submit picks" }}
+                <Loader2
+                  v-if="isSavingPicks"
+                  class="h-3.5 w-3.5 animate-spin"
+                  aria-hidden="true"
+                />
+                {{ isSavingPicks ? "Submitting" : "Submit picks" }}
               </button>
             </div>
           </div>
@@ -425,6 +431,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Download,
+  Loader2,
   Maximize2,
   Pause,
   Play,

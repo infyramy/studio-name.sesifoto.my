@@ -83,7 +83,7 @@ onMounted(() => input.value?.focus());
           :style="{ background: accent, color: readablePortalAccentText(accent) }"
         >
           <Loader2 v-if="loading" class="mr-2 h-4 w-4 animate-spin" />
-          {{ loading ? "Checking..." : "Open gallery" }}
+          {{ loading ? "Checking" : "Open gallery" }}
         </button>
       </form>
 

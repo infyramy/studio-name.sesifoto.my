@@ -117,17 +117,29 @@
             class="form-fill__cta"
             :style="{ background: 'var(--p-text)', color: 'var(--p-shell)' }"
             :disabled="isBusy"
+            :aria-busy="busyAction === 'submit' || undefined"
           >
-            {{ busyAction === "submit" ? "Submitting..." : "Submit" }}
+            <Loader2
+              v-if="busyAction === 'submit'"
+              class="mr-2 h-4 w-4 animate-spin"
+              aria-hidden="true"
+            />
+            {{ busyAction === "submit" ? "Submitting" : "Submit" }}
           </button>
           <button
             type="button"
             class="form-fill__secondary"
             :style="{ borderColor: 'color-mix(in srgb, var(--p-border) 70%, transparent)' }"
             :disabled="isBusy"
+            :aria-busy="busyAction === 'save' || undefined"
             @click="saveDraft"
           >
-            {{ busyAction === "save" ? "Saving..." : "Save for later" }}
+            <Loader2
+              v-if="busyAction === 'save'"
+              class="mr-2 h-4 w-4 animate-spin"
+              aria-hidden="true"
+            />
+            {{ busyAction === "save" ? "Saving" : "Save for later" }}
           </button>
         </div>
       </template>
@@ -137,7 +149,7 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from "vue";
-import { Check } from "lucide-vue-next";
+import { Check, Loader2 } from "lucide-vue-next";
 import type {
   PortalForm,
   PortalFormAnswers,

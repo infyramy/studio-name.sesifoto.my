@@ -194,7 +194,7 @@ defineExpose({ clearSensitiveFields });
             :style="{ background: 'var(--gate-accent)', color: 'var(--gate-accent-text)' }"
           >
             <Loader2 v-if="loading" class="mr-2 h-4 w-4 animate-spin" />
-            {{ loading ? "Checking..." : "Continue" }}
+            {{ loading ? "Checking" : "Continue" }}
           </button>
         </form>
       </section>
@@ -296,7 +296,7 @@ defineExpose({ clearSensitiveFields });
           class="portal-primary portal-focus flex h-10 items-center rounded-xl px-4 text-sm font-semibold transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-45"
         >
           <Loader2 v-if="loading" class="mr-2 h-4 w-4 animate-spin" />
-          {{ loading ? "Saving..." : "Change passcode" }}
+          {{ loading ? "Saving" : "Change passcode" }}
         </button>
       </div>
     </form>
