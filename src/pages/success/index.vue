@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, nextTick } from "vue";
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import { useStudioStore } from "@/stores/studio";
 import { useTranslation } from "@/composables/useTranslation";
@@ -39,6 +39,10 @@ const error = ref<string | null>(null);
 const expandedIndex = ref<number | null>(0);
 const copiedId = ref(false);
 const confettiFired = ref(false);
+const PAYMENT_POLL_INTERVAL_MS = 1500;
+const PAYMENT_POLL_TIMEOUT_MS = 30000;
+let paymentPollTimer: number | undefined;
+let paymentPollDeadline = 0;
 
 const toggleAccordion = (index: number) => {
   expandedIndex.value = expandedIndex.value === index ? null : index;
@@ -75,27 +79,59 @@ const isCelebratoryPayment = (b: Booking | null) => {
   return b.payment_status === "paid" || b.payment_status === "partially_paid";
 };
 
-const fetchBookingsWithRetry = async (
-  ids: string[],
-  maxRetries: number = 5,
-  delayMs: number = 1500,
-): Promise<Booking[]> => {
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    const validBookings = await api.getBookingsBatch(ids);
+const hasConfirmedPayment = (b: Booking | null) => isCelebratoryPayment(b);
 
-    if (validBookings.length <= 1 || !hasAnyPendingPayment(validBookings)) {
-      return validBookings;
-    }
-
-    if (attempt < maxRetries) {
-      await new Promise((resolve) => setTimeout(resolve, delayMs));
-    } else {
-      return validBookings;
-    }
+const fetchBookings = async () => {
+  const latestBookings = await api.getBookingsBatch(bookingIds);
+  if (latestBookings.length > 0) {
+    bookings.value = latestBookings;
   }
-
-  return await api.getBookingsBatch(ids);
+  return latestBookings;
 };
+
+const stopPaymentPolling = () => {
+  if (paymentPollTimer !== undefined) {
+    window.clearInterval(paymentPollTimer);
+    paymentPollTimer = undefined;
+  }
+};
+
+const startPaymentPolling = () => {
+  stopPaymentPolling();
+  paymentPollDeadline = Date.now() + PAYMENT_POLL_TIMEOUT_MS;
+  paymentPollTimer = window.setInterval(async () => {
+    if (Date.now() >= paymentPollDeadline) {
+      stopPaymentPolling();
+      return;
+    }
+
+    try {
+      const latestBookings = await fetchBookings();
+      if (!hasAnyPendingPayment(latestBookings)) {
+        stopPaymentPolling();
+      }
+    } catch {
+      // Keep last successful data and retry on next interval.
+    }
+  }, PAYMENT_POLL_INTERVAL_MS);
+};
+
+onMounted(async () => {
+  try {
+    const initialBookings = await fetchBookings();
+    if (initialBookings.length === 0) {
+      error.value = t("bookingNotFound");
+    } else if (hasAnyPendingPayment(initialBookings)) {
+      startPaymentPolling();
+    }
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : t("bookingNotFound");
+  } finally {
+    isLoading.value = false;
+  }
+});
+
+onUnmounted(stopPaymentPolling);
 
 function fireConfetti() {
   if (confettiFired.value) return;
@@ -133,19 +169,6 @@ function fireConfetti() {
     });
   }, 200);
 }
-
-onMounted(async () => {
-  try {
-    bookings.value = await fetchBookingsWithRetry(bookingIds);
-    if (bookings.value.length === 0) {
-      error.value = t("bookingNotFound");
-    }
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : t("bookingNotFound");
-  } finally {
-    isLoading.value = false;
-  }
-});
 
 watch(
   () => [isLoading.value, booking.value?.payment_status] as const,
@@ -486,7 +509,7 @@ const getWhatsAppUrl = computed(() => {
                   </section>
 
                   <section
-                    v-if="b.total_amount"
+                    v-if="hasConfirmedPayment(b) && b.total_amount"
                     class="space-y-3 border-t border-gray-100 pt-4"
                   >
                     <h4
@@ -658,7 +681,11 @@ const getWhatsAppUrl = computed(() => {
               </div>
             </li>
             <li
-              v-if="booking.balance_amount && booking.balance_amount > 0"
+              v-if="
+                booking.payment_status === 'partially_paid' &&
+                booking.balance_amount &&
+                booking.balance_amount > 0
+              "
               class="flex gap-3 py-3"
             >
               <CreditCard class="mt-0.5 h-4 w-4 shrink-0 text-gray-900" />
