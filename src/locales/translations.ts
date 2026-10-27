@@ -296,6 +296,8 @@ export const translationsBM: Translations = {
   copyBookingId: "Salin ID",
   bookingIdCopied: "Disalin!",
   sessionsBooked: "sesi ditempah",
+  bookingQrCode: "Kod QR tempahan",
+  bookingQrCodeDesc: "Imbas untuk membuka semula ringkasan tempahan dan bayaran ini.",
 
   // Lookup Page
   checkYourBooking: "Semak Tempahan Anda",
@@ -770,6 +772,8 @@ export const translationsEN: Translations = {
   copyBookingId: "Copy ID",
   bookingIdCopied: "Copied!",
   sessionsBooked: "sessions booked",
+  bookingQrCode: "Booking QR code",
+  bookingQrCodeDesc: "Scan to reopen this booking and payment summary.",
 
   // Lookup Page
   checkYourBooking: "Check Your Booking",

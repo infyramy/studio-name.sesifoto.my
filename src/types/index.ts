@@ -284,6 +284,7 @@ export interface Booking {
     | "undelivered"
     | "completed"
     | "cancelled";
+  check_in_token?: string;
   cart_hold_expires_at: string | null;
   created_at: string;
   updated_at: string;

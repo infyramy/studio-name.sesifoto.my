@@ -285,6 +285,8 @@ export type TranslationKey =
   | "copyBookingId"
   | "bookingIdCopied"
   | "sessionsBooked"
+  | "bookingQrCode"
+  | "bookingQrCodeDesc"
 
   // Lookup Page
   | "checkYourBooking"

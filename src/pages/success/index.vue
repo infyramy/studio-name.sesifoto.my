@@ -6,6 +6,7 @@ import { useTranslation } from "@/composables/useTranslation";
 import PoweredBySesifoto from "@/components/PoweredBySesifoto.vue";
 import { api } from "@/services/api";
 import { format } from "date-fns";
+import QRCode from "qrcode";
 import type { Booking } from "@/types";
 import confetti from "canvas-confetti";
 import {
@@ -22,6 +23,7 @@ import {
   Copy,
   Check,
   Camera,
+  QrCode,
 } from "lucide-vue-next";
 
 const router = useRouter();
@@ -44,6 +46,25 @@ const toggleAccordion = (index: number) => {
 
 const booking = computed(() => bookings.value[0] || null);
 const isMultipleBookings = computed(() => bookings.value.length > 1);
+const bookingQrUrl = ref("");
+
+watch(
+  () => bookings.value.map((item) => item.check_in_token || "").join(","),
+  async (checkInTokens) => {
+    const token = checkInTokens.split(",")[0];
+    if (!token || typeof window === "undefined") {
+      bookingQrUrl.value = "";
+      return;
+    }
+    const bookingUrl = new URL(
+      `https://office.sesifoto.my/studio/bookings/check-in?token=${encodeURIComponent(token)}`,
+    ).toString();
+    bookingQrUrl.value = await QRCode.toDataURL(bookingUrl, {
+      margin: 1,
+      width: 220,
+    });
+  },
+);
 
 const hasAnyPendingPayment = (bookingList: Booking[]) => {
   return bookingList.some((b) => b.payment_status === "pending");
@@ -583,6 +604,24 @@ const getWhatsAppUrl = computed(() => {
                     >
                       {{ t("inclTransactionFee") }}:
                       {{ formatAmount(b.chip_fee_paid) }}
+                    </p>
+                  </section>
+
+                  <section
+                    v-if="bookingQrUrl && isCelebratoryPayment(b)"
+                    class="space-y-3 border-t border-gray-100 pt-4 text-center"
+                  >
+                    <h4 class="flex items-center justify-center gap-2 text-sm font-medium text-gray-900">
+                      <QrCode class="h-4 w-4 text-gray-400" />
+                      {{ t("bookingQrCode") }}
+                    </h4>
+                    <img
+                      :src="bookingQrUrl"
+                      :alt="t('bookingQrCode')"
+                      class="mx-auto h-36 w-36 rounded-lg border border-gray-100 bg-white p-2"
+                    />
+                    <p class="text-xs text-gray-500">
+                      {{ t("bookingQrCodeDesc") }}
                     </p>
                   </section>
                 </div>
