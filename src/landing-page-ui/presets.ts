@@ -237,6 +237,7 @@ export function createDefaultTheme(): LandingPageTheme {
     ...siteNav,
     footerCopyright: "© Sesifoto Studio. All rights reserved.",
     showLanguageSwitcher: true,
+    defaultLanguage: "bm",
     ...marketing,
   };
 }

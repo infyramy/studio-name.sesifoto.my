@@ -123,6 +123,8 @@ export type LandingPageTheme = {
   footerNav: SiteNavLink[];
   footerCopyright: string;
   showLanguageSwitcher: boolean;
+  /** Initial UI language for visitors (preview + public site). */
+  defaultLanguage: StudioLanguage;
 } & HomeMarketingContent;
 
 export type LandingPageConfig = Partial<LandingPageTheme> & Record<string, unknown>;

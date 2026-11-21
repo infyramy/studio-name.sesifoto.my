@@ -68,10 +68,24 @@ const leadFormViewRef = ref<{
 
 const isGalleryOpen = ref(false);
 const galleryInitialIndex = ref(0);
+/** Apply site default language once per session; keep visitor toggles after that. */
+const landingLanguageApplied = ref(false);
 
 const language = computed<StudioLanguage>(() =>
   studioStore.currentLanguage === "EN" ? "en" : "bm",
 );
+
+function applyLandingDefaultLanguage(
+  rawStyle: Record<string, unknown> | null | undefined,
+  normalized: LandingPageTheme,
+) {
+  if (landingLanguageApplied.value) return;
+  if (!rawStyle || !("defaultLanguage" in rawStyle)) return;
+  studioStore.setLanguage(
+    normalized.defaultLanguage === "en" ? "EN" : "BM",
+  );
+  landingLanguageApplied.value = true;
+}
 
 const isLinksHome = computed(
   () => !isTemplatePage.value && theme.value?.homeLayout === "links",
@@ -249,30 +263,36 @@ async function loadPage() {
 
     if (isPortfolio.value) {
       portfolioConfig.value = normalizePortfolioConfig(data.config);
+      const rawSiteStyle = (data.siteStyle ?? {}) as Record<string, unknown>;
       siteStyle.value = normalizeLandingPageConfig(
-        data.siteStyle ?? {},
+        rawSiteStyle,
         studioDefaults.value,
         { products: data.products },
       );
       theme.value = siteStyle.value;
       rememberSiteTheme(siteStyle.value);
+      applyLandingDefaultLanguage(rawSiteStyle, siteStyle.value);
     } else if (isLeadForm.value) {
       leadFormConfig.value = normalizeLeadFormConfig(data.config);
+      const rawSiteStyle = (data.siteStyle ?? {}) as Record<string, unknown>;
       siteStyle.value = normalizeLandingPageConfig(
-        data.siteStyle ?? {},
+        rawSiteStyle,
         studioDefaults.value,
         { products: data.products },
       );
       theme.value = siteStyle.value;
       rememberSiteTheme(siteStyle.value);
+      applyLandingDefaultLanguage(rawSiteStyle, siteStyle.value);
     } else {
+      const rawConfig = (data.config ?? {}) as Record<string, unknown>;
       theme.value = normalizeLandingPageConfig(
-        data.config,
+        rawConfig,
         studioDefaults.value,
         { pageType: data.type, products: data.products },
       );
       siteStyle.value = theme.value;
       rememberSiteTheme(theme.value);
+      applyLandingDefaultLanguage(rawConfig, theme.value);
     }
   } catch (err: unknown) {
     pageError.value =

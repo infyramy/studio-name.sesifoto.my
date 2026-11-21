@@ -88,10 +88,21 @@ const secondaryButtonStyle = {
   WebkitBackdropFilter: "var(--card-backdrop)",
   boxShadow: "var(--card-shadow)",
 };
+
+/** Preview fills device frame; live fills viewport. Same flex + sticky footer. */
+const surfaceFillClass = computed(() =>
+  props.surfaceClass === "preview-surface" ? "min-h-full" : "min-h-dvh",
+);
 </script>
 
 <template>
-  <div :class="['min-h-full w-full max-w-full overflow-x-clip', surfaceClass]">
+  <div
+    :class="[
+      'flex w-full max-w-full flex-col overflow-x-clip',
+      surfaceFillClass,
+      surfaceClass,
+    ]"
+  >
     <!-- eslint-disable-next-line vue/no-v-text-v-html-on-component -->
     <component :is="'style'" v-html="themeStyle" />
 
@@ -104,7 +115,7 @@ const secondaryButtonStyle = {
       @retry="emit('retryLoad')"
     />
 
-    <div v-else class="relative min-h-full w-full">
+    <div v-else class="relative flex w-full flex-1 flex-col">
       <div
         v-if="config.showLanguageSwitcher"
         class="absolute right-4 top-4 z-20 flex items-center gap-1 text-xs font-medium"
@@ -140,7 +151,7 @@ const secondaryButtonStyle = {
       </div>
 
       <div
-        class="relative z-10 mx-auto flex w-full max-w-[480px] flex-col items-center px-5 pb-10 text-center"
+        class="relative z-10 mx-auto flex w-full max-w-[480px] flex-1 flex-col items-center px-5 pb-10 text-center"
         :class="config.heroUrl ? '-mt-16' : 'pt-16'"
       >
         <div v-if="config.logoUrl" class="mb-5 flex justify-center">
@@ -292,7 +303,7 @@ const secondaryButtonStyle = {
           :href="SESIFOTO_HOME_URL"
           target="_blank"
           rel="noopener noreferrer"
-          class="mt-10 inline-flex flex-col items-center gap-2 text-[10px] text-[var(--text-muted)] opacity-70 transition-opacity hover:opacity-100"
+          class="mt-auto inline-flex flex-col items-center gap-2 pt-10 text-[10px] text-[var(--text-muted)] opacity-70 transition-opacity hover:opacity-100"
         >
           <img
             :src="SESIFOTO_LOGO_SRC"

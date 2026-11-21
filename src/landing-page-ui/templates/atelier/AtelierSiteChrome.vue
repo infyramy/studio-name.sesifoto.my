@@ -191,7 +191,7 @@ function setLanguage(lang: StudioLanguage) {
   <div
     ref="chromeRef"
     :class="[
-      'relative flex min-h-full w-full max-w-full flex-col',
+      'relative flex min-h-full w-full max-w-full flex-1 flex-col',
       showDesktopRail ? 'md:flex-row' : '',
       animateEnter ? 'lp-chrome--animate' : '',
     ]"

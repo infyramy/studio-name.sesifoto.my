@@ -13,8 +13,18 @@ import {
   type ProductEntitlements,
   type SectionKey,
   type SiteNavLink,
+  type StudioLanguage,
   type TestimonialItem,
 } from "./types";
+
+function normalizeStudioLanguage(
+  value: unknown,
+  fallback: StudioLanguage,
+): StudioLanguage {
+  if (value === "en" || value === "EN") return "en";
+  if (value === "bm" || value === "BM") return "bm";
+  return fallback;
+}
 
 export function normalizeSectionOrder(input: unknown): SectionKey[] {
   const list = Array.isArray(input) ? input : [];
@@ -204,6 +214,10 @@ export function normalizeLandingPageConfig(
   theme.showLanguageSwitcher = coerceBoolean(
     theme.showLanguageSwitcher,
     defaults.showLanguageSwitcher,
+  );
+  theme.defaultLanguage = normalizeStudioLanguage(
+    theme.defaultLanguage,
+    defaults.defaultLanguage,
   );
 
   const logoStyles = ["transparent", "circle", "square"] as const;

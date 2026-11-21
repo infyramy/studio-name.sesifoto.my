@@ -1,5 +1,13 @@
 /* Public site page enter / scroll reveal + boot */
 
+/* Live surface must fill the viewport; parent only has min-height so % height fails. */
+div.landing-surface {
+  min-height: 100dvh;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+
 .lp-boot {
   display: flex;
   flex-direction: column;
