@@ -4,6 +4,7 @@ import { useRouter } from "vue-router";
 import { Home } from "lucide-vue-next";
 import { useTranslation } from "@/composables/useTranslation";
 import { useStudioStore } from "@/stores/studio";
+import SafeImage from "@/components/SafeImage.vue";
 
 const { t } = useTranslation();
 const studioStore = useStudioStore();
@@ -31,11 +32,10 @@ const goHome = () => {
       <header
         class="page-nf__brand page-nf__enter page-nf__enter--1 flex flex-col items-center gap-3 mb-10"
       >
-        <img
-          v-if="studioLogoUrl"
+        <SafeImage
           :src="studioLogoUrl"
           :alt="studioName"
-          class="h-14 w-14 rounded-lg object-contain bg-white"
+          class="h-14 w-14 rounded-full object-contain p-[14%] box-border"
         />
         <span
           v-if="studioName"

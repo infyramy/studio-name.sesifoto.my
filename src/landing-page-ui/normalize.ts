@@ -126,7 +126,9 @@ export function normalizeLandingPageConfig(
 
   const defaults = { ...factory };
   defaults.studioName = studio.name || defaults.studioName;
-  defaults.logoUrl = studio.logoUrl || defaults.logoUrl;
+  defaults.logoUrl =
+    (typeof studio.logoUrl === "string" && studio.logoUrl.trim()) ||
+    defaults.logoUrl;
   defaults.socialInstagram = studio.instagram || defaults.socialInstagram;
   defaults.socialFacebook = studio.facebook || defaults.socialFacebook;
   defaults.socialTiktok = studio.tiktok || defaults.socialTiktok;
@@ -144,6 +146,10 @@ export function normalizeLandingPageConfig(
   const theme: LandingPageTheme = { ...defaults, ...raw };
 
   applyStudioProfileOverrides(theme, raw, studio, factory);
+
+  if (typeof theme.logoUrl !== "string" || !theme.logoUrl.trim()) {
+    theme.logoUrl = defaults.logoUrl || "/logo-light.png";
+  }
 
   if (typeof theme.showButtons !== "boolean") {
     theme.showButtons = true;

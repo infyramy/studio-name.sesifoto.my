@@ -56,11 +56,10 @@
               Invoice #{{ invoice?.number || "—" }}
             </p>
           </div>
-          <img
-            v-if="studioLogoUrl"
+          <SafeImage
             :src="studioLogoUrl"
-            :alt="studioName"
-            class="h-10 w-auto max-w-[7rem] object-contain"
+            :alt="studioName || ''"
+            class="h-10 w-10 rounded-full object-contain p-[14%] box-border"
           />
         </div>
 
@@ -143,6 +142,7 @@
 import { computed, ref } from "vue";
 import { Printer, X } from "lucide-vue-next";
 import PortalOverlay from "./PortalOverlay.vue";
+import SafeImage from "@/components/SafeImage.vue";
 import type { PortalInvoice } from "@/services/portal.service";
 
 const props = defineProps<{

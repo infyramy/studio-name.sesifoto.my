@@ -207,9 +207,8 @@ export function createDefaultTheme(): LandingPageTheme {
     showFaq: true,
     showEmergency: true,
     showFooter: true,
-    logoUrl:
-      "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ4LrfZrIU_TSCVQRbm7mx1JHv8KfGe6-d3aQ&s",
-    logoStyle: "square",
+    logoUrl: "/logo-light.png",
+    logoStyle: "circle",
     studioName: "Sesifoto Studio",
     mainTitle: marketing.heroTagline,
     ssmNumber: "1402334A",

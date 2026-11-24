@@ -13,13 +13,11 @@
       </button>
       <div class="quote-hero__content">
         <div class="quote-hero__brand">
-          <img
-            v-if="quote.studio.logoUrl"
+          <SafeImage
             :src="quote.studio.logoUrl"
             :alt="quote.studio.name"
             class="quote-hero__logo"
           />
-          <p v-else class="quote-hero__studio">{{ quote.studio.name }}</p>
         </div>
         <h1 class="quote-hero__title">
           Hi {{ clientFirstName }},
@@ -537,6 +535,7 @@ import { useSanitize } from "@/composables/useSanitize";
 import { usePortalTheme } from "@/composables/usePortalTheme";
 import { printInvoiceBlob } from "@/composables/useInvoicePage";
 import PoweredBySesifoto from "@/components/PoweredBySesifoto.vue";
+import SafeImage from "@/components/SafeImage.vue";
 import PortalThemeIcon from "@/components/portal/PortalThemeIcon.vue";
 import PortalOverlay from "./PortalOverlay.vue";
 
@@ -905,9 +904,11 @@ function money(value: number) {
 
 .quote-hero__logo {
   height: 3rem;
-  width: auto;
-  max-width: 10rem;
+  width: 3rem;
+  border-radius: 999px;
   object-fit: contain;
+  padding: 14%;
+  box-sizing: border-box;
 }
 
 .quote-hero__studio {

@@ -9,13 +9,11 @@
           <header class="gate__header">
             <div class="gate__brand">
               <div class="gate__logo-wrap">
-                <img
-                  v-if="gate?.logoUrl"
-                  :src="gate.logoUrl"
-                  :alt="gate.studioName"
+                <SafeImage
+                  :src="gate?.logoUrl"
+                  :alt="gate?.studioName || studioName"
                   class="gate__logo"
                 />
-                <span v-else class="gate__logo-fallback">{{ studioInitial }}</span>
               </div>
               <div class="gate__brand-text">
                 <p class="gate__eyebrow">Client Portal</p>
@@ -95,6 +93,7 @@ import {
 import PortalThemeIcon from "@/components/portal/PortalThemeIcon.vue";
 import PortalLoadingState from "@/components/portal/PortalLoadingState.vue";
 import PoweredBySesifoto from "@/components/PoweredBySesifoto.vue";
+import SafeImage from "@/components/SafeImage.vue";
 import { usePortalTheme } from "@/composables/usePortalTheme";
 import { PortalApiError, portalService } from "@/services/portal.service";
 import { useStudioStore } from "@/stores/studio";
@@ -117,9 +116,6 @@ const { isDark, themeVars, setAccent, toggleDark } = usePortalTheme({
 });
 
 const studioName = computed(() => studioStore.studio?.name || "Studio");
-const studioInitial = computed(
-  () => (gate.value?.studioName || studioName.value).charAt(0).toUpperCase(),
-);
 const heroUrl = computed(() => gate.value?.heroUrl || "");
 function nextJobId(): string {
   const value = route.query.nextJob;
@@ -345,7 +341,9 @@ async function submit() {
 .gate__logo {
   height: 100%;
   width: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  padding: 14%;
+  box-sizing: border-box;
 }
 
 .gate__logo-fallback {

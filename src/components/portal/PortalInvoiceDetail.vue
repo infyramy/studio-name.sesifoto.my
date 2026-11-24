@@ -22,13 +22,11 @@
       </button>
       <div class="invoice-hero__content">
         <div class="invoice-hero__brand">
-          <img
-            v-if="studioLogoUrl"
+          <SafeImage
             :src="studioLogoUrl"
-            :alt="studioName"
+            :alt="studioName || ''"
             class="invoice-hero__logo"
           />
-          <p v-else class="invoice-hero__studio">{{ studioName }}</p>
         </div>
         <h1 class="invoice-hero__title">
           Hi {{ clientFirstName }},
@@ -377,6 +375,7 @@
 import { computed } from "vue";
 import { Download, Loader2, Printer, ReceiptText } from "lucide-vue-next";
 import PoweredBySesifoto from "@/components/PoweredBySesifoto.vue";
+import SafeImage from "@/components/SafeImage.vue";
 import PortalThemeIcon from "@/components/portal/PortalThemeIcon.vue";
 import { invoiceStatusLabel } from "@/composables/useInvoicePage";
 import type { PortalInvoice } from "@/services/portal.service";
@@ -620,9 +619,11 @@ function formatMoney(value: number, currency: string | null) {
 
 .invoice-hero__logo {
   height: 3rem;
-  width: auto;
-  max-width: 10rem;
+  width: 3rem;
+  border-radius: 999px;
   object-fit: contain;
+  padding: 14%;
+  box-sizing: border-box;
 }
 
 .invoice-hero__studio {

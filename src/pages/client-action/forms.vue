@@ -11,8 +11,7 @@
     <main v-else-if="data" class="action__main portal-reveal">
       <header class="action__header">
         <div class="action__brand">
-          <img
-            v-if="data.studio.logoUrl"
+          <SafeImage
             :src="data.studio.logoUrl"
             :alt="data.studio.name"
             class="action__logo"
@@ -122,6 +121,7 @@ import PortalFormFill from "@/components/portal/PortalFormFill.vue";
 import PortalErrorState from "@/components/portal/PortalErrorState.vue";
 import PortalLoadingState from "@/components/portal/PortalLoadingState.vue";
 import PoweredBySesifoto from "@/components/PoweredBySesifoto.vue";
+import SafeImage from "@/components/SafeImage.vue";
 import { usePortalTheme } from "@/composables/usePortalTheme";
 import {
   ClientActionApiError,
@@ -208,7 +208,9 @@ onMounted(load);
   width: 2.75rem;
   height: 2.75rem;
   border-radius: 999px;
-  object-fit: cover;
+  object-fit: contain;
+  padding: 14%;
+  box-sizing: border-box;
 }
 
 .action__studio {

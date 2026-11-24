@@ -34,9 +34,11 @@ div.landing-surface {
 
 .lp-boot__logo {
   height: 2.75rem;
-  width: auto;
-  max-width: 9rem;
+  width: 2.75rem;
+  border-radius: 999px;
   object-fit: contain;
+  padding: 14%;
+  box-sizing: border-box;
 }
 
 .lp-boot__name {

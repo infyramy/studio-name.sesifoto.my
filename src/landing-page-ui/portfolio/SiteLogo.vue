@@ -1,6 +1,12 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
 import type { LogoStyle } from "../types";
+import {
+  DEFAULT_SESIFOTO_IMAGE,
+  DEFAULT_SESIFOTO_IMAGE_BG,
+  isDefaultSesifotoImage,
+  resolveImageUrl,
+} from "@/lib/default-image";
 
 const props = withDefaults(
   defineProps<{
@@ -17,6 +23,22 @@ const props = withDefaults(
 
 const isTransparent = computed(() => props.logoStyle === "transparent");
 const isCircle = computed(() => props.logoStyle === "circle");
+
+const resolvedSrc = computed(() => resolveImageUrl(props.src));
+const displaySrc = ref(resolvedSrc.value);
+watch(resolvedSrc, (value) => {
+  displaySrc.value = value;
+});
+
+const showingDefault = computed(() =>
+  isDefaultSesifotoImage(displaySrc.value),
+);
+
+function onError() {
+  if (displaySrc.value !== DEFAULT_SESIFOTO_IMAGE) {
+    displaySrc.value = DEFAULT_SESIFOTO_IMAGE;
+  }
+}
 
 const frameClass = computed(() => {
   if (isTransparent.value) {
@@ -37,35 +59,53 @@ const frameClass = computed(() => {
 });
 
 const imageClass = computed(() =>
-  isTransparent.value ? "h-full w-full object-contain" : "h-full w-full object-cover",
+  isTransparent.value
+    ? "h-full w-full object-contain"
+    : "h-full w-full object-contain p-[14%] box-border",
 );
 
-const frameStyle = computed(() =>
-  isTransparent.value
-    ? undefined
-    : {
-        backgroundColor: "var(--card-bg)",
-        backdropFilter: "var(--card-backdrop)",
-        WebkitBackdropFilter: "var(--card-backdrop)",
-        boxShadow: "var(--card-shadow)",
-      },
+const frameStyle = computed(() => {
+  if (showingDefault.value) {
+    return { backgroundColor: DEFAULT_SESIFOTO_IMAGE_BG };
+  }
+  if (isTransparent.value) return undefined;
+  return {
+    backgroundColor: "var(--card-bg)",
+    backdropFilter: "var(--card-backdrop)",
+    WebkitBackdropFilter: "var(--card-backdrop)",
+    boxShadow: "var(--card-shadow)",
+  };
+});
+
+const transparentImgStyle = computed(() =>
+  showingDefault.value
+    ? {
+        backgroundColor: DEFAULT_SESIFOTO_IMAGE_BG,
+        padding: "0.35rem 0.6rem",
+        borderRadius: "0.375rem",
+        boxSizing: "border-box",
+      }
+    : undefined,
 );
 </script>
 
 <template>
   <img
     v-if="isTransparent"
-    :src="src"
+    :src="displaySrc"
     :alt="alt"
     :class="frameClass"
+    :style="transparentImgStyle"
     referrerpolicy="no-referrer"
+    @error="onError"
   />
   <div v-else :class="frameClass" :style="frameStyle">
     <img
-      :src="src"
+      :src="displaySrc"
       :alt="alt"
       :class="imageClass"
       referrerpolicy="no-referrer"
+      @error="onError"
     />
   </div>
 </template>

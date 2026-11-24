@@ -6,6 +6,7 @@ import {
   deriveAccessiblePortalAccent,
   readablePortalAccentText,
 } from "@/utils/portal-color";
+import SafeImage from "@/components/SafeImage.vue";
 
 const props = defineProps<{
   gallery: LockedGallery;
@@ -33,11 +34,10 @@ onMounted(() => input.value?.focus());
 <template>
   <div class="flex min-h-dvh items-center justify-center bg-[#070908] px-5 py-10">
     <section class="w-full max-w-sm rounded-[18px] border border-white/15 bg-[#0b0d0c]/95 px-6 py-7 shadow-[0_22px_64px_rgba(0,0,0,0.48)] sm:px-8">
-      <img
-        v-if="gallery.studio.logoUrl"
+      <SafeImage
         :src="gallery.studio.logoUrl"
         :alt="gallery.studio.name"
-        class="mb-5 h-8 w-auto max-w-[140px] object-contain"
+        class="mb-5 h-10 w-10 rounded-full object-contain p-[14%] box-border"
       />
       <p class="text-[11px] font-semibold tracking-wide" :style="{ color: accent }">
         {{ gallery.studio.name }}
