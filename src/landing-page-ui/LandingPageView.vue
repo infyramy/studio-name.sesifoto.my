@@ -17,6 +17,7 @@ import {
 } from "lucide-vue-next";
 import { tLandingPage, type LandingPageUiKey } from "./i18n";
 import { getGalleryImagesClean, getOrderedSections } from "./normalize";
+import SiteLogo from "./portfolio/SiteLogo.vue";
 import type { LandingPageTheme, ProductEntitlements, StudioLanguage } from "./types";
 import {
   normalizePhone,
@@ -460,36 +461,13 @@ function textEditClass() {
           @click="onSectionClick('header', $event)"
         >
           <div class="relative mb-6 mt-2 flex justify-center w-full">
-            <img
-              v-if="config.logoStyle === 'transparent' && config.logoUrl"
+            <SiteLogo
               :src="config.logoUrl"
               alt="Studio Logo"
-              class="w-48 md:w-56 h-auto object-contain drop-shadow-md"
-              referrerpolicy="no-referrer"
+              :logo-style="config.logoStyle"
+              variant="header"
+              class="scale-[1.85] md:scale-[2.1]"
             />
-            <div
-              v-else-if="config.logoUrl"
-              class="relative flex items-center justify-center overflow-hidden shadow-2xl border"
-              :class="
-                config.logoStyle === 'circle'
-                  ? 'rounded-full w-28 h-28 md:w-32 md:h-32'
-                  : 'rounded-2xl w-28 h-28 md:w-32 md:h-32'
-              "
-              :style="{
-                backgroundColor: 'var(--card-bg)',
-                borderColor: 'var(--border-color)',
-                backdropFilter: 'var(--card-backdrop)',
-                WebkitBackdropFilter: 'var(--card-backdrop)',
-                boxShadow: 'var(--card-shadow)',
-              }"
-            >
-              <img
-                :src="config.logoUrl"
-                alt="Studio Logo"
-                class="w-full h-full object-cover drop-shadow-sm"
-                referrerpolicy="no-referrer"
-              />
-            </div>
           </div>
 
           <div
@@ -968,39 +946,12 @@ function textEditClass() {
               @click="onSectionClick('footer', $event)"
             >
               <div class="flex items-center justify-center gap-4 w-full">
-                <div
-                  v-if="config.logoUrl"
-                  class="flex items-center justify-center overflow-hidden"
-                  :class="
-                    config.logoStyle === 'transparent'
-                      ? 'w-12 h-12'
-                      : config.logoStyle === 'circle'
-                        ? 'w-10 h-10 rounded-full border border-[var(--border-color)]'
-                        : 'w-10 h-10 rounded-xl border border-[var(--border-color)]'
-                  "
-                  :style="
-                    config.logoStyle !== 'transparent'
-                      ? {
-                          backgroundColor: 'var(--card-bg)',
-                          backdropFilter: 'var(--card-backdrop)',
-                          WebkitBackdropFilter: 'var(--card-backdrop)',
-                          boxShadow: 'var(--card-shadow)',
-                        }
-                      : {}
-                  "
-                >
-                  <img
-                    :src="config.logoUrl"
-                    alt="Studio Logo"
-                    class="w-full h-full"
-                    :class="
-                      config.logoStyle === 'transparent'
-                        ? 'object-contain'
-                        : 'object-cover'
-                    "
-                    referrerpolicy="no-referrer"
-                  />
-                </div>
+                <SiteLogo
+                  :src="config.logoUrl"
+                  alt="Studio Logo"
+                  :logo-style="config.logoStyle"
+                  variant="footer"
+                />
                 <div class="flex flex-col text-left text-xs text-[var(--text-muted)]">
                   <p
                     class="font-bold text-sm text-[var(--text-main)] flex items-baseline gap-1"

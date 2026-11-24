@@ -106,10 +106,17 @@ export function sanitizeProductButtonsInConfig(
   if (!products.studio) {
     next.showBookNowButton = false;
     next.showCheckBookingButton = false;
+    next.showHomeBookingButton = false;
   }
 
   if (!products.crm) {
     next.showCrmInquiryButton = false;
+  }
+
+  if (products.packageCode === "light") {
+    next.homeLayout = "links";
+    next.showHomeServicesButton = false;
+    next.showHomePortfolioButton = false;
   }
 
   return next;
@@ -165,16 +172,6 @@ export function normalizeLandingPageConfig(
   }
   if (typeof theme.showCrmInquiryButton !== "boolean") {
     theme.showCrmInquiryButton = false;
-  }
-
-  if (options?.products) {
-    if (!options.products.studio) {
-      theme.showBookNowButton = false;
-      theme.showCheckBookingButton = false;
-    }
-    if (!options.products.crm) {
-      theme.showCrmInquiryButton = false;
-    }
   }
 
   if (!Array.isArray(theme.faqs)) theme.faqs = [];
@@ -236,6 +233,23 @@ export function normalizeLandingPageConfig(
   Object.assign(theme, normalizeHomeMarketingContent(raw));
 
   theme.showFaq = theme.showHomeFaq;
+
+  // Entitlement gates last so home-marketing defaults cannot re-enable locked CTAs.
+  if (options?.products) {
+    if (!options.products.studio) {
+      theme.showBookNowButton = false;
+      theme.showCheckBookingButton = false;
+      theme.showHomeBookingButton = false;
+    }
+    if (!options.products.crm) {
+      theme.showCrmInquiryButton = false;
+    }
+    if (options.products.packageCode === "light") {
+      theme.homeLayout = "links";
+      theme.showHomeServicesButton = false;
+      theme.showHomePortfolioButton = false;
+    }
+  }
 
   return theme;
 }

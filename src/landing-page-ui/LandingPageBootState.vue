@@ -3,6 +3,7 @@ import { computed } from "vue";
 import type { LandingPageTheme } from "./types";
 import { createDefaultTheme } from "./presets";
 import { useLandingPageStyles } from "./useLandingPageStyles";
+import { resolveImageUrl } from "@/lib/default-image";
 
 const props = withDefaults(
   defineProps<{
@@ -45,8 +46,8 @@ const bootStyle = computed(() => {
   };
 });
 
-const showLogo = computed(() => !!props.theme?.logoUrl?.trim());
 const showName = computed(() => !!props.theme?.studioName?.trim());
+const bootLogoSrc = computed(() => resolveImageUrl(props.theme?.logoUrl));
 </script>
 
 <template>
@@ -67,10 +68,9 @@ const showName = computed(() => !!props.theme?.studioName?.trim());
       </button>
     </template>
     <template v-else>
-      <div v-if="showLogo || showName" class="lp-boot__brand">
+      <div class="lp-boot__brand">
         <img
-          v-if="showLogo"
-          :src="theme!.logoUrl"
+          :src="bootLogoSrc"
           :alt="theme?.studioName || ''"
           class="lp-boot__logo"
           referrerpolicy="no-referrer"
@@ -78,9 +78,6 @@ const showName = computed(() => !!props.theme?.studioName?.trim());
         <p v-if="showName" class="lp-boot__name font-title">
           {{ theme!.studioName }}
         </p>
-      </div>
-      <div v-else class="lp-boot__mark" aria-hidden="true">
-        <span class="lp-boot__dot" />
       </div>
       <div class="lp-boot__track" aria-hidden="true">
         <div class="lp-boot__bar" />

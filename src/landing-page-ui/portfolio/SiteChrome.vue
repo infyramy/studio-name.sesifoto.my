@@ -263,18 +263,11 @@ function setLanguage(lang: StudioLanguage) {
           @click="goHome"
         >
           <SiteLogo
-            v-if="styleConfig.logoUrl"
             :src="styleConfig.logoUrl"
             :alt="styleConfig.studioName || 'Home'"
             :logo-style="styleConfig.logoStyle"
             variant="header"
           />
-          <span
-            v-else-if="styleConfig.studioName"
-            class="truncate text-center text-base font-semibold"
-          >
-            {{ styleConfig.studioName }}
-          </span>
         </a>
 
         <div :class="[desktopNavClass, 'items-center gap-5']">
@@ -347,18 +340,11 @@ function setLanguage(lang: StudioLanguage) {
                 @click="goHome"
               >
                 <SiteLogo
-                  v-if="styleConfig.logoUrl"
                   :src="styleConfig.logoUrl"
                   :alt="styleConfig.studioName || 'Home'"
                   :logo-style="styleConfig.logoStyle"
                   variant="header"
                 />
-                <span
-                  v-else-if="styleConfig.studioName"
-                  class="text-base font-semibold"
-                >
-                  {{ styleConfig.studioName }}
-                </span>
               </a>
               <div class="h-10 w-10 shrink-0" aria-hidden="true" />
             </div>
@@ -413,7 +399,6 @@ function setLanguage(lang: StudioLanguage) {
       <div :class="footerInnerClass">
         <div class="mb-6 flex justify-center">
           <a
-            v-if="styleConfig.logoUrl"
             href="/"
             class="inline-flex transition-opacity hover:opacity-70"
             :aria-label="styleConfig.studioName || 'Home'"

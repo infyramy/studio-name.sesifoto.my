@@ -218,18 +218,11 @@ function setLanguage(lang: StudioLanguage) {
             @click="goHome"
           >
             <SiteLogo
-              v-if="styleConfig.logoUrl"
               :src="styleConfig.logoUrl"
               :alt="styleConfig.studioName || 'Home'"
               :logo-style="styleConfig.logoStyle"
               variant="header"
             />
-            <span
-              v-else-if="styleConfig.studioName"
-              class="truncate text-center font-title text-2xl tracking-[0.08em] text-[var(--text-main)] md:text-3xl"
-            >
-              {{ styleConfig.studioName }}
-            </span>
           </a>
 
           <div

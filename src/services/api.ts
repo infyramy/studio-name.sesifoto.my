@@ -240,7 +240,11 @@ export const api = {
     type: "studio_booking" | "crm_inquiry" | "general";
     config: Record<string, unknown>;
     isDefault: boolean;
-    products: { studio: boolean; crm: boolean };
+    products: {
+      studio: boolean;
+      crm: boolean;
+      packageCode?: "light" | "essential" | "pro" | null;
+    };
     siteStyle?: Record<string, unknown>;
   }> {
     const query = pageSlug ? `?pageSlug=${encodeURIComponent(pageSlug)}` : "";

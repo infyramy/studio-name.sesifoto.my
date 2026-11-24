@@ -8,6 +8,7 @@ import {
   Instagram,
 } from "lucide-vue-next";
 import LandingPageBootState from "../LandingPageBootState.vue";
+import SiteLogo from "../portfolio/SiteLogo.vue";
 import { tLandingPage } from "../i18n";
 import type {
   LandingPageTheme,
@@ -154,27 +155,14 @@ const surfaceFillClass = computed(() =>
         class="relative z-10 mx-auto flex w-full max-w-[480px] flex-1 flex-col items-center px-5 pb-10 text-center"
         :class="config.heroUrl ? '-mt-16' : 'pt-16'"
       >
-        <div v-if="config.logoUrl" class="mb-5 flex justify-center">
-          <img
-            v-if="config.logoStyle === 'transparent'"
+        <div class="mb-5 flex justify-center">
+          <SiteLogo
             :src="config.logoUrl"
-            :alt="config.studioName"
-            class="h-auto w-40 object-contain drop-shadow-md"
-            referrerpolicy="no-referrer"
+            :alt="config.studioName || 'Studio'"
+            :logo-style="config.logoStyle"
+            variant="header"
+            class="scale-150"
           />
-          <div
-            v-else
-            class="flex h-24 w-24 items-center justify-center overflow-hidden border"
-            :class="config.logoStyle === 'circle' ? 'rounded-full' : 'rounded-2xl'"
-            :style="secondaryButtonStyle"
-          >
-            <img
-              :src="config.logoUrl"
-              :alt="config.studioName"
-              class="h-full w-full object-cover"
-              referrerpolicy="no-referrer"
-            />
-          </div>
         </div>
 
         <h1

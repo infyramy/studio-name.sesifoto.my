@@ -224,15 +224,11 @@ function setLanguage(lang: StudioLanguage) {
         @click="goHome"
       >
         <SiteLogo
-          v-if="styleConfig.logoUrl"
           :src="styleConfig.logoUrl"
           :alt="styleConfig.studioName || 'Home'"
           :logo-style="styleConfig.logoStyle"
           variant="header"
         />
-        <template v-else>
-          {{ styleConfig.studioName }}
-        </template>
       </a>
 
       <div class="h-9 w-9 shrink-0" aria-hidden="true" />
@@ -253,18 +249,11 @@ function setLanguage(lang: StudioLanguage) {
           @click="goHome"
         >
           <SiteLogo
-            v-if="styleConfig.logoUrl"
             :src="styleConfig.logoUrl"
             :alt="styleConfig.studioName || 'Home'"
             :logo-style="styleConfig.logoStyle"
             variant="header"
           />
-          <span
-            v-else-if="styleConfig.studioName"
-            class="block font-title text-lg leading-tight tracking-[0.02em] text-[var(--text-main)]"
-          >
-            {{ styleConfig.studioName }}
-          </span>
         </a>
 
         <nav class="flex flex-col gap-3">

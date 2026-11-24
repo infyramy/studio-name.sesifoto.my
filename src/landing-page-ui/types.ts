@@ -134,6 +134,8 @@ export type LandingPageType = "studio_booking" | "crm_inquiry" | "general";
 export type ProductEntitlements = {
   studio: boolean;
   crm: boolean;
+  /** When light, public home hides Services/Portfolio buttons. */
+  packageCode?: "light" | "essential" | "pro" | null;
 };
 
 export interface LandingPagePublicDto {
