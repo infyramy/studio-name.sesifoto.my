@@ -44,9 +44,13 @@ export async function submitPublicBookingCheckout(options: {
   clearBookingState();
 
   if (paymentResult.paymentSkipped) {
-    const bookingNumbers = createdBookings
-      .map((b) => b.booking_number)
-      .join(",");
+    // Zero-pay renames TMP-* to final numbers server-side; prefer those.
+    const confirmed = paymentResult.confirmedBookingNumbers?.filter(Boolean);
+    const bookingNumbers = (
+      confirmed?.length
+        ? confirmed
+        : createdBookings.map((b) => b.booking_number)
+    ).join(",");
     return {
       createdBookings,
       result: { status: "skipped", bookingNumbers },
