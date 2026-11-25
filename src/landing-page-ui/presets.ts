@@ -201,7 +201,7 @@ export function createDefaultTheme(): LandingPageTheme {
     socialFacebook: "https://facebook.com",
     socialPinterest: "",
     socialThreads: "",
-    socialWebsite: "https://sesifoto.my",
+    socialWebsite: "",
     showGallery: true,
     showMaps: true,
     showFaq: true,

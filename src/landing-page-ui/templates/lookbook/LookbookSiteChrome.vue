@@ -67,9 +67,13 @@ const footerNav = computed(() =>
 const socialLinks = computed(() => {
   const links: { href: string; label: string }[] = [];
   const ig = safeHttpUrl(props.styleConfig.socialInstagram);
+  const tt = safeHttpUrl(props.styleConfig.socialTiktok);
   const fb = safeHttpUrl(props.styleConfig.socialFacebook);
+  const th = safeHttpUrl(props.styleConfig.socialThreads);
   if (ig) links.push({ href: ig, label: "Instagram" });
+  if (tt) links.push({ href: tt, label: "TikTok" });
   if (fb) links.push({ href: fb, label: "Facebook" });
+  if (th) links.push({ href: th, label: "Threads" });
   return links;
 });
 

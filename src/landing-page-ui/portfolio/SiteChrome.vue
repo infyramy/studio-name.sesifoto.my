@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from "vue";
-import { Facebook, Instagram, Mail, MapPin, Menu, MessageCircle, X } from "lucide-vue-next";
+import { AtSign, Facebook, Instagram, Mail, MapPin, Menu, MessageCircle, X } from "lucide-vue-next";
 import { useLandingPageEnter } from "../useLandingPageEnter";
 import {
   getSiteNavLabel,
@@ -64,13 +64,18 @@ const footerNav = computed(() =>
   })),
 );
 
+type SocialIconKey = "instagram" | "tiktok" | "facebook" | "threads";
+
 const socialLinks = computed(() => {
-  const links: { href: string; label: string; icon: "instagram" | "facebook" }[] =
-    [];
+  const links: { href: string; label: string; icon: SocialIconKey }[] = [];
   const ig = safeHttpUrl(props.styleConfig.socialInstagram);
+  const tt = safeHttpUrl(props.styleConfig.socialTiktok);
   const fb = safeHttpUrl(props.styleConfig.socialFacebook);
+  const th = safeHttpUrl(props.styleConfig.socialThreads);
   if (ig) links.push({ href: ig, label: "Instagram", icon: "instagram" });
+  if (tt) links.push({ href: tt, label: "TikTok", icon: "tiktok" });
   if (fb) links.push({ href: fb, label: "Facebook", icon: "facebook" });
+  if (th) links.push({ href: th, label: "Threads", icon: "threads" });
   return links;
 });
 
@@ -497,7 +502,20 @@ function setLanguage(lang: StudioLanguage) {
             :aria-label="link.label"
           >
             <Instagram v-if="link.icon === 'instagram'" class="h-4 w-4" />
-            <Facebook v-else class="h-4 w-4" />
+            <svg
+              v-else-if="link.icon === 'tiktok'"
+              class="h-4 w-4"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M9 12a4 4 0 1 0 4 4V4a5 5 0 0 0 5 5" />
+            </svg>
+            <Facebook v-else-if="link.icon === 'facebook'" class="h-4 w-4" />
+            <AtSign v-else class="h-4 w-4" />
           </a>
         </div>
       </div>

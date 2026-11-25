@@ -4,7 +4,6 @@ import {
   ArrowRight,
   Calendar,
   Facebook,
-  Globe,
   Instagram,
 } from "lucide-vue-next";
 import LandingPageBootState from "../LandingPageBootState.vue";
@@ -70,7 +69,7 @@ const socials = computed(() => ({
   instagram: safeHttpUrl(props.config.socialInstagram),
   tiktok: safeHttpUrl(props.config.socialTiktok),
   facebook: safeHttpUrl(props.config.socialFacebook),
-  website: safeHttpUrl(props.config.socialWebsite),
+  threads: safeHttpUrl(props.config.socialThreads),
 }));
 
 const hasSocials = computed(
@@ -226,14 +225,26 @@ const surfaceFillClass = computed(() =>
             <Facebook :size="22" />
           </a>
           <a
-            v-if="socials.website"
-            :href="socials.website"
-            aria-label="Website"
+            v-if="socials.threads"
+            :href="socials.threads"
+            aria-label="Threads"
             target="_blank"
             rel="noopener noreferrer"
             class="text-[var(--text-muted)] transition-colors hover:text-[var(--text-main)]"
           >
-            <Globe :size="22" />
+            <svg
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <circle cx="12" cy="12" r="4" />
+              <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8" />
+            </svg>
           </a>
         </div>
 

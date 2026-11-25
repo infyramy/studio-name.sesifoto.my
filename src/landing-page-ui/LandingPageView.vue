@@ -2,10 +2,10 @@
 import { computed, h, ref, toRef } from "vue";
 import {
   ArrowRight,
+  AtSign,
   Calendar,
   ChevronDown,
   Facebook,
-  Globe,
   HelpCircle,
   Instagram,
   Mail,
@@ -134,7 +134,7 @@ const socials = computed(() => ({
   instagram: safeHttpUrl(props.config.socialInstagram),
   tiktok: safeHttpUrl(props.config.socialTiktok),
   facebook: safeHttpUrl(props.config.socialFacebook),
-  website: safeHttpUrl(props.config.socialWebsite),
+  threads: safeHttpUrl(props.config.socialThreads),
 }));
 
 const emergencyPhone = computed(() => {
@@ -560,14 +560,14 @@ function textEditClass() {
               <Facebook :size="24" />
             </a>
             <a
-              v-if="socials.website"
-              :href="socials.website"
-              aria-label="Website"
+              v-if="socials.threads"
+              :href="socials.threads"
+              aria-label="Threads"
               target="_blank"
               rel="noopener noreferrer"
               class="transition-all duration-300 hover:scale-110 hover:-translate-y-1 drop-shadow-sm text-[var(--text-muted)] hover:text-[var(--text-main)]"
             >
-              <Globe :size="24" />
+              <AtSign :size="24" />
             </a>
           </div>
         </div>

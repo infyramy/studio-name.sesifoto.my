@@ -58,11 +58,12 @@ const frameClass = computed(() => {
     : "h-10 w-10 overflow-hidden rounded-xl border border-[var(--border-color)] opacity-90";
 });
 
-const imageClass = computed(() =>
-  isTransparent.value
-    ? "h-full w-full object-contain"
-    : "h-full w-full object-contain p-[14%] box-border",
-);
+const imageClass = computed(() => {
+  if (isTransparent.value) return "h-full w-full object-contain";
+  return showingDefault.value
+    ? "h-full w-full object-contain p-[14%] box-border"
+    : "h-full w-full object-cover";
+});
 
 const frameStyle = computed(() => {
   if (showingDefault.value) {
