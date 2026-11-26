@@ -3,6 +3,7 @@ import { safeHttpUrl } from "../useLandingPageStyles";
 import { isHomeCtaPresetId } from "./cta-presets";
 import { createDefaultHomeMarketingContent } from "./presets";
 import { normalizeHomeSectionOrder } from "./section-order";
+import { normalizeLinkPageDesignConfig } from "../link-page/normalize";
 import type {
   HomeCtaPresetId,
   HomeFeaturedPackage,
@@ -212,5 +213,6 @@ export function normalizeHomeMarketingContent(
         ? defaults.homeCtaSecondaryPreset
         : legacySecondaryPreset(src),
     ),
+    linkPageDesign: normalizeLinkPageDesignConfig(src.linkPageDesign),
   };
 }

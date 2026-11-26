@@ -1,5 +1,6 @@
 import type { HomeCtaPresetId, HomeFeaturedPackage, HomeGalleryItem, HomeMarketingContent } from "./types";
 import { DEFAULT_HOME_SECTION_ORDER } from "./section-order";
+import { createDefaultLinkPageDesign } from "../link-page/presets";
 
 const IMG_ABOUT =
   "https://images.unsplash.com/photo-1493863641943-9b64192e4c60?q=80&w=600&auto=format&fit=crop";
@@ -42,5 +43,6 @@ export function createDefaultHomeMarketingContent(): HomeMarketingContent {
     homeCtaHeading: "Ceritakan hari bahagia anda bersama kami",
     homeCtaPrimaryPreset: "book_appointment",
     homeCtaSecondaryPreset: "view_packages",
+    linkPageDesign: createDefaultLinkPageDesign("Kampung"),
   };
 }

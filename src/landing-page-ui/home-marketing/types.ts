@@ -1,4 +1,5 @@
 import type { HomeSectionKey } from "./section-order";
+import type { LinkPageDesignConfig } from "../link-page/types";
 
 export type HomeGalleryItem = {
   id: string;
@@ -67,4 +68,5 @@ export type HomeMarketingContent = {
   homeCtaHeading: string;
   homeCtaPrimaryPreset: HomeCtaPresetId;
   homeCtaSecondaryPreset: HomeCtaPresetId;
+  linkPageDesign: LinkPageDesignConfig;
 };
