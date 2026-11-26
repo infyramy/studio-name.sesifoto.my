@@ -46,29 +46,83 @@ async function getServiceWorkerRegistration() {
   }
 }
 
+/** Clear Workbox/PWA caches and unregister stale SW when an update fails to activate cleanly. */
+async function clearStaleServiceWorkerCaches() {
+  try {
+    if ("caches" in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((key) => caches.delete(key)));
+    }
+  } catch {
+    // ignore cache clear errors
+  }
+  try {
+    if ("serviceWorker" in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map((r) => r.unregister()));
+    }
+  } catch {
+    // ignore unregister errors
+  }
+}
+
 /** The offline cache serves index.html, so the new worker must take over before reloading. */
 async function activateLatestServiceWorker() {
   const registration = await getServiceWorkerRegistration();
-  if (!registration) return;
+  if (!registration) {
+    await clearStaleServiceWorkerCaches();
+    return;
+  }
+
+  let controllerChanged = false;
+  const onControllerChange = () => {
+    controllerChanged = true;
+  };
+  navigator.serviceWorker?.addEventListener?.(
+    "controllerchange",
+    onControllerChange,
+    { once: true },
+  );
+
   try {
     await registration.update();
   } catch {
+    await clearStaleServiceWorkerCaches();
     return;
   }
+
   const worker = registration.installing ?? registration.waiting;
-  if (!worker) return;
+  if (!worker) {
+    // Server has a newer version.json, but SW didn't pick up a new sw.js yet (e.g. HTTP cache).
+    // Clear caches and unregister stale SW so the reload fetches fresh index.html from network.
+    await clearStaleServiceWorkerCaches();
+    return;
+  }
+
   await new Promise<void>((resolve) => {
     const timer = setTimeout(resolve, SERVICE_WORKER_WAIT_MS);
+    const done = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    navigator.serviceWorker?.addEventListener?.("controllerchange", done, {
+      once: true,
+    });
     worker.addEventListener("statechange", () => {
       if (worker.state === "activated" || worker.state === "redundant") {
-        clearTimeout(timer);
-        resolve();
+        // Give clients.claim() a brief tick to take control
+        setTimeout(done, 100);
       }
     });
   });
+
+  if (!controllerChanged) {
+    await clearStaleServiceWorkerCaches();
+  }
 }
 
 async function checkForUpdate() {
+  if (import.meta.env.DEV) return;
   try {
     const res = await fetch(`/version.json?t=${Date.now()}`, {
       cache: "no-store",
