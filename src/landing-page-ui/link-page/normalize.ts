@@ -170,6 +170,8 @@ export function normalizeLinkPageDesignConfig(
     "Arch",
     "Organic",
     "Circle",
+    "Polaroid",
+    "Widescreen",
   ];
   const actionLayouts: LinkPageActionLayout[] = [
     "Floating Card",
@@ -179,6 +181,7 @@ export function normalizeLinkPageDesignConfig(
     "Minimal Links",
     "Distributed Actions",
     "Primary + Menu",
+    "Indexed List",
   ];
   const containers: LinkPageContainerSurface[] = [
     "Solid",

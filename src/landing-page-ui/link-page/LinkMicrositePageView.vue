@@ -764,21 +764,27 @@ const surfaceFillClass = computed(() =>
               class="lp-secondary-group"
             >
               <button
-                v-for="act in secondaryActions"
+                v-for="(act, actIdx) in secondaryActions"
                 :key="act.id"
                 type="button"
                 class="lp-secondary"
                 :data-style="d.secondaryStyle"
                 @click="handleActionClick(act)"
               >
+                <span
+                  v-if="d.actionLayout === 'Indexed List'"
+                  class="lp-action-idx"
+                >
+                  {{ String(actIdx + 1).padStart(2, "0") }}
+                </span>
                 <component
                   :is="actionIconComponent(act.id)"
-                  v-if="act.display !== 'Text Only'"
+                  v-else-if="act.display !== 'Text Only'"
                   class="lp-ico"
                 />
                 <span v-if="act.display !== 'Icon Only'">{{ act.label }}</span>
                 <ChevronRight
-                  v-if="d.actionLayout === 'Vertical Menu'"
+                  v-if="d.actionLayout === 'Vertical Menu' || d.actionLayout === 'Indexed List'"
                   class="lp-ico chev"
                 />
               </button>
@@ -1088,6 +1094,34 @@ const surfaceFillClass = computed(() =>
   align-self: center;
   max-height: 90%;
   width: 100%;
+}
+.lp-photo[data-frame="Polaroid"] {
+  background: var(--lp-surface, #fff);
+  padding: 14px 14px 44px;
+  border-radius: 4px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.14);
+  border: 1px solid color-mix(in srgb, var(--lp-text) 10%, transparent);
+}
+.lp-photo[data-frame="Polaroid"] img,
+.lp-photo[data-frame="Polaroid"] .lp-shade {
+  position: relative;
+  inset: auto;
+  width: 100%;
+  height: 100%;
+  border-radius: 2px;
+}
+.lp-photo[data-frame="Polaroid"] .lp-shade {
+  position: absolute;
+  inset: 14px 14px 44px;
+  width: auto;
+  height: auto;
+}
+.lp-photo[data-frame="Widescreen"] {
+  aspect-ratio: 16 / 9;
+  align-self: center;
+  max-height: 100%;
+  width: 100%;
+  border-radius: 2px;
 }
 
 .lp-decoration {
@@ -1426,26 +1460,37 @@ const surfaceFillClass = computed(() =>
 
 /* Action layout modes */
 .lp-actions[data-layout="Vertical Menu"] .lp-secondary-group,
-.lp-actions[data-layout="Distributed Actions"] .lp-secondary-group {
+.lp-actions[data-layout="Distributed Actions"] .lp-secondary-group,
+.lp-actions[data-layout="Indexed List"] .lp-secondary-group {
   flex-direction: column;
   gap: 0;
   align-items: stretch;
-  border-top: 1px solid color-mix(in srgb, currentColor 10%, transparent);
+  border-top: 1px solid color-mix(in srgb, currentColor 12%, transparent);
   margin-top: 4px;
 }
 .lp-actions[data-layout="Vertical Menu"] .lp-secondary,
-.lp-actions[data-layout="Distributed Actions"] .lp-secondary {
+.lp-actions[data-layout="Distributed Actions"] .lp-secondary,
+.lp-actions[data-layout="Indexed List"] .lp-secondary {
   justify-content: flex-start;
   padding: 12px 10px;
   min-height: 46px;
   border-radius: 0;
-  border-bottom: 1px solid color-mix(in srgb, currentColor 10%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, currentColor 12%, transparent);
 }
-.lp-actions[data-layout="Vertical Menu"] .lp-secondary .chev {
+.lp-actions[data-layout="Vertical Menu"] .lp-secondary .chev,
+.lp-actions[data-layout="Indexed List"] .lp-secondary .chev {
   margin-left: auto;
   opacity: 0.45;
   width: 16px;
   height: 16px;
+}
+.lp-action-idx {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 11px;
+  opacity: 0.5;
+  letter-spacing: 0.06em;
+  min-width: 24px;
+  text-align: left;
 }
 
 .lp-actions[data-layout="Action Tiles"] .lp-secondary-group {

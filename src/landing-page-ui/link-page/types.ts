@@ -4,7 +4,10 @@ export type LinkPageConceptId =
   | "Luxury"
   | "Editorial"
   | "Minimalist"
-  | "Evergreen";
+  | "Evergreen"
+  | "Analog"
+  | "Noir"
+  | "Cobalt";
 
 export type LinkPageLayout =
   | "Full Background"
@@ -32,7 +35,9 @@ export type LinkPageFrame =
   | "Rounded"
   | "Arch"
   | "Organic"
-  | "Circle";
+  | "Circle"
+  | "Polaroid"
+  | "Widescreen";
 
 export type LinkPageActionLayout =
   | "Floating Card"
@@ -41,7 +46,8 @@ export type LinkPageActionLayout =
   | "Bottom Dock"
   | "Minimal Links"
   | "Distributed Actions"
-  | "Primary + Menu";
+  | "Primary + Menu"
+  | "Indexed List";
 
 export type LinkPageContainerSurface =
   | "Solid"
