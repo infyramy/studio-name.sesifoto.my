@@ -46,10 +46,34 @@ export interface WebsiteSettings {
   paymentType: "deposit" | "full";
   cartModeEnabled: boolean;
   allowMultipleSlot: boolean;
+  allowSingleThemeBooking: boolean;
   cartHoldDuration: number;
   bookingWindowStart?: string;
   bookingWindowEnd?: string;
   chipFeeMode?: "on_top" | "absorbed";
+}
+
+// Booking Package Types
+export interface BookingPackageTheme {
+  themeId: string;
+  sequence: number;
+  name: string;
+  durationMinutes: number;
+  basePax: number;
+  images: string[];
+}
+
+export interface BookingPackage {
+  id: string;
+  name: string;
+  descriptionShort: string | null;
+  images: string[];
+  basePrice: number;
+  depositAmount: number | null;
+  timingMode: "separated" | "continuous";
+  allowThemeReorder: boolean;
+  sortOrder: number;
+  themes: BookingPackageTheme[];
 }
 
 // Theme Types
@@ -237,6 +261,7 @@ export interface BatchBookingItem {
   referral_code?: string;
   /** Item subtotal in sen (for coupon partial-apply on backend) */
   subtotal?: number;
+  package_sequence?: number;
 }
 
 export interface BatchBookingRequest {
@@ -247,6 +272,8 @@ export interface BatchBookingRequest {
   consent_tc: boolean;
   consent_marketing?: boolean;
   session_id?: string;
+  package_id?: string;
+  booking_group_id?: string;
   items: BatchBookingItem[];
 }
 

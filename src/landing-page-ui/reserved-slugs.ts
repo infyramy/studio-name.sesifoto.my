@@ -1,4 +1,4 @@
-/** Slugs that collide with public app routes — cannot be used as landing page slugs */
+/** Slugs that collide with public app routes: cannot be used as landing page slugs */
 export const RESERVED_PAGE_SLUGS = [
   "booking",
   "booking-cart",

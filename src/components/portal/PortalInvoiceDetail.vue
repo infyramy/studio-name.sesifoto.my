@@ -136,7 +136,7 @@
             <div>
               <p class="invoice-meta__label">To</p>
               <p class="invoice-meta__value">
-                {{ invoice.clientName || clientName || "—" }}
+                {{ invoice.clientName || clientName || "-" }}
               </p>
             </div>
             <div>
@@ -145,7 +145,7 @@
                 {{
                   invoice.issueDate
                     ? formatDateLong(invoice.issueDate)
-                    : "—"
+                    : "-"
                 }}
               </p>
             </div>
@@ -153,7 +153,7 @@
               <p class="invoice-meta__label">Due date</p>
               <p class="invoice-meta__value">
                 {{
-                  invoice.dueDate ? formatDateLong(invoice.dueDate) : "—"
+                  invoice.dueDate ? formatDateLong(invoice.dueDate) : "-"
                 }}
               </p>
             </div>

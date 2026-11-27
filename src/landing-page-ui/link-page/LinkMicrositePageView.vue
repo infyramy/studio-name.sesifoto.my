@@ -539,9 +539,13 @@ const whatsappHref = computed(() => {
   return `https://wa.me/${normalized}`;
 });
 
-const surfaceFillClass = computed(() =>
-  props.surfaceClass === "preview-surface" ? "h-full min-h-full" : "min-h-dvh",
-);
+const isScrollHeight = computed(() => d.value.pageHeight === "Scroll");
+
+const surfaceFillClass = computed(() => {
+  if (props.surfaceClass === "preview-surface") return "h-full min-h-full";
+  if (isScrollHeight.value) return "min-h-dvh";
+  return "h-dvh max-h-dvh overflow-hidden";
+});
 </script>
 
 <template>
@@ -994,7 +998,7 @@ const surfaceFillClass = computed(() =>
   position: relative;
   isolation: isolate;
   flex: 1 1 auto;
-  min-height: 100svh;
+  min-height: 100dvh;
   display: grid;
   overflow-x: hidden;
   overflow-y: auto;
@@ -1006,13 +1010,28 @@ const surfaceFillClass = computed(() =>
   grid-template-columns: minmax(0, var(--lp-photo-width)) minmax(320px, 1fr);
 }
 
+/* Automatic + Full Screen: lock to viewport; content scrolls inside pane only */
+.lp-page:not(.scroll) {
+  height: 100dvh;
+  max-height: 100dvh;
+  min-height: 100dvh;
+  overflow: hidden;
+}
+
 .lp-page.preview {
+  min-height: 100%;
+}
+
+.lp-page.preview:not(.scroll) {
+  height: 100%;
+  max-height: 100%;
   min-height: 100%;
 }
 
 .lp-page.scroll {
   height: auto;
-  min-height: 100svh;
+  max-height: none;
+  min-height: 100dvh;
   overflow: visible;
 }
 
@@ -1644,6 +1663,13 @@ const surfaceFillClass = computed(() =>
   padding: clamp(20px, 3vh, 32px) var(--pad) clamp(24px, 4vh, 40px);
   gap: 20px;
 }
+.lp-page:not(.scroll)[data-layout="Framed Image"] {
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+.lp-page:not(.scroll)[data-layout="Framed Image"] .lp-content {
+  min-height: 0;
+  overflow-y: auto;
+}
 .lp-page[data-layout="Framed Image"] .lp-photo {
   grid-row: 1;
   grid-column: 1;
@@ -1694,16 +1720,19 @@ const surfaceFillClass = computed(() =>
   grid-template-rows: var(--lp-mobile-image-height) minmax(0, 1fr);
   --pad: 14px;
   gap: 0;
-  height: 100svh;
-  min-height: 100svh;
+  height: 100dvh;
+  max-height: 100dvh;
+  min-height: 100dvh;
   overflow: hidden;
 }
 .lp-page.mobile.preview {
   height: 100%;
+  max-height: 100%;
   min-height: 100%;
 }
 .lp-page.mobile.scroll {
   height: auto;
+  max-height: none;
   overflow-y: auto;
 }
 .lp-page.mobile .lp-photo {
@@ -1726,7 +1755,9 @@ const surfaceFillClass = computed(() =>
   justify-content: center;
   align-items: center;
   gap: 8px;
-  overflow: hidden;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 .lp-page.mobile .lp-content-inner {
   gap: clamp(6px, 1.2vh, 10px);
@@ -1824,11 +1855,13 @@ const surfaceFillClass = computed(() =>
 .lp-page.mobile[data-mobile-layout="Full Background"] {
   display: flex;
   flex-direction: column;
-  height: 100svh;
-  min-height: 100svh;
+  height: 100dvh;
+  max-height: 100dvh;
+  min-height: 100dvh;
 }
 .lp-page.mobile.preview[data-mobile-layout="Full Background"] {
   height: 100%;
+  max-height: 100%;
   min-height: 100%;
 }
 .lp-page.mobile[data-mobile-layout="Full Background"] .lp-photo {

@@ -3,7 +3,13 @@ import { computed } from "vue";
 import type { LandingPageTheme } from "./types";
 import { createDefaultTheme } from "./presets";
 import { useLandingPageStyles } from "./useLandingPageStyles";
-import { resolveImageUrl } from "@/lib/default-image";
+import SafeImage from "@/components/SafeImage.vue";
+import {
+  DEFAULT_SESIFOTO_IMAGE_BG,
+  isDefaultSesifotoImage,
+  isMissingImageUrl,
+  resolveImageUrl,
+} from "@/lib/default-image";
 
 const props = withDefaults(
   defineProps<{
@@ -48,6 +54,11 @@ const bootStyle = computed(() => {
 
 const showName = computed(() => !!props.theme?.studioName?.trim());
 const bootLogoSrc = computed(() => resolveImageUrl(props.theme?.logoUrl));
+const isDefaultLogo = computed(
+  () =>
+    isMissingImageUrl(props.theme?.logoUrl) ||
+    isDefaultSesifotoImage(bootLogoSrc.value),
+);
 </script>
 
 <template>
@@ -69,10 +80,18 @@ const bootLogoSrc = computed(() => resolveImageUrl(props.theme?.logoUrl));
     </template>
     <template v-else>
       <div class="lp-boot__brand">
-        <img
-          :src="bootLogoSrc"
+        <SafeImage
+          :src="theme?.logoUrl"
           :alt="theme?.studioName || ''"
           class="lp-boot__logo"
+          :class="
+            isDefaultLogo ? 'lp-boot__logo--default' : 'lp-boot__logo--studio'
+          "
+          :style="
+            isDefaultLogo
+              ? { backgroundColor: DEFAULT_SESIFOTO_IMAGE_BG }
+              : undefined
+          "
           referrerpolicy="no-referrer"
         />
         <p v-if="showName" class="lp-boot__name font-title">

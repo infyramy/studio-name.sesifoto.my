@@ -512,7 +512,7 @@ const notice = ref("");
 let noticeTimer = 0;
 const isDownloading = ref(false);
 
-/** Landing-page / marketing entry — hide download so casual visitors cannot ZIP. */
+/** Landing-page / marketing entry: hide download so casual visitors cannot ZIP. */
 const fromPublicSite = computed(() => {
   const raw = route.query.from;
   const value = Array.isArray(raw) ? raw[0] : raw;

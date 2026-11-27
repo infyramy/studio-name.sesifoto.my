@@ -11,6 +11,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
+  ChevronUp,
   Calendar,
   Clock,
   Plus,
@@ -34,6 +35,7 @@ import type {
   Theme,
   Coupon,
   BatchBookingRequest,
+  BookingPackage,
 } from "@/types";
 import Modal from "@/components/Modal.vue";
 import ImageCarousel from "@/components/ImageCarousel.vue";
@@ -43,13 +45,19 @@ import {
   useBookingSession,
   useBookingHolds,
   useBookingStatePersistence,
+  usePackageBookingWizard,
   submitPublicBookingCheckout,
   applyCheckoutResult,
   isPaymentUnavailableError,
   isSlotUnavailableError,
   type CartHold,
   type BookingCartItem,
+  type PackageSessionDraft,
 } from "@/composables/booking";
+import {
+  deriveAccessiblePortalAccent,
+  readablePortalAccentText,
+} from "@/utils/portal-color";
 
 const { sanitize } = useSanitize();
 
@@ -58,6 +66,18 @@ const route = useRoute();
 const studioStore = useStudioStore();
 const { t } = useTranslation();
 const { formatPriceWhole } = useCurrency();
+
+const bookingAccentStyle = computed(() => {
+  const accent = deriveAccessiblePortalAccent(
+    studioStore.brandColor,
+    ["#f3f2ee", "#fafaf8", "#eae8e2"],
+    0.12,
+  );
+  return {
+    "--bk-primary": accent,
+    "--bk-primary-fg": readablePortalAccentText(accent),
+  } as Record<string, string>;
+});
 const { formatDate } = useDateFormat();
 
 const bookingClosed = computed(
@@ -104,8 +124,61 @@ const isCartModeEnabled = computed(() => {
   return studioStore.studio?.settings?.cart_mode_enabled === true;
 });
 
-// Multiple Slot Mode Detection
+const {
+  activePackage,
+  bookingGroupId,
+  currentSequenceIndex,
+  completedSessions,
+  orderedThemeIds,
+  orderConfirmed,
+  selectedChain,
+  isPackageMode,
+  isContinuousPackage,
+  canReorderThemes,
+  packageThemes,
+  currentPackageTheme,
+  isLastPackageTheme,
+  packageProgressLabel,
+  startPackage,
+  clearPackage,
+  moveOrderedTheme,
+  setOrderedThemeIds,
+  confirmThemeOrder,
+  setSelectedChain,
+  resolveTheme,
+  stashCurrentSession,
+  advanceSequence,
+  allSessionsIncludingCurrent,
+  packagePayableTotal,
+} = usePackageBookingWizard();
+
+/** Chain starts loaded for continuous package date */
+const continuousChainStarts = ref<
+  Array<{
+    startTime: string;
+    chain: Array<{
+      themeId: string;
+      sequence: number;
+      startTime: string;
+      endTime: string;
+    }>;
+  }>
+>([]);
+/** Server auto-picked a different theme order for this date */
+const packageAutoReorderNotice = ref(false);
+
+/** When set, finishing/cancelling a package theme edit returns here (e.g. summary step 6). */
+const packageEditReturnStep = ref<number | null>(null);
+
+const allowSingleThemeBooking = computed(
+  () => studioStore.websiteSettings?.allowSingleThemeBooking !== false,
+);
+
+const showThemeCatalog = computed(() => allowSingleThemeBooking.value);
+
+// Multiple Slot Mode Detection (disabled during package wizard)
 const isMultipleSlotEnabled = computed(() => {
+  if (isPackageMode.value) return false;
   return studioStore.websiteSettings?.allowMultipleSlot === true;
 });
 
@@ -666,18 +739,120 @@ const galleryState = ref({
   initialIndex: 0,
   title: "" as string,
   description: "" as string,
+  metaItems: [] as { label: string; value: string }[],
+  includesLabel: "" as string,
+  includesItems: [] as { name: string; detail?: string }[],
 });
 
 const openGallery = (theme: Theme) => {
   if (theme.images && theme.images.length > 0) {
+    const metaItems = [
+      {
+        label: t("price"),
+        value: `RM${formatPriceWhole(theme.base_price)}`,
+      },
+      {
+        label: t("duration"),
+        value: `${theme.duration_minutes} ${t("minutes")}`,
+      },
+      {
+        label: t("basePax"),
+        value: `${theme.base_pax} ${t("pax")}`,
+      },
+    ];
+    if (theme.extra_pax_price > 0) {
+      metaItems.push({
+        label: t("extraPaxFee").replace(":", ""),
+        value: `+RM${formatPriceWhole(theme.extra_pax_price)}`,
+      });
+    }
+
     galleryState.value = {
       show: true,
       images: theme.images,
       initialIndex: 0,
       title: theme.name,
       description: theme.description_long || theme.description_short,
+      metaItems,
+      includesLabel: "",
+      includesItems: [],
     };
   }
+};
+
+function packageCover(pkg: BookingPackage) {
+  return (
+    pkg.images?.[0] ||
+    pkg.themes.find((theme) => theme.images?.[0])?.images?.[0] ||
+    ""
+  );
+}
+
+function packageIncludesLabel(pkg: BookingPackage) {
+  return [...pkg.themes]
+    .sort((a, b) => a.sequence - b.sequence)
+    .map((theme) => theme.name)
+    .join(" → ");
+}
+
+const openPackageGallery = (pkg: BookingPackage) => {
+  const images =
+    pkg.images?.length > 0
+      ? pkg.images
+      : pkg.themes.flatMap((theme) => theme.images || []).filter(Boolean);
+  if (!images.length) return;
+
+  const themes = [...pkg.themes].sort((a, b) => a.sequence - b.sequence);
+  const totalDuration = themes.reduce(
+    (sum, theme) => sum + (theme.durationMinutes || 0),
+    0,
+  );
+
+  galleryState.value = {
+    show: true,
+    images: [...new Set(images)],
+    initialIndex: 0,
+    title: pkg.name,
+    description: pkg.descriptionShort || "",
+    metaItems: [
+      {
+        label: t("price"),
+        value: `RM${formatPriceWhole(pkg.basePrice)}`,
+      },
+      {
+        label: t("packages"),
+        value: `${themes.length} ${t("themesInPackage")}`,
+      },
+      ...(totalDuration > 0
+        ? [
+            {
+              label: t("duration"),
+              value: `${totalDuration} ${t("minutes")}`,
+            },
+          ]
+        : []),
+      ...(pkg.depositAmount != null && pkg.depositAmount > 0
+        ? [
+            {
+              label: t("deposit"),
+              value: `RM${formatPriceWhole(pkg.depositAmount)}`,
+            },
+          ]
+        : []),
+    ],
+    includesLabel: t("packageIncludes"),
+    includesItems: themes.map((theme) => ({
+      name: theme.name,
+      detail: [
+        theme.durationMinutes
+          ? `${theme.durationMinutes} ${t("minutes")}`
+          : "",
+        theme.basePax ? `${t("basePax")} ${theme.basePax} ${t("pax")}` : "",
+      ]
+        .filter(Boolean)
+        .join(" · "),
+    })),
+  };
 };
 
 const closeGallery = () => {
@@ -692,6 +867,16 @@ const openAddonImage = (addon: any) => {
     initialIndex: 0,
     title: addon.name || "",
     description: addon.description || "",
+    metaItems: addon.price
+      ? [
+          {
+            label: t("price"),
+            value: `RM${formatPriceWhole(addon.price)}`,
+          },
+        ]
+      : [],
+    includesLabel: "",
+    includesItems: [],
   };
 };
 
@@ -1105,6 +1290,7 @@ const loadingSlots = ref(false);
 
 // Helpers
 const selectTheme = (theme: Theme) => {
+  clearPackage();
   selectedTheme.value = theme;
   paxCount.value = theme.base_pax; // Reset/Set to base pax
   selectedDate.value = null; // Reset date
@@ -1112,6 +1298,196 @@ const selectTheme = (theme: Theme) => {
   selectedSlots.value = []; // Reset multi-slot selection
   // Don't auto-navigate - user must click next button
 };
+
+const selectPackage = (pkg: BookingPackage) => {
+  startPackage(pkg);
+  continuousChainStarts.value = [];
+  packageAutoReorderNotice.value = false;
+  setSelectedChain(null);
+
+  const firstId =
+    orderedThemeIds.value[0] ||
+    [...pkg.themes].sort((a, b) => a.sequence - b.sequence)[0]?.themeId;
+  const theme = firstId
+    ? resolveTheme(studioStore.themes, firstId)
+    : undefined;
+  if (!theme) return;
+
+  selectedTheme.value = theme;
+  paxCount.value = theme.base_pax;
+  selectedDate.value = null;
+  selectedSlot.value = null;
+  selectedSlots.value = [];
+  selectedAddons.value = {};
+};
+
+function syncPackageThemeFromOrder() {
+  const meta = packageThemes.value[0];
+  if (!meta) return;
+  const theme = resolveTheme(studioStore.themes, meta.themeId);
+  if (!theme) return;
+  selectedTheme.value = theme;
+  paxCount.value = theme.base_pax;
+}
+
+function onMovePackageTheme(index: number, delta: number) {
+  moveOrderedTheme(index, delta);
+  syncPackageThemeFromOrder();
+  continuousChainStarts.value = [];
+  setSelectedChain(null);
+  selectedDate.value = null;
+  selectedSlot.value = null;
+  timeSlots.value = [];
+}
+
+function buildCurrentPackageDraft(): PackageSessionDraft | null {
+  if (!isPackageMode.value || !selectedTheme.value || !selectedDate.value) {
+    return null;
+  }
+  const slot =
+    confirmedSlot.value ||
+    selectedSlot.value ||
+    (confirmedSlots.value[0] ?? null);
+  if (!slot) return null;
+
+  const sequence =
+    currentPackageTheme.value?.sequence ?? currentSequenceIndex.value + 1;
+
+  return {
+    theme: selectedTheme.value,
+    sequence,
+    date: selectedDate.value,
+    slot,
+    pax: paxCount.value,
+    addons: { ...selectedAddons.value },
+    hold: slot.hold,
+    extrasTotal: extraPaxCost.value + addonsTotal.value,
+  };
+}
+
+async function beginNextPackageTheme() {
+  const nextMeta = packageThemes.value[currentSequenceIndex.value];
+  if (!nextMeta) return false;
+  const theme = resolveTheme(studioStore.themes, nextMeta.themeId);
+  if (!theme) return false;
+
+  selectedTheme.value = theme;
+  paxCount.value = theme.base_pax;
+  selectedAddons.value = {};
+  selectedSlots.value = [];
+  await studioStore.loadAddonsForTheme(theme.id);
+
+  if (isContinuousPackage.value && selectedChain.value) {
+    const seg = selectedChain.value.chain.find(
+      (s) => s.sequence === nextMeta.sequence,
+    );
+    const existing = completedSessions.value.find(
+      (s) => s.sequence === nextMeta.sequence,
+    );
+    if (seg) {
+      selectedDate.value = existing?.date || selectedDate.value;
+      const slot = {
+        id: `chain-${seg.themeId}-${seg.startTime}`,
+        start: seg.startTime,
+        end: seg.endTime,
+        available: true,
+        price: 0,
+        hold: existing?.hold,
+      };
+      selectedSlot.value = slot;
+      confirmedSlot.value = slot;
+    }
+    currentStep.value = 3;
+    return true;
+  }
+
+  selectedDate.value = null;
+  selectedSlot.value = null;
+  confirmedSlot.value = null;
+  confirmedSlots.value = [];
+  timeSlots.value = [];
+  holdExpiresAt.value = null;
+  stopHoldCountdown();
+  currentStep.value = 2;
+  return true;
+}
+
+async function editPackageSession(sequence: number) {
+  if (!isPackageMode.value || !activePackage.value) return;
+
+  const session = completedSessions.value.find((s) => s.sequence === sequence);
+  if (!session) return;
+
+  const themeIndex = packageThemes.value.findIndex(
+    (t) => t.sequence === sequence,
+  );
+  if (themeIndex < 0) return;
+
+  packageEditReturnStep.value = currentStep.value;
+  currentSequenceIndex.value = themeIndex;
+
+  selectedTheme.value = session.theme;
+  paxCount.value = session.pax;
+  selectedAddons.value = { ...session.addons };
+  selectedSlots.value = [];
+  confirmedSlots.value = [];
+  await studioStore.loadAddonsForTheme(session.theme.id);
+
+  await selectDate(session.date);
+
+  const match =
+    timeSlots.value.find(
+      (slot) =>
+        slot.id === session.slot?.id ||
+        (slot.start === session.slot?.start && slot.end === session.slot?.end),
+    ) || session.slot;
+
+  selectedSlot.value = match;
+  confirmedSlot.value = match;
+  if (session.hold?.expiresAt || match?.hold?.expiresAt) {
+    const expires = session.hold?.expiresAt || match?.hold?.expiresAt;
+    holdExpiresAt.value = new Date(expires);
+    if (match && session.hold) {
+      confirmedSlot.value = { ...match, hold: session.hold };
+    }
+    startHoldCountdown();
+  }
+
+  currentStep.value = 2;
+}
+
+function returnFromPackageSessionEdit() {
+  const returnStep = packageEditReturnStep.value;
+  packageEditReturnStep.value = null;
+  if (returnStep != null) {
+    currentStep.value = returnStep;
+    return true;
+  }
+  return false;
+}
+
+function pushPackageSessionsToCart(sessions: PackageSessionDraft[]) {
+  if (!activePackage.value || !bookingGroupId.value) return;
+
+  for (const session of sessions) {
+    const extras = session.extrasTotal;
+    const base =
+      session.sequence === 1 ? activePackage.value.basePrice : 0;
+    cart.value.push({
+      id: `${bookingGroupId.value}-${session.sequence}-${Date.now()}`,
+      theme: session.theme,
+      date: session.date,
+      slot: session.slot,
+      pax: session.pax,
+      addons: session.addons,
+      total: base + extras,
+      hold: session.hold,
+      packageId: activePackage.value.id,
+      bookingGroupId: bookingGroupId.value,
+      packageSequence: session.sequence,
+    });
+  }
+}
 
 // Helper to convert time string to minutes for comparison
 const timeToMinutes = (timeStr: string): number => {
@@ -1216,23 +1592,60 @@ const selectDate = async (dateStr: string) => {
   selectedDate.value = dateStr;
   selectedSlot.value = null; // Reset slot
   selectedSlots.value = []; // Reset multi-slot selection
+  setSelectedChain(null);
+  continuousChainStarts.value = [];
+  scrollToSelectedDate();
 
-  // Load time slots for selected date
   if (selectedTheme.value && studioStore.studio) {
     loadingSlots.value = true;
     try {
-      const slots = await api.getAvailableTimeSlots(
-        studioStore.studio.id,
-        selectedTheme.value.id,
-        dateStr,
-        getSessionId(),
-      );
-
-      // Process slots and disable past ones for current date
-      timeSlots.value = processTimeSlots(slots, dateStr);
+      if (
+        isContinuousPackage.value &&
+        activePackage.value &&
+        orderConfirmed.value
+      ) {
+        const chainResult = await api.getPackageChainSlots(
+          activePackage.value.id,
+          dateStr,
+          packageThemes.value.map((t) => t.themeId),
+          getSessionId(),
+        );
+        if (
+          chainResult.autoReordered &&
+          chainResult.themeIds.length === orderedThemeIds.value.length
+        ) {
+          setOrderedThemeIds(chainResult.themeIds);
+          syncPackageThemeFromOrder();
+          packageAutoReorderNotice.value = true;
+        } else {
+          packageAutoReorderNotice.value = false;
+        }
+        continuousChainStarts.value = chainResult.starts;
+        timeSlots.value = processTimeSlots(
+          chainResult.starts.map((row) => ({
+            id: `chain-start-${row.startTime}`,
+            start: row.startTime,
+            end: row.chain[row.chain.length - 1]?.endTime || row.startTime,
+            available: true,
+            price: 0,
+            isSpecialPricing: false,
+            chain: row,
+          })),
+          dateStr,
+        );
+      } else {
+        const slots = await api.getAvailableTimeSlots(
+          studioStore.studio.id,
+          selectedTheme.value.id,
+          dateStr,
+          getSessionId(),
+        );
+        timeSlots.value = processTimeSlots(slots, dateStr);
+      }
     } catch (error) {
       console.error("Failed to load time slots:", error);
       timeSlots.value = [];
+      continuousChainStarts.value = [];
     } finally {
       loadingSlots.value = false;
     }
@@ -1280,6 +1693,11 @@ const selectSlot = (slot: any) => {
   } else {
     // Original single-select behavior
     selectedSlot.value = slot;
+    if (isContinuousPackage.value && slot.chain) {
+      setSelectedChain(slot.chain);
+    } else {
+      setSelectedChain(null);
+    }
   }
 };
 
@@ -1713,30 +2131,61 @@ const scrollDates = (direction: "left" | "right") => {
   dateScroller.value.scrollTo({ left: newScroll, behavior: "smooth" });
 };
 
-// Scroll to the selected date in the date scroller
-const scrollToSelectedDate = () => {
-  if (!dateScroller.value || !selectedDate.value) return;
+// Scroll selected date to horizontal center of the date scroller
+const scrollToSelectedDate = (dateStr?: string) => {
+  const targetDate = dateStr || selectedDate.value;
+  if (!dateScroller.value || !targetDate) return;
 
-  // Wait for DOM to update with dates
   nextTick(() => {
-    const selectedDateElement = dateScroller.value?.querySelector(
-      `[data-date="${selectedDate.value}"]`,
+    const scroller = dateScroller.value;
+    const selectedDateElement = scroller?.querySelector(
+      `[data-date="${targetDate}"]`,
     ) as HTMLElement | null;
 
-    if (selectedDateElement && dateScroller.value) {
-      // Scroll the selected date into center of the scroller
-      const scrollerWidth = dateScroller.value.offsetWidth;
-      const elementLeft = selectedDateElement.offsetLeft;
-      const elementWidth = selectedDateElement.offsetWidth;
-      const scrollPosition = elementLeft - scrollerWidth / 2 + elementWidth / 2;
+    if (!selectedDateElement || !scroller) return;
 
-      dateScroller.value.scrollTo({
-        left: Math.max(0, scrollPosition),
-        behavior: "smooth",
-      });
-    }
+    const scrollerWidth = scroller.clientWidth;
+    const maxScroll = Math.max(0, scroller.scrollWidth - scrollerWidth);
+    const elementLeft = selectedDateElement.offsetLeft;
+    const elementWidth = selectedDateElement.offsetWidth;
+    const scrollPosition = elementLeft - scrollerWidth / 2 + elementWidth / 2;
+
+    scroller.scrollTo({
+      left: Math.min(maxScroll, Math.max(0, scrollPosition)),
+      behavior: "smooth",
+    });
   });
 };
+
+const CONTEXT_TIME_PILL_LIMIT = 3;
+
+const contextSchedule = computed(() => {
+  if (!selectedDate.value) return null;
+
+  const hasMulti =
+    isMultipleSlotEnabled.value && selectedSlots.value.length > 0;
+  const hasSingle = !isMultipleSlotEnabled.value && selectedSlot.value;
+  if (!hasMulti && !hasSingle) return null;
+
+  if (hasMulti) {
+    const slots = [...selectedSlots.value].sort((a, b) =>
+      String(a.start).localeCompare(String(b.start)),
+    );
+    return {
+      date: formatDate(selectedDate.value),
+      pills: slots.slice(0, CONTEXT_TIME_PILL_LIMIT).map((s) => s.start),
+      more: Math.max(0, slots.length - CONTEXT_TIME_PILL_LIMIT),
+      singleTime: null as string | null,
+    };
+  }
+
+  return {
+    date: formatDate(selectedDate.value),
+    pills: [] as string[],
+    more: 0,
+    singleTime: `${selectedSlot.value.start} – ${selectedSlot.value.end}`,
+  };
+});
 
 // Helper function to parse time
 const parseTime = (timeStr: string): string => {
@@ -1771,6 +2220,119 @@ const parseTime = (timeStr: string): string => {
 
 const nextStep = async () => {
   const maxStep = isCartModeEnabled.value ? 7 : 6; // Cart mode: 7 steps, Single mode: 6 steps
+
+  // Continuous + reorder: lock order before leaving catalog
+  if (
+    currentStep.value === 1 &&
+    isContinuousPackage.value &&
+    canReorderThemes.value &&
+    !orderConfirmed.value
+  ) {
+    confirmThemeOrder();
+    syncPackageThemeFromOrder();
+  }
+
+  // ============================================
+  // Step 2 -> 3: Continuous package holds (cart + single)
+  // ============================================
+  if (
+    currentStep.value === 2 &&
+    isContinuousPackage.value &&
+    selectedChain.value
+  ) {
+    if (!selectedDate.value || !selectedSlot.value) return;
+
+    if (!isCartModeEnabled.value) {
+      const confirmed = await showHoldConfirmationDialog();
+      if (!confirmed) return;
+    }
+
+    try {
+      isCreatingHold.value = true;
+      const slotsData = selectedChain.value.chain.map((seg) => ({
+        themeId: seg.themeId,
+        date: selectedDate.value!,
+        startTime: parseTime(seg.startTime),
+        endTime: parseTime(seg.endTime),
+      }));
+      const batchHolds = await createBatchCartHold(slotsData);
+      const chainWithHolds = {
+        startTime: selectedChain.value.startTime,
+        chain: selectedChain.value.chain.map((seg, index) => ({
+          ...seg,
+          hold: batchHolds[index],
+        })),
+      };
+      setSelectedChain(chainWithHolds as any);
+
+      const firstSeg = chainWithHolds.chain[0];
+      const firstHold = batchHolds[0];
+      confirmedSlot.value = {
+        ...selectedSlot.value,
+        start: firstSeg?.startTime,
+        end: firstSeg?.endTime,
+        hold: firstHold,
+      };
+      holdExpiresAt.value = new Date(
+        batchHolds[batchHolds.length - 1]!.expiresAt,
+      );
+      if (!isCartModeEnabled.value) {
+        startHoldCountdown();
+      }
+
+      for (const seg of chainWithHolds.chain) {
+        const theme = resolveTheme(studioStore.themes, seg.themeId);
+        if (!theme) continue;
+        stashCurrentSession({
+          theme,
+          sequence: seg.sequence,
+          date: selectedDate.value!,
+          slot: {
+            id: `chain-${seg.themeId}-${seg.startTime}`,
+            start: seg.startTime,
+            end: seg.endTime,
+            available: true,
+            price: 0,
+            hold: (seg as any).hold,
+          },
+          pax: theme.base_pax,
+          addons: {},
+          hold: (seg as any).hold,
+          extrasTotal: 0,
+        });
+      }
+
+      currentStep.value++;
+    } catch (error: any) {
+      try {
+        await api.releaseSessionHolds(getSessionId());
+      } catch (releaseErr) {
+        console.error("Failed to release continuous chain holds:", releaseErr);
+      }
+      setSelectedChain(null);
+      confirmedSlot.value = null;
+      holdExpiresAt.value = null;
+      stopHoldCountdown();
+
+      if (
+        error.message === "SLOT_NO_LONGER_AVAILABLE" ||
+        error.message === "SLOT_TIME_HAS_PASSED"
+      ) {
+        await showModal({
+          title: t("slotNoLongerAvailable"),
+          message: t("slotNoLongerAvailableMessage"),
+          type: "error",
+          confirmText: t("ok"),
+        });
+      }
+      if (selectedDate.value) {
+        await selectDate(selectedDate.value);
+      }
+    } finally {
+      isCreatingHold.value = false;
+    }
+    return;
+  }
 
   // ============================================
   // Step 2 -> 3: Create hold for single mode
@@ -1974,6 +2536,45 @@ const nextStep = async () => {
   }
 
   if (currentStep.value < maxStep) {
+    // Package wizard: after pax/addons, stash session and continue next theme
+    if (isPackageMode.value && currentStep.value === 3) {
+      const draft = buildCurrentPackageDraft();
+      if (!draft) return;
+      stashCurrentSession(draft);
+
+      // Editing a theme from summary/customer: save and return
+      if (packageEditReturnStep.value != null) {
+        returnFromPackageSessionEdit();
+        return;
+      }
+
+      if (!isLastPackageTheme.value) {
+        advanceSequence();
+        await beginNextPackageTheme();
+        return;
+      }
+
+      const sessions = allSessionsIncludingCurrent(null);
+      if (isCartModeEnabled.value) {
+        const confirmed = await showAddToCartConfirmationDialog();
+        if (!confirmed) return;
+        pushPackageSessionsToCart(sessions);
+        clearPackage();
+        selectedTheme.value = null;
+        selectedDate.value = null;
+        selectedSlot.value = null;
+        selectedSlots.value = [];
+        selectedAddons.value = {};
+        confirmedSlot.value = null;
+        confirmedSlots.value = [];
+        currentStep.value = 4;
+        return;
+      }
+
+      currentStep.value = 4;
+      return;
+    }
+
     // Cart mode: After step 3, show confirmation then add to cart and go to step 4
     if (isCartModeEnabled.value && currentStep.value === 3) {
       // Show confirmation dialog before adding to cart
@@ -2055,6 +2656,19 @@ const nextStep = async () => {
           return Math.round(discount * proportion);
         };
 
+        // Package cart: only when every item belongs to the same package group
+        const packageCartId = cart.value[0]?.packageId;
+        const packageGroupId = cart.value[0]?.bookingGroupId;
+        const isPurePackageCart = !!(
+          packageCartId &&
+          packageGroupId &&
+          cart.value.every(
+            (item) =>
+              item.packageId === packageCartId &&
+              item.bookingGroupId === packageGroupId,
+          )
+        );
+
         // Prepare batch booking request
         const batchRequest: BatchBookingRequest = {
           customer_name: customerInfo.value.name,
@@ -2064,6 +2678,8 @@ const nextStep = async () => {
           consent_tc: termsAccepted.value,
           consent_marketing: false,
           session_id: getSessionId(),
+          package_id: isPurePackageCart ? packageCartId : undefined,
+          booking_group_id: isPurePackageCart ? packageGroupId : undefined,
           items: cart.value.map((item, i) => {
             const selectedAddonsArray = Object.entries(item.addons)
               .filter(([_, qty]) => qty > 0)
@@ -2103,6 +2719,9 @@ const nextStep = async () => {
               discount_amount: itemDiscount > 0 ? itemDiscount : undefined,
               subtotal: item.total,
               referral_code: getReferralCode(),
+              package_sequence: isPurePackageCart
+                ? item.packageSequence
+                : undefined,
             };
           }),
         };
@@ -2181,6 +2800,105 @@ const nextStep = async () => {
       }
     } else {
       // Single mode: Create booking(s)
+      if (isPackageMode.value) {
+        const draft = buildCurrentPackageDraft();
+        const sessions = allSessionsIncludingCurrent(draft);
+        if (!activePackage.value || sessions.length === 0) return;
+
+        isProcessingPayment.value = true;
+        try {
+          const parseSlotTime = (slot: any, key: "start" | "end") => {
+            const raw =
+              slot?.originalSlot?.[key] ||
+              slot?.[key] ||
+              (key === "start" ? "09:00" : "09:30");
+            return raw.includes("AM") || raw.includes("PM")
+              ? parseTime(raw)
+              : raw;
+          };
+
+          const batchRequest: BatchBookingRequest = {
+            customer_name: customerInfo.value.name,
+            customer_phone: customerInfo.value.phone,
+            customer_email: customerInfo.value.email || "",
+            customer_notes: customerInfo.value.notes || "",
+            consent_tc: termsAccepted.value,
+            consent_marketing: false,
+            session_id: getSessionId(),
+            package_id: activePackage.value.id,
+            booking_group_id: bookingGroupId.value || undefined,
+            items: sessions.map((session) => {
+              const addonsArray = Object.entries(session.addons)
+                .filter(([_, qty]) => qty > 0)
+                .map(([addonId, quantity]) => ({
+                  addon_id: addonId,
+                  quantity: quantity as number,
+                }));
+              const rowBase =
+                session.sequence === 1 ? activePackage.value!.basePrice : 0;
+              return {
+                theme_id: session.theme.id,
+                booking_date: session.date,
+                start_time: parseSlotTime(session.slot, "start"),
+                end_time: parseSlotTime(session.slot, "end"),
+                pax_count: session.pax,
+                selected_addons: addonsArray,
+                coupon_code: validatedCoupon.value?.code,
+                subtotal: rowBase + session.extrasTotal,
+                referral_code: getReferralCode(),
+                package_sequence: session.sequence,
+              };
+            }),
+          };
+
+          const paymentType =
+            (studioStore.websiteSettings?.paymentType as
+              | "full"
+              | "deposit") || "full";
+
+          const payable = Math.max(
+            0,
+            effectiveSingleModeTotal.value - discountAmount.value,
+          );
+          const { result } = await submitPublicBookingCheckout({
+            batchRequest,
+            paymentType,
+            amount: payable,
+            clearBookingState: clearPersistedBookingState,
+          });
+          clearPackage();
+          applyCheckoutResult(router, result);
+        } catch (error: any) {
+          console.error("Failed to create package bookings:", error);
+          if (isPaymentUnavailableError(error)) {
+            router.push("/payment/failed?error=payment_unavailable");
+            return;
+          }
+          if (isSlotUnavailableError(error)) {
+            await showModal({
+              title: t("slotNoLongerAvailable"),
+              message: t("slotNoLongerAvailableMessage"),
+              type: "warning",
+              confirmText: t("ok"),
+            });
+            return;
+          }
+          await showModal({
+            title: t("error") || "Error",
+            message:
+              error.data?.message ||
+              error.message ||
+              t("bookingFailed") ||
+              "Failed to create booking. Please try again.",
+            type: "error",
+            confirmText: t("ok") || "OK",
+          });
+        } finally {
+          isProcessingPayment.value = false;
+        }
+        return;
+      }
+
       if (!selectedTheme.value || !selectedDate.value) {
         return;
       }
@@ -2318,6 +3036,16 @@ const nextStep = async () => {
 
 const prevStep = async () => {
   if (currentStep.value > 1) {
+    // Cancel package theme edit: leave date step back to summary/customer
+    if (
+      isPackageMode.value &&
+      packageEditReturnStep.value != null &&
+      currentStep.value === 2
+    ) {
+      returnFromPackageSessionEdit();
+      return;
+    }
+
     // If going back from step 3 (Pax & Addons) to step 2 (Time) in single mode with active hold
     // ONLY show warning when going from step 3 to step 2
     if (
@@ -2401,6 +3129,19 @@ const handleChangeTheme = async () => {
     holdExpiresAt.value = null;
     stopHoldCountdown();
   }
+
+  // Release holds from completed package sessions
+  for (const session of completedSessions.value) {
+    if (session.hold?.holdId) {
+      await releaseCartHold(session.hold.holdId);
+    }
+  }
+  clearPackage();
+  selectedTheme.value = null;
+  selectedDate.value = null;
+  selectedSlot.value = null;
+  selectedSlots.value = [];
+  selectedAddons.value = {};
   currentStep.value = 1;
 };
 
@@ -2445,6 +3186,11 @@ const addonsTotal = computed(() => {
 const currentItemTotal = computed(() => {
   if (!selectedTheme.value) return 0;
 
+  // Package mode: theme base is replaced by package base (counted once at payable total)
+  if (isPackageMode.value) {
+    return extraPaxCost.value + addonsTotal.value;
+  }
+
   // Use the slot price (already includes special pricing from backend)
   // If the selected slot has a price from the backend, use that
   // Otherwise fall back to theme base_price
@@ -2477,6 +3223,13 @@ const currentItemTotal = computed(() => {
 /** Single mode: total for one or more slots, respecting addonsApplyTo (first slot only vs all). */
 const effectiveSingleModeTotal = computed(() => {
   if (isCartModeEnabled.value) return 0;
+
+  if (isPackageMode.value && activePackage.value) {
+    const draft = buildCurrentPackageDraft();
+    const sessions = allSessionsIncludingCurrent(draft);
+    return packagePayableTotal(sessions);
+  }
+
   const slotCount = isMultipleSlotEnabled.value
     ? confirmedSlots.value.length > 0
       ? confirmedSlots.value.length
@@ -2564,6 +3317,39 @@ const subtotalBeforeDiscount = computed(() => {
   }
   return effectiveSingleModeTotal.value;
 });
+
+const packageSummarySessions = computed(() => {
+  if (!isPackageMode.value) return [];
+  return allSessionsIncludingCurrent(buildCurrentPackageDraft());
+});
+
+const packageCoverImage = computed(() => {
+  if (!activePackage.value) return "";
+  return (
+    activePackage.value.images?.[0] ||
+    packageSummarySessions.value[0]?.theme.images?.[0] ||
+    ""
+  );
+});
+
+function sessionExtraPaxCost(session: PackageSessionDraft) {
+  const extra = Math.max(0, session.pax - (session.theme.base_pax || 0));
+  return extra * (session.theme.extra_pax_price || 0);
+}
+
+function sessionAddonLines(session: PackageSessionDraft) {
+  return Object.entries(session.addons)
+    .filter(([, qty]) => qty > 0)
+    .map(([id, qty]) => {
+      const addon = studioStore.addons.find((a) => a.id === id);
+      return {
+        id,
+        name: addon?.name || id,
+        qty,
+        total: (addon?.price || 0) * qty,
+      };
+    });
+}
 
 /** Single mode: number of sessions when multi-slot (0 if not multi-slot). */
 const singleModeSlotCount = computed(() => {
@@ -3165,7 +3951,7 @@ watch(
 </script>
 
 <template>
-  <div class="bk-page bk-page--sticky-cta-lg">
+  <div class="bk-page bk-page--sticky-cta-lg" :style="bookingAccentStyle">
     <!-- Booking closed gate -->
     <div
       v-if="bookingClosed"
@@ -3194,7 +3980,7 @@ watch(
           <div class="flex h-14 items-center gap-3 px-4 sm:px-6">
             <button
               type="button"
-              class="-ml-2 flex h-10 w-10 items-center justify-center rounded-full text-gray-900 transition-colors hover:bg-gray-100"
+              class="-ml-2 flex h-10 w-10 items-center justify-center rounded-full text-[var(--bk-text)] transition-colors hover:bg-[var(--bk-surface)]"
               :aria-label="t('back')"
               :disabled="isProcessingPayment"
               @click="prevStep"
@@ -3202,14 +3988,14 @@ watch(
               <ArrowLeft class="h-5 w-5" />
             </button>
             <div class="min-w-0 flex-1">
-              <h1 class="truncate text-base font-medium text-gray-900">
+              <h1 class="bk-title truncate text-base">
                 {{ steps[currentStep - 1]?.title || t("booking") }}
               </h1>
             </div>
           </div>
-          <div class="h-0.5 w-full bg-gray-100">
+          <div class="bk-progress-track">
             <div
-              class="h-full bg-gray-900 transition-[width] duration-500 ease-out"
+              class="bk-progress-fill"
               :style="{ width: `${(currentStep / totalSteps) * 100}%` }"
             />
           </div>
@@ -3222,10 +4008,10 @@ watch(
             selectedTheme &&
             currentStep !== (isCartModeEnabled ? 7 : 6)
           "
-          class="relative z-30 animate-fade-in border-b border-gray-100 bg-white"
+          class="bk-context-strip animate-fade-in"
         >
-          <div class="flex items-center gap-3 px-4 py-3 sm:px-6">
-            <div class="h-10 w-10 shrink-0 overflow-hidden rounded-md bg-gray-100">
+          <div class="flex items-center gap-3 px-4 py-2.5 sm:px-6">
+            <div class="bk-context-media">
               <img
                 v-if="selectedTheme.images?.[0]"
                 :src="selectedTheme.images[0]"
@@ -3234,45 +4020,63 @@ watch(
               />
               <div
                 v-else
-                class="flex h-full w-full items-center justify-center text-gray-300"
+                class="flex h-full w-full items-center justify-center text-[var(--bk-faint)]"
               >
                 <ImageIcon class="h-4 w-4" />
               </div>
             </div>
 
             <div class="min-w-0 flex-1">
-              <p class="truncate text-sm font-medium text-gray-900">
+              <p
+                v-if="isPackageMode && activePackage"
+                class="truncate text-[11px] font-medium text-[var(--bk-muted)]"
+              >
+                {{ activePackage.name }}
+                <template v-if="isContinuousPackage">
+                  · {{ t("packageContinuous") }}
+                </template>
+                · {{ t("packageThemeOf") }} {{ packageProgressLabel }}
+              </p>
+              <p class="truncate text-sm font-semibold text-[var(--bk-text)]">
                 {{ selectedTheme.name }}
               </p>
-              <p
-                v-if="
-                  selectedDate &&
-                  (isMultipleSlotEnabled
-                    ? selectedSlots.length > 0
-                    : selectedSlot)
-                "
-                class="truncate text-xs text-gray-500"
+              <div
+                v-if="contextSchedule"
+                class="mt-1 space-y-1.5"
               >
-                {{ formatDate(selectedDate) }},
-                <template
-                  v-if="isMultipleSlotEnabled && selectedSlots.length > 0"
+                <p class="truncate text-xs font-medium text-[var(--bk-muted)]">
+                  {{ contextSchedule.date
+                  }}<span v-if="contextSchedule.singleTime">
+                    · {{ contextSchedule.singleTime }}
+                  </span>
+                </p>
+                <div
+                  v-if="contextSchedule.pills.length"
+                  class="flex flex-wrap items-center gap-1"
                 >
-                  {{
-                    selectedSlots.map((s) => `${s.start}-${s.end}`).join(", ")
-                  }}
-                </template>
-                <template v-else>
-                  {{ selectedSlot.start }} - {{ selectedSlot.end }}
-                </template>
-              </p>
-              <p v-else class="text-xs text-gray-400">
+                  <span
+                    v-for="(pill, idx) in contextSchedule.pills"
+                    :key="`${pill}-${idx}`"
+                    class="bk-time-pill"
+                  >
+                    {{ pill }}
+                  </span>
+                  <span
+                    v-if="contextSchedule.more > 0"
+                    class="bk-time-pill bk-time-pill--more"
+                  >
+                    +{{ contextSchedule.more }}
+                  </span>
+                </div>
+              </div>
+              <p v-else class="mt-0.5 text-xs font-medium text-[var(--bk-faint)]">
                 {{ t("selectDateAndTime") }}
               </p>
             </div>
 
             <button
               type="button"
-              class="shrink-0 text-sm text-gray-500 underline-offset-2 hover:text-gray-900 hover:underline"
+              class="shrink-0 text-sm text-[var(--bk-muted)] underline-offset-2 hover:text-[var(--bk-text)] hover:underline"
               @click="handleChangeTheme"
             >
               {{ t("change") }}
@@ -3282,10 +4086,10 @@ watch(
           <button
             v-if="confirmedSlot && holdExpiresAt && !isCartModeEnabled"
             type="button"
-            class="flex w-full items-center justify-center gap-2 border-t border-amber-100 bg-amber-50 py-2 text-xs font-medium text-amber-700"
+            class="flex w-full items-center justify-center gap-1.5 border-t border-amber-100/80 bg-amber-50/80 py-1.5 text-[11px] font-medium text-amber-800"
             @click="prevStep"
           >
-            <Clock class="h-3.5 w-3.5" />
+            <Clock class="h-3 w-3" />
             <span>
               {{ t("slotLocked") }} {{ holdCountdown }} · {{ t("change") }}
             </span>
@@ -3321,39 +4125,201 @@ watch(
       <!-- Recovery Dialog -->
 
       <!-- Theme Overview (shown in steps 2-4) -->
-      <main
-        class="mx-auto w-full max-w-2xl flex-1 space-y-8 overflow-hidden px-4 pb-8 pt-6 sm:px-6 sm:pt-8"
-      >
+      <main class="bk-main space-y-6 sm:space-y-8">
         <Transition :name="transitionName" mode="out-in">
-          <!-- Step 1: Themes -->
+          <!-- Step 1: Themes / Packages -->
           <div v-if="currentStep === 1" :key="1">
-            <p class="mb-4 text-sm text-gray-500">
+            <p class="mb-4 text-sm font-medium text-[var(--bk-muted)]">
               {{ t("selectThemeDescription") }}
             </p>
+
+            <!-- Packages -->
+            <div
+              v-if="!loadingThemes && studioStore.packages.length > 0"
+              class="mb-6 space-y-2"
+            >
+              <h2 class="bk-title text-sm">{{ t("packages") }}</h2>
+              <ul class="bk-theme-list" role="radiogroup" :aria-label="t('packages')">
+                <li
+                  v-for="pkg in studioStore.packages"
+                  :key="pkg.id"
+                  role="radio"
+                  tabindex="0"
+                  :aria-checked="activePackage?.id === pkg.id"
+                  class="bk-theme-row"
+                  :class="{
+                    'bk-theme-row--selected': activePackage?.id === pkg.id,
+                  }"
+                  @click="selectPackage(pkg)"
+                  @keydown.enter.prevent="selectPackage(pkg)"
+                  @keydown.space.prevent="selectPackage(pkg)"
+                >
+                  <button
+                    type="button"
+                    class="bk-theme-row-media"
+                    :class="{ 'cursor-zoom-in': !!packageCover(pkg) }"
+                    :aria-label="pkg.name"
+                    @click.stop="openPackageGallery(pkg)"
+                  >
+                    <img
+                      v-if="packageCover(pkg)"
+                      :src="packageCover(pkg)"
+                      :alt="pkg.name"
+                      class="h-full w-full object-cover"
+                    />
+                    <div
+                      v-else
+                      class="flex h-full w-full items-center justify-center text-[var(--bk-faint)]"
+                    >
+                      <ImageIcon class="h-5 w-5" />
+                    </div>
+                  </button>
+                  <div class="min-w-0 flex-1">
+                    <h3 class="bk-title truncate text-[15px] sm:text-base">
+                      {{ pkg.name }}
+                    </h3>
+                    <p
+                      v-if="pkg.descriptionShort"
+                      class="mt-0.5 line-clamp-1 text-sm font-medium text-[var(--bk-muted)]"
+                    >
+                      {{ pkg.descriptionShort }}
+                    </p>
+                    <p
+                      class="mt-1 line-clamp-2 text-xs font-medium text-[var(--bk-muted)]"
+                    >
+                      <span class="text-[var(--bk-faint)]"
+                        >{{ t("packageIncludes") }}:</span
+                      >
+                      {{ packageIncludesLabel(pkg) }}
+                    </p>
+                    <p
+                      class="mt-1 text-[11px] font-medium text-[var(--bk-faint)]"
+                    >
+                      {{
+                        pkg.timingMode === "continuous"
+                          ? t("packageContinuous")
+                          : t("packageSeparated")
+                      }}
+                    </p>
+                  </div>
+                  <div class="flex shrink-0 items-center gap-2.5 sm:gap-3">
+                    <span
+                      class="text-[15px] font-semibold tabular-nums text-[var(--bk-text)] sm:text-base"
+                    >
+                      RM{{ formatPriceWhole(pkg.basePrice) }}
+                    </span>
+                    <span
+                      class="bk-theme-row-check"
+                      :class="{
+                        'bk-theme-row-check--on': activePackage?.id === pkg.id,
+                      }"
+                      aria-hidden="true"
+                    >
+                      <Check
+                        v-if="activePackage?.id === pkg.id"
+                        class="h-3 w-3"
+                      />
+                    </span>
+                  </div>
+                </li>
+              </ul>
+
+              <div
+                v-if="
+                  isPackageMode &&
+                  canReorderThemes &&
+                  activePackage &&
+                  !orderConfirmed
+                "
+                class="mt-4 space-y-2 rounded-[var(--bk-radius)] border border-[var(--bk-line)] bg-[var(--bk-surface)]/40 p-3"
+              >
+                <div>
+                  <p class="text-sm font-semibold text-[var(--bk-text)]">
+                    {{ t("packageReorderTitle") }}
+                  </p>
+                  <p class="mt-0.5 text-xs text-[var(--bk-muted)]">
+                    {{ t("packageReorderHint") }}
+                  </p>
+                </div>
+                <p
+                  v-if="packageAutoReorderNotice"
+                  class="rounded-lg bg-amber-50 px-2.5 py-2 text-xs font-medium text-amber-900"
+                >
+                  {{ t("packageAutoReordered") }}
+                </p>
+                <ul class="space-y-1.5">
+                  <li
+                    v-for="(themeId, index) in orderedThemeIds"
+                    :key="themeId"
+                    class="flex items-center gap-2 rounded-lg border border-[var(--bk-line)] bg-white px-2.5 py-2"
+                  >
+                    <span
+                      class="w-5 text-xs font-semibold tabular-nums text-[var(--bk-faint)]"
+                      >{{ index + 1 }}</span
+                    >
+                    <span class="min-w-0 flex-1 truncate text-sm font-medium">
+                      {{
+                        packageThemes.find((t) => t.themeId === themeId)
+                          ?.name || themeId
+                      }}
+                    </span>
+                    <button
+                      type="button"
+                      class="rounded p-1 text-[var(--bk-muted)] hover:bg-[var(--bk-surface)] hover:text-[var(--bk-text)] disabled:opacity-30"
+                      :disabled="index === 0"
+                      :aria-label="'Move up'"
+                      @click="onMovePackageTheme(index, -1)"
+                    >
+                      <ChevronUp class="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      class="rounded p-1 text-[var(--bk-muted)] hover:bg-[var(--bk-surface)] hover:text-[var(--bk-text)] disabled:opacity-30"
+                      :disabled="index === orderedThemeIds.length - 1"
+                      :aria-label="'Move down'"
+                      @click="onMovePackageTheme(index, 1)"
+                    >
+                      <ChevronDown class="h-4 w-4" />
+                    </button>
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            <h2
+              v-if="
+                !loadingThemes &&
+                showThemeCatalog &&
+                studioStore.packages.length > 0
+              "
+              class="bk-title mb-2 text-sm"
+            >
+              {{ t("singleThemes") }}
+            </h2>
 
             <!-- Loading Skeleton -->
             <ul
               v-if="loadingThemes"
-              class="divide-y divide-gray-100 border-y border-gray-100"
+              class="bk-theme-list"
             >
               <li
                 v-for="i in 3"
                 :key="`skeleton-${i}`"
-                class="flex animate-pulse items-center gap-4 py-4"
+                class="bk-theme-row animate-pulse"
               >
-                <div class="h-16 w-16 shrink-0 rounded-lg bg-gray-100" />
-                <div class="flex-1 space-y-2">
-                  <div class="h-4 w-1/3 rounded bg-gray-100" />
-                  <div class="h-3 w-2/3 rounded bg-gray-100" />
+                <div class="h-14 w-14 shrink-0 rounded-[var(--bk-radius-sm)] bg-[var(--bk-surface)]" />
+                <div class="min-w-0 flex-1 space-y-2">
+                  <div class="h-4 w-1/3 rounded bg-[var(--bk-surface)]" />
+                  <div class="h-3 w-2/3 rounded bg-[var(--bk-surface)]" />
                 </div>
-                <div class="h-4 w-12 rounded bg-gray-100" />
+                <div class="h-4 w-12 rounded bg-[var(--bk-surface)]" />
               </li>
             </ul>
 
-            <!-- Themes List -->
+            <!-- Themes compact list -->
             <ul
-              v-else
-              class="divide-y divide-gray-100 border-y border-gray-100"
+              v-else-if="showThemeCatalog"
+              class="bk-theme-list"
               role="radiogroup"
               :aria-label="t('selectTheme')"
             >
@@ -3362,20 +4328,21 @@ watch(
                 :key="theme.id"
                 role="radio"
                 tabindex="0"
-                :aria-checked="selectedTheme?.id === theme.id"
-                class="-mx-3 flex cursor-pointer items-center gap-4 rounded-lg px-3 py-4 transition-colors"
-                :class="
-                  selectedTheme?.id === theme.id
-                    ? 'bg-gray-50'
-                    : 'hover:bg-gray-50'
+                :aria-checked="
+                  !isPackageMode && selectedTheme?.id === theme.id
                 "
+                class="bk-theme-row"
+                :class="{
+                  'bk-theme-row--selected':
+                    !isPackageMode && selectedTheme?.id === theme.id,
+                }"
                 @click="selectTheme(theme)"
                 @keydown.enter.prevent="selectTheme(theme)"
                 @keydown.space.prevent="selectTheme(theme)"
               >
                 <button
                   type="button"
-                  class="h-16 w-16 shrink-0 cursor-zoom-in overflow-hidden rounded-lg bg-gray-100"
+                  class="bk-theme-row-media cursor-zoom-in"
                   :aria-label="theme.name"
                   @click.stop="openGallery(theme)"
                 >
@@ -3387,70 +4354,80 @@ watch(
                   />
                   <span
                     v-else
-                    class="flex h-full w-full items-center justify-center text-gray-300"
+                    class="flex h-full w-full items-center justify-center text-[var(--bk-faint)]"
                   >
-                    <ImageIcon class="h-6 w-6" />
+                    <ImageIcon class="h-5 w-5" />
                   </span>
                 </button>
 
                 <div class="min-w-0 flex-1">
-                  <div class="flex flex-wrap items-baseline gap-x-2">
-                    <h3 class="truncate text-base font-medium text-gray-900">
+                  <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                    <h3 class="bk-title truncate text-[15px] sm:text-base">
                       {{ theme.name }}
                     </h3>
                     <span
                       v-if="theme.popular"
-                      class="rounded bg-gray-100 px-1.5 py-0.5 text-[11px] font-medium capitalize text-gray-600"
+                      class="rounded bg-[var(--bk-surface)] px-1.5 py-0.5 text-[11px] font-semibold capitalize text-[var(--bk-muted)]"
                     >
                       {{ t("popular") }}
                     </span>
                   </div>
                   <p
                     v-if="theme.description_short"
-                    class="mt-0.5 line-clamp-1 text-sm text-gray-500"
+                    class="mt-0.5 line-clamp-1 text-sm font-medium text-[var(--bk-muted)]"
                   >
                     {{ theme.description_short }}
                   </p>
-                  <p class="mt-1 text-xs text-gray-400">
+                  <p class="mt-1 text-xs font-medium text-[var(--bk-faint)]">
                     {{ theme.duration_minutes }} {{ t("minutes") }} ·
                     {{ theme.base_pax }} {{ t("pax") }}
                   </p>
                 </div>
 
-                <div class="flex shrink-0 items-center gap-3">
-                  <span class="text-base font-medium tabular-nums text-gray-900">
+                <div class="flex shrink-0 items-center gap-2.5 sm:gap-3">
+                  <span class="text-[15px] font-semibold tabular-nums text-[var(--bk-text)] sm:text-base">
                     RM{{ formatPriceWhole(theme.base_price) }}
                   </span>
                   <span
-                    class="flex h-5 w-5 items-center justify-center rounded-full border transition-colors"
-                    :class="
-                      selectedTheme?.id === theme.id
-                        ? 'border-gray-900 bg-gray-900 text-white'
-                        : 'border-gray-300'
-                    "
+                    class="bk-theme-row-check"
+                    :class="{
+                      'bk-theme-row-check--on':
+                        !isPackageMode && selectedTheme?.id === theme.id,
+                    }"
                     aria-hidden="true"
                   >
                     <Check
-                      v-if="selectedTheme?.id === theme.id"
+                      v-if="!isPackageMode && selectedTheme?.id === theme.id"
                       class="h-3 w-3"
                     />
                   </span>
                 </div>
               </li>
             </ul>
+
+            <p
+              v-else-if="
+                !loadingThemes &&
+                !showThemeCatalog &&
+                studioStore.packages.length === 0
+              "
+              class="rounded-lg border border-dashed px-4 py-8 text-center text-sm text-[var(--bk-muted)]"
+            >
+              {{ t("selectThemeDescription") }}
+            </p>
           </div>
 
           <!-- Step 2: Date & Time -->
           <div v-else-if="currentStep === 2" :key="2" class="space-y-8">
-            <section class="space-y-3">
+            <section class="space-y-4">
               <div class="flex items-center justify-between">
-                <h2 class="text-sm font-medium text-gray-900">
+                <h2 class="bk-title text-sm">
                   {{ t("date") }}
                 </h2>
                 <div class="flex items-center gap-1">
                   <button
                     type="button"
-                    class="flex h-8 w-8 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900"
+                    class="flex h-8 w-8 items-center justify-center rounded-full text-[var(--bk-muted)] transition-colors hover:bg-[var(--bk-surface)] hover:text-[var(--bk-text)]"
                     aria-label="Scroll dates left"
                     @click="scrollDates('left')"
                   >
@@ -3458,7 +4435,7 @@ watch(
                   </button>
                   <button
                     type="button"
-                    class="flex h-8 w-8 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900"
+                    class="flex h-8 w-8 items-center justify-center rounded-full text-[var(--bk-muted)] transition-colors hover:bg-[var(--bk-surface)] hover:text-[var(--bk-text)]"
                     aria-label="Scroll dates right"
                     @click="scrollDates('right')"
                   >
@@ -3469,13 +4446,13 @@ watch(
 
               <div
                 ref="dateScroller"
-                class="-mx-4 flex snap-x gap-2 overflow-x-auto scroll-smooth px-4 pb-1 scrollbar-hide sm:-mx-6 sm:px-6"
+                class="-mx-4 flex snap-x gap-2.5 overflow-x-auto scroll-smooth px-4 pb-1 scrollbar-hide sm:-mx-6 sm:px-6"
               >
                 <template v-if="loadingDates">
                   <div
                     v-for="i in 7"
                     :key="`date-skeleton-${i}`"
-                    class="h-[4.5rem] w-14 shrink-0 animate-pulse rounded-lg bg-gray-100"
+                    class="h-16 w-12 shrink-0 animate-pulse rounded-[var(--bk-radius-sm)] bg-[var(--bk-surface)] sm:h-[4.5rem] sm:w-14"
                   />
                 </template>
 
@@ -3487,19 +4464,23 @@ watch(
                   :data-date="d.date"
                   :disabled="d.isBlackout"
                   :aria-pressed="selectedDate === d.date"
-                  class="relative flex h-[4.5rem] w-14 shrink-0 snap-start flex-col items-center justify-center rounded-lg border transition-colors"
+                  class="bk-date-chip"
                   :class="
                     d.isBlackout
-                      ? 'cursor-not-allowed border-transparent bg-gray-50 text-gray-300 line-through'
+                      ? 'bk-date-chip--disabled'
                       : selectedDate === d.date
-                        ? 'border-gray-900 bg-gray-900 text-white'
-                        : 'border-gray-200 bg-white text-gray-900 hover:border-gray-400'
+                        ? 'bk-date-chip--selected'
+                        : 'bk-date-chip--idle'
                   "
                   @click="!d.isBlackout && selectDate(d.date)"
                 >
                   <span
                     class="text-[11px] capitalize"
-                    :class="selectedDate === d.date ? 'text-white/70' : 'text-gray-500'"
+                    :class="
+                      selectedDate === d.date
+                        ? 'text-[var(--bk-primary-fg)]/70'
+                        : 'text-[var(--bk-muted)]'
+                    "
                   >
                     {{ d.weekday }}
                   </span>
@@ -3508,14 +4489,22 @@ watch(
                   </span>
                   <span
                     class="text-[11px] capitalize"
-                    :class="selectedDate === d.date ? 'text-white/70' : 'text-gray-500'"
+                    :class="
+                      selectedDate === d.date
+                        ? 'text-[var(--bk-primary-fg)]/70'
+                        : 'text-[var(--bk-muted)]'
+                    "
                   >
                     {{ d.month }}
                   </span>
                   <span
                     v-if="d.isSpecial && !d.isBlackout"
                     class="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full"
-                    :class="selectedDate === d.date ? 'bg-white' : 'bg-amber-500'"
+                    :class="
+                      selectedDate === d.date
+                        ? 'bg-[var(--bk-primary-fg)]'
+                        : 'bg-amber-500'
+                    "
                     aria-hidden="true"
                   />
                 </button>
@@ -3607,14 +4596,14 @@ watch(
             <!-- Time Slots -->
             <section
               data-time-section
-              class="space-y-3 transition-opacity"
+              class="space-y-4 transition-opacity"
               :class="{ 'pointer-events-none opacity-40': !selectedDate }"
             >
               <div class="flex items-center justify-between">
-                <h2 class="text-sm font-medium text-gray-900">
+                <h2 class="bk-title text-sm">
                   {{ t("selectTime") }}
                 </h2>
-                <span v-if="selectedDate" class="text-xs text-gray-500">
+                <span v-if="selectedDate" class="text-xs text-[var(--bk-muted)]">
                   {{
                     isMultipleSlotEnabled
                       ? selectedSlots.length > 0
@@ -3628,12 +4617,12 @@ watch(
               </div>
 
               <div v-if="loadingSlots" class="flex justify-center py-8">
-                <Loader2 class="h-5 w-5 animate-spin text-gray-400" />
+                <Loader2 class="h-5 w-5 animate-spin text-[var(--bk-faint)]" />
               </div>
 
               <div
                 v-else-if="timeSlots.length > 0"
-                class="grid grid-cols-2 gap-2 sm:grid-cols-3"
+                class="grid grid-cols-2 gap-2.5 sm:grid-cols-3"
               >
                 <button
                   v-for="slot in timeSlots"
@@ -3645,27 +4634,74 @@ watch(
                       ? selectedSlots.some((s) => s.id === slot.id)
                       : selectedSlot?.id === slot.id
                   "
-                  class="h-11 rounded-lg border text-sm font-medium tabular-nums transition-colors"
+                  class="bk-slot-chip"
                   :class="
                     !slot.available
-                      ? 'cursor-not-allowed border-transparent bg-gray-50 text-gray-300 line-through'
+                      ? 'bk-slot-chip--disabled'
                       : (
                             isMultipleSlotEnabled
                               ? selectedSlots.some((s) => s.id === slot.id)
                               : selectedSlot?.id === slot.id
                           )
-                        ? 'border-gray-900 bg-gray-900 text-white'
-                        : 'border-gray-200 bg-white text-gray-900 hover:border-gray-400'
+                        ? 'bk-slot-chip--selected'
+                        : 'bk-slot-chip--idle'
                   "
                   @click="selectSlot(slot)"
                 >
-                  {{ slot.start }} - {{ slot.end }}
+                  <template v-if="isContinuousPackage && slot.chain">
+                    {{ slot.start }}
+                  </template>
+                  <template v-else>
+                    {{ slot.start }} - {{ slot.end }}
+                  </template>
                 </button>
               </div>
 
               <p
-                v-else-if="selectedDate && !loadingSlots"
-                class="py-8 text-center text-sm text-gray-500"
+                v-if="
+                  isContinuousPackage &&
+                  packageAutoReorderNotice &&
+                  selectedDate
+                "
+                class="rounded-[var(--bk-radius)] bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900"
+              >
+                {{ t("packageAutoReordered") }}
+              </p>
+
+              <div
+                v-if="
+                  isContinuousPackage &&
+                  selectedChain &&
+                  selectedChain.chain?.length
+                "
+                class="rounded-[var(--bk-radius)] border border-[var(--bk-line)] bg-[var(--bk-surface)]/40 p-3"
+              >
+                <p class="text-xs font-semibold text-[var(--bk-text)]">
+                  {{ t("packageChainPreview") }}
+                </p>
+                <ul class="mt-2 space-y-1.5">
+                  <li
+                    v-for="seg in selectedChain.chain"
+                    :key="`${seg.themeId}-${seg.sequence}`"
+                    class="flex items-center justify-between gap-3 text-xs text-[var(--bk-muted)]"
+                  >
+                    <span class="min-w-0 truncate font-medium text-[var(--bk-text)]">
+                      {{ seg.sequence }}.
+                      {{
+                        packageThemes.find((t) => t.themeId === seg.themeId)
+                          ?.name || seg.themeId
+                      }}
+                    </span>
+                    <span class="shrink-0 tabular-nums">
+                      {{ seg.startTime }} - {{ seg.endTime }}
+                    </span>
+                  </li>
+                </ul>
+              </div>
+
+              <p
+                v-else-if="selectedDate && !loadingSlots && timeSlots.length === 0"
+                class="py-8 text-center text-sm text-[var(--bk-muted)]"
               >
                 {{
                   t("noSlotsAvailable") ||
@@ -3680,6 +4716,27 @@ watch(
             <p class="text-sm text-gray-500">
               {{ t("paxAndAddonsDescription") }}
             </p>
+
+            <div
+              v-if="
+                isContinuousPackage &&
+                (confirmedSlot || selectedSlot) &&
+                selectedDate
+              "
+              class="flex items-start gap-2 rounded-lg border border-[var(--bk-line)] bg-[var(--bk-surface)]/40 px-3 py-2.5 text-sm text-[var(--bk-text)]"
+            >
+              <Clock class="mt-0.5 h-4 w-4 shrink-0 text-[var(--bk-muted)]" />
+              <div class="min-w-0">
+                <p class="text-xs font-medium text-[var(--bk-muted)]">
+                  {{ t("packageTimeLocked") }}
+                </p>
+                <p class="mt-0.5 font-medium tabular-nums">
+                  {{ selectedDate }} ·
+                  {{ (confirmedSlot || selectedSlot)?.start }} -
+                  {{ (confirmedSlot || selectedSlot)?.end }}
+                </p>
+              </div>
+            </div>
 
             <!-- Multi-slot Pax/Addon Note -->
             <div
@@ -3928,13 +4985,13 @@ watch(
           <div
             v-else-if="currentStep === 4 && isCartModeEnabled"
             :key="4.1"
-            class="space-y-6"
+            class="space-y-5"
           >
             <div
               v-if="cartItemCount === 0"
               class="space-y-4 py-10 text-center"
             >
-              <p class="text-sm text-gray-500">{{ t("cartEmpty") }}</p>
+              <p class="text-sm font-medium text-[var(--bk-muted)]">{{ t("cartEmpty") }}</p>
               <button
                 type="button"
                 class="bk-cta-primary bk-cta-primary--inline"
@@ -3946,48 +5003,70 @@ watch(
 
             <div
               v-if="unifiedCartHoldExpiresAt && cart.length > 0"
-              class="flex items-center justify-between rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-800"
+              class="flex items-center justify-between rounded-[var(--bk-radius-sm)] border border-amber-100/80 bg-amber-50/70 px-3 py-2 text-sm font-medium text-amber-800"
             >
               <span class="flex items-center gap-2">
-                <Clock class="h-4 w-4" />
+                <Clock class="h-3.5 w-3.5" />
                 {{ t("slotHeld") }}
               </span>
-              <span class="font-medium tabular-nums">
+              <span class="font-semibold tabular-nums">
                 {{ unifiedCartHoldCountdown }}
               </span>
             </div>
 
             <ul
               v-if="cart && cart.length > 0"
-              class="divide-y divide-gray-100 border-y border-gray-100"
+              class="bk-theme-list"
             >
-              <li v-for="(item, index) in cart" :key="item.id" class="py-4">
-                <div class="flex items-start gap-3">
+              <li
+                v-for="(item, index) in cart"
+                :key="item.id"
+                class="rounded-[var(--bk-radius-sm)] border border-[var(--bk-border)] bg-[var(--bk-card)] px-3 py-3 sm:px-4"
+              >
+                <div class="bk-session-row !py-0">
+                  <div class="bk-session-thumb">
+                    <img
+                      v-if="item.theme.images?.[0]"
+                      :src="item.theme.images[0]"
+                      :alt="item.theme.name"
+                      class="h-full w-full object-cover"
+                    />
+                    <div
+                      v-else
+                      class="flex h-full w-full items-center justify-center text-[var(--bk-faint)]"
+                    >
+                      <ImageIcon class="h-4 w-4" />
+                    </div>
+                  </div>
                   <div class="min-w-0 flex-1">
-                    <p class="text-base font-medium text-gray-900">
+                    <p class="text-[15px] font-semibold text-[var(--bk-text)] sm:text-base">
                       {{ item.theme.name }}
                     </p>
-                    <p class="mt-0.5 text-sm text-gray-500">
-                      {{ formatDate(item.date) }} · {{ item.slot.start }} –
-                      {{ item.slot.end }}
+                    <p class="mt-0.5 text-sm font-medium text-[var(--bk-muted)]">
+                      {{ formatDate(item.date) }}
+                    </p>
+                    <p class="mt-0.5 text-sm font-semibold tabular-nums text-[var(--bk-text)]">
+                      {{ item.slot.start }} – {{ item.slot.end }}
                     </p>
                   </div>
-                  <p class="text-base font-medium tabular-nums text-gray-900">
-                    RM{{ formatPriceWhole(item.total) }}
-                  </p>
-                  <button
-                    type="button"
-                    class="-mr-2 -mt-1 flex h-9 w-9 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600"
-                    :aria-label="`${t('removeFromCart')}: ${item.theme.name}`"
-                    @click="removeCartItem(index)"
-                  >
-                    <Trash2 class="h-4 w-4" />
-                  </button>
+                  <div class="flex shrink-0 flex-col items-end gap-1">
+                    <p class="text-[15px] font-semibold tabular-nums text-[var(--bk-text)] sm:text-base">
+                      RM{{ formatPriceWhole(item.total) }}
+                    </p>
+                    <button
+                      type="button"
+                      class="flex h-8 w-8 items-center justify-center rounded-full text-[var(--bk-faint)] transition-colors hover:bg-red-50 hover:text-red-600"
+                      :aria-label="`${t('removeFromCart')}: ${item.theme.name}`"
+                      @click="removeCartItem(index)"
+                    >
+                      <Trash2 class="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
 
                 <button
                   type="button"
-                  class="mt-2 flex items-center gap-1 text-sm text-gray-500 transition-colors hover:text-gray-900"
+                  class="mt-3 flex items-center gap-1 text-sm font-medium text-[var(--bk-muted)] transition-colors hover:text-[var(--bk-text)]"
                   :aria-expanded="expandedCartItems.has(item.id)"
                   @click="toggleCartItemExpansion(item.id)"
                 >
@@ -4004,11 +5083,11 @@ watch(
 
                 <dl
                   v-if="expandedCartItems.has(item.id)"
-                  class="mt-3 space-y-1.5 rounded-lg bg-gray-50 px-3 py-3 text-sm"
+                  class="bk-breakdown"
                 >
-                  <div class="flex justify-between gap-4 text-gray-600">
+                  <div class="flex justify-between gap-4">
                     <dt>{{ t("setPrice") }} ({{ item.theme.base_pax }} {{ t("pax") }})</dt>
-                    <dd class="tabular-nums">
+                    <dd class="font-semibold tabular-nums text-[var(--bk-text)]">
                       RM{{ formatPriceWhole(item.theme.base_price) }}
                     </dd>
                   </div>
@@ -4017,13 +5096,13 @@ watch(
                     v-if="item.specialPricing"
                     class="flex justify-between gap-4"
                   >
-                    <dt class="text-amber-700">{{ item.specialPricing.message }}</dt>
+                    <dt class="text-amber-800">{{ item.specialPricing.message }}</dt>
                     <dd
-                      class="tabular-nums"
+                      class="font-semibold tabular-nums"
                       :class="
                         item.specialPricing.amount > 0
-                          ? 'text-amber-700'
-                          : 'text-green-600'
+                          ? 'text-amber-800'
+                          : 'text-green-700'
                       "
                     >
                       {{ item.specialPricing.amount > 0 ? "+" : "" }}RM{{
@@ -4034,14 +5113,14 @@ watch(
 
                   <div
                     v-if="Math.max(0, item.pax - (item.theme.base_pax || 0)) > 0"
-                    class="flex justify-between gap-4 text-gray-600"
+                    class="flex justify-between gap-4"
                   >
                     <dt>
                       {{ t("extraPaxLabel") }} ×{{
                         Math.max(0, item.pax - (item.theme.base_pax || 0))
                       }}
                     </dt>
-                    <dd class="tabular-nums">
+                    <dd class="font-semibold tabular-nums text-[var(--bk-text)]">
                       +RM{{
                         formatPriceWhole(
                           Math.max(0, item.pax - (item.theme.base_pax || 0)) *
@@ -4056,13 +5135,13 @@ watch(
                       v-if="
                         qty > 0 && studioStore.addons.find((a) => a.id === id)
                       "
-                      class="flex justify-between gap-4 text-gray-600"
+                      class="flex justify-between gap-4"
                     >
                       <dt class="truncate">
                         {{ studioStore.addons.find((a) => a.id === id).name }}
                         ×{{ qty }}
                       </dt>
-                      <dd class="tabular-nums">
+                      <dd class="font-semibold tabular-nums text-[var(--bk-text)]">
                         +RM{{
                           formatPriceWhole(
                             (studioStore.addons.find((a) => a.id === id)
@@ -4430,49 +5509,45 @@ watch(
           <!-- Step 7: Summary (Cart Mode) -->
           <div
             v-else-if="currentStep === 7 && isCartModeEnabled"
-            class="space-y-6"
+            class="space-y-5"
           >
-            <p class="text-sm text-gray-500">
+            <p class="text-sm font-medium text-[var(--bk-muted)]">
               {{ t("bookingSummaryDescription") }}
             </p>
 
             <!-- Unified Cart Hold Timer (Subtle Style) -->
             <div
               v-if="unifiedCartHoldExpiresAt && cart.length > 0"
-              class="flex items-center justify-between rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-800"
+              class="flex items-center justify-between rounded-[var(--bk-radius-sm)] border border-amber-100/80 bg-amber-50/70 px-3 py-2 text-sm font-medium text-amber-800"
             >
-              <div
-                class="flex items-center gap-2"
-              >
-                <Clock class="h-4 w-4" />
+              <div class="flex items-center gap-2">
+                <Clock class="h-3.5 w-3.5" />
                 <span>{{ t("slotHeld") }}</span>
               </div>
-              <div class="font-medium tabular-nums">
+              <div class="font-semibold tabular-nums">
                 {{ unifiedCartHoldCountdown }}
               </div>
             </div>
 
             <!-- Booking Summary Card -->
-            <div
-              class="border-y border-gray-100"
-            >
+            <div class="bk-summary-panel">
               <!-- Card Header: Customer Info (Matches Step 6) -->
-              <div
-                class="flex items-start justify-between gap-3 border-b border-gray-100 py-4"
-              >
-                <div>
-                  <h3 class="text-base font-medium text-gray-900">
+              <div class="bk-summary-section flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                  <h3 class="bk-title text-base">
                     {{ customerInfo.name }}
                   </h3>
                   <div
-                    class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 text-sm text-gray-500 mt-1"
+                    class="mt-1.5 flex flex-col gap-1 text-sm font-medium text-[var(--bk-muted)] sm:flex-row sm:items-center sm:gap-3"
                   >
                     <div class="flex items-center gap-1.5">
-                      <Phone class="w-3.5 h-3.5" /> {{ customerInfo.phone }}
+                      <Phone class="h-3.5 w-3.5 shrink-0" />
+                      <span class="truncate">{{ customerInfo.phone }}</span>
                     </div>
-                    <div class="hidden sm:block w-px h-3 bg-gray-300"></div>
-                    <div class="flex items-center gap-1.5">
-                      <Mail class="w-3.5 h-3.5" /> {{ customerInfo.email }}
+                    <div class="hidden h-3 w-px bg-[var(--bk-border-strong)] sm:block" />
+                    <div class="flex min-w-0 items-center gap-1.5">
+                      <Mail class="h-3.5 w-3.5 shrink-0" />
+                      <span class="truncate">{{ customerInfo.email }}</span>
                     </div>
                   </div>
                 </div>
@@ -4480,25 +5555,40 @@ watch(
                   @click="currentStep = 5"
                   type="button"
                   :aria-label="t('customerInformation')"
-                  class="-mr-2 flex h-9 w-9 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900"
+                  class="-mr-2 flex h-9 w-9 items-center justify-center rounded-full text-[var(--bk-muted)] transition-colors hover:bg-[var(--bk-surface)] hover:text-[var(--bk-text)]"
                 >
                   <Pencil class="h-4 w-4" />
                 </button>
               </div>
 
               <!-- Cart Items Content -->
-              <div class="py-5">
-                <div class="space-y-8">
+              <div class="bk-summary-section">
+                <div class="space-y-5">
                   <!-- Iterate over cart items -->
                   <div
                     v-for="(item, index) in cart || []"
                     :key="item.id"
-                    class="relative"
+                    class="bk-session-row !py-0"
                   >
+                    <div class="bk-session-thumb">
+                      <img
+                        v-if="item.theme.images?.[0]"
+                        :src="item.theme.images[0]"
+                        :alt="item.theme.name"
+                        class="h-full w-full object-cover"
+                      />
+                      <div
+                        v-else
+                        class="flex h-full w-full items-center justify-center text-[var(--bk-faint)]"
+                      >
+                        <ImageIcon class="h-4 w-4" />
+                      </div>
+                    </div>
+                    <div class="min-w-0 flex-1">
                     <!-- Item Header -->
-                    <div class="flex justify-between items-start mb-1">
-                      <div class="flex items-center gap-2">
-                        <h4 class="text-base font-medium text-gray-900">
+                    <div class="mb-1 flex items-start justify-between gap-3">
+                      <div class="flex min-w-0 flex-wrap items-center gap-2">
+                        <h4 class="bk-title truncate text-[15px] sm:text-base">
                           {{ item.theme.name }}
                         </h4>
                         <!-- Coupon Applied Badge -->
@@ -4507,9 +5597,9 @@ watch(
                             validatedCoupon &&
                             isCartItemEligibleForCoupon(index)
                           "
-                          class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs font-medium"
+                          class="inline-flex items-center gap-1 rounded bg-green-100 px-1.5 py-0.5 text-[11px] font-semibold text-green-800"
                         >
-                          <Ticket class="w-3 h-3" />
+                          <Ticket class="h-3 w-3" />
                           {{ validatedCoupon.code }}
                         </span>
                         <!-- Not Eligible Badge (partial apply) -->
@@ -4518,22 +5608,23 @@ watch(
                             validatedCoupon &&
                             !isCartItemEligibleForCoupon(index)
                           "
-                          class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-xs font-medium"
+                          class="inline-flex items-center gap-1 rounded bg-[var(--bk-surface)] px-1.5 py-0.5 text-[11px] font-semibold text-[var(--bk-muted)]"
                         >
-                          <X class="w-3 h-3" />
+                          <X class="h-3 w-3" />
                           {{ t("notEligible") }}
                         </span>
                       </div>
-                      <span class="text-base font-medium text-gray-900">
+                      <span class="shrink-0 text-[15px] font-semibold tabular-nums text-[var(--bk-text)] sm:text-base">
                         RM{{ formatPriceWhole(item.theme.base_price) }}
                       </span>
                     </div>
 
                     <!-- Date & Time -->
-                    <div class="text-gray-500 text-sm flex items-center gap-2">
-                      <span>{{ formatDate(item.date) }}</span>
-                      <span class="w-1 h-1 rounded-full bg-gray-300"></span>
-                      <span>{{ item.slot.start }} - {{ item.slot.end }}</span>
+                    <div class="space-y-1.5 text-sm font-medium text-[var(--bk-muted)]">
+                      <p>{{ formatDate(item.date) }}</p>
+                      <p class="font-semibold tabular-nums text-[var(--bk-text)]">
+                        {{ item.slot.start }} – {{ item.slot.end }}
+                      </p>
                     </div>
 
                     <!-- Breakdown Details (Extras) -->
@@ -4650,31 +5741,25 @@ watch(
 
                     <!-- Item Total Row -->
                     <div
-                      class="mt-4 pt-4 border-t border-gray-100 flex justify-between items-center"
+                      class="mt-4 flex items-center justify-between border-t border-[var(--bk-border)] pt-3"
                     >
-                      <span
-                        class="text-sm text-gray-500"
-                        >{{ t("total") || "Total" }}</span
-                      >
-                      <span class="font-medium text-gray-900"
-                        >RM{{
+                      <span class="text-sm font-medium text-[var(--bk-muted)]">
+                        {{ t("total") || "Total" }}
+                      </span>
+                      <span class="font-semibold tabular-nums text-[var(--bk-text)]">
+                        RM{{
                           formatPriceWhole(
                             item.total - getCartItemDiscount(index),
                           )
-                        }}</span
-                      >
+                        }}
+                      </span>
                     </div>
-
-                    <!-- Divider between items (except last) -->
-                    <div
-                      v-if="index < cart.length - 1"
-                      class="my-8 border-b border-gray-100 w-full absolute -left-0 right-0"
-                    ></div>
+                    </div>
                   </div>
                 </div>
 
                 <!-- Separator -->
-                <div class="border-t border-gray-100 my-6"></div>
+                <div class="my-5 border-t border-[var(--bk-border)]" />
 
                 <!-- Coupon Section (Matches Step 6) -->
                 <div>
@@ -4690,7 +5775,7 @@ watch(
                       @click="handleApplyCoupon"
                       :disabled="!couponCode.trim() || isValidatingCoupon"
                       type="button"
-                      class="h-11 shrink-0 rounded-lg bg-gray-900 px-5 text-sm font-medium text-white transition-colors hover:bg-black disabled:opacity-40"
+                      class="bk-cta-primary bk-cta-primary--inline !min-w-0 px-5"
                     >
                       {{ isValidatingCoupon ? "..." : t("apply") || "Guna" }}
                     </button>
@@ -4703,12 +5788,12 @@ watch(
                   <!-- Applied Coupon -->
                   <div
                     v-if="validatedCoupon"
-                    class="space-y-2 rounded-lg bg-green-50 px-3 py-2.5"
+                    class="space-y-2 rounded-[var(--bk-radius-sm)] bg-green-50 px-3 py-2.5"
                   >
                     <div class="flex items-center justify-between">
                       <div class="flex items-center gap-2">
-                        <Ticket class="w-4 h-4 text-green-700" />
-                        <span class="font-medium text-green-700">{{
+                        <Ticket class="h-4 w-4 text-green-700" />
+                        <span class="font-semibold text-green-800">{{
                           validatedCoupon.code
                         }}</span>
                         <span class="text-green-600 text-sm"
@@ -4933,31 +6018,29 @@ watch(
           <!-- Single Mode: Summary -->
           <div
             v-else-if="currentStep === 6 && !isCartModeEnabled"
-            class="space-y-6"
+            class="space-y-5"
           >
-            <p class="text-sm text-gray-500">
+            <p class="text-sm font-medium text-[var(--bk-muted)]">
               {{ t("bookingSummaryDescription") }}
             </p>
             <!-- Booking Summary Card -->
-            <div
-              class="border-y border-gray-100"
-            >
-              <div
-                class="flex items-start justify-between gap-3 border-b border-gray-100 py-4"
-              >
-                <div>
-                  <h3 class="text-base font-medium text-gray-900">
+            <div class="bk-summary-panel">
+              <div class="bk-summary-section flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                  <h3 class="bk-title text-base">
                     {{ customerInfo.name }}
                   </h3>
                   <div
-                    class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 text-sm text-gray-500 mt-1"
+                    class="mt-1.5 flex flex-col gap-1 text-sm font-medium text-[var(--bk-muted)] sm:flex-row sm:items-center sm:gap-3"
                   >
                     <div class="flex items-center gap-1.5">
-                      <Phone class="w-3.5 h-3.5" /> {{ customerInfo.phone }}
+                      <Phone class="h-3.5 w-3.5 shrink-0" />
+                      <span class="truncate">{{ customerInfo.phone }}</span>
                     </div>
-                    <div class="hidden sm:block w-px h-3 bg-gray-300"></div>
-                    <div class="flex items-center gap-1.5">
-                      <Mail class="w-3.5 h-3.5" /> {{ customerInfo.email }}
+                    <div class="hidden h-3 w-px bg-[var(--bk-border-strong)] sm:block" />
+                    <div class="flex min-w-0 items-center gap-1.5">
+                      <Mail class="h-3.5 w-3.5 shrink-0" />
+                      <span class="truncate">{{ customerInfo.email }}</span>
                     </div>
                   </div>
                 </div>
@@ -4965,7 +6048,7 @@ watch(
                   @click="currentStep = 4"
                   type="button"
                   :aria-label="t('customerInformation')"
-                  class="-mr-2 flex h-9 w-9 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900"
+                  class="-mr-2 flex h-9 w-9 items-center justify-center rounded-full text-[var(--bk-muted)] transition-colors hover:bg-[var(--bk-surface)] hover:text-[var(--bk-text)]"
                 >
                   <Pencil class="h-4 w-4" />
                 </button>
@@ -4974,56 +6057,193 @@ watch(
               <!-- Hold Timer Banner -->
               <div
                 v-if="confirmedSlot && holdExpiresAt"
-                class="mt-4 flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2.5 text-sm text-amber-800"
+                class="mx-0 mt-3 flex items-center gap-2 rounded-[var(--bk-radius-sm)] border border-amber-100/80 bg-amber-50/70 px-3 py-2 text-sm font-medium text-amber-800"
               >
-                <Clock class="h-4 w-4" />
-                <span> {{ t("slotLocked") }}: {{ holdCountdown }} </span>
+                <Clock class="h-3.5 w-3.5" />
+                <span>{{ t("slotLocked") }}: {{ holdCountdown }}</span>
               </div>
 
-              <div class="py-5">
+              <div class="bk-summary-section">
                 <!-- 2. Main Booking Details -->
-                <div class="space-y-6">
+                <div class="space-y-5">
+                  <!-- Package summary -->
+                  <template v-if="isPackageMode && activePackage">
+                    <div class="bk-session-row !py-0">
+                      <div class="bk-session-thumb">
+                        <img
+                          v-if="packageCoverImage"
+                          :src="packageCoverImage"
+                          :alt="activePackage.name"
+                          class="h-full w-full object-cover"
+                        />
+                        <div
+                          v-else
+                          class="flex h-full w-full items-center justify-center text-[var(--bk-faint)]"
+                        >
+                          <ImageIcon class="h-4 w-4" />
+                        </div>
+                      </div>
+                      <div class="min-w-0 flex-1">
+                        <div class="mb-1 flex items-start justify-between gap-3">
+                          <div class="min-w-0">
+                            <p
+                              class="text-[11px] font-medium uppercase tracking-wide text-[var(--bk-muted)]"
+                            >
+                              {{ t("packages") }}
+                            </p>
+                            <h4
+                              class="bk-title truncate text-[15px] sm:text-base"
+                            >
+                              {{ activePackage.name }}
+                            </h4>
+                            <p class="mt-0.5 text-xs text-[var(--bk-muted)]">
+                              {{ packageSummarySessions.length }}
+                              {{ t("themesInPackage") }}
+                            </p>
+                          </div>
+                          <span
+                            class="shrink-0 text-[15px] font-semibold tabular-nums text-[var(--bk-text)] sm:text-base"
+                          >
+                            RM{{ formatPriceWhole(activePackage.basePrice) }}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div
+                      v-for="session in packageSummarySessions"
+                      :key="session.sequence"
+                      class="rounded-[var(--bk-radius-sm)] border border-[var(--bk-border)] px-3 py-3"
+                    >
+                      <div class="mb-1 flex items-start justify-between gap-3">
+                        <div class="min-w-0">
+                          <div class="flex items-center gap-2">
+                            <span
+                              class="flex size-5 shrink-0 items-center justify-center rounded-full bg-[var(--bk-surface)] text-[10px] font-semibold text-[var(--bk-muted)]"
+                            >
+                              {{ session.sequence }}
+                            </span>
+                            <h4
+                              class="bk-title truncate text-sm sm:text-[15px]"
+                            >
+                              {{ session.theme.name }}
+                            </h4>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          class="-mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[var(--bk-muted)] transition-colors hover:bg-[var(--bk-surface)] hover:text-[var(--bk-text)]"
+                          :aria-label="t('change')"
+                          @click="editPackageSession(session.sequence)"
+                        >
+                          <Pencil class="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                      <div class="mt-2 space-y-1.5 pl-7">
+                        <p
+                          class="flex items-center gap-2 text-sm font-medium text-[var(--bk-muted)]"
+                        >
+                          <Calendar
+                            class="h-3.5 w-3.5 shrink-0 text-[var(--bk-faint)]"
+                          />
+                          {{ formatDate(session.date) }}
+                        </p>
+                        <p
+                          class="text-sm font-semibold tabular-nums text-[var(--bk-text)]"
+                        >
+                          {{ session.slot?.start }} -
+                          {{ session.slot?.end }}
+                        </p>
+                      </div>
+
+                      <div
+                        v-if="
+                          sessionExtraPaxCost(session) > 0 ||
+                          sessionAddonLines(session).length > 0
+                        "
+                        class="mt-3 space-y-2 pl-7"
+                      >
+                        <div
+                          v-if="sessionExtraPaxCost(session) > 0"
+                          class="relative flex justify-between pl-4 text-sm before:absolute before:left-0 before:content-['+'] before:text-gray-400"
+                        >
+                          <span class="text-gray-500">
+                            {{ t("extraPaxLabel") }} (x{{
+                              session.pax - (session.theme.base_pax || 0)
+                            }})
+                          </span>
+                          <span class="font-medium text-gray-900"
+                            >+RM{{
+                              formatPriceWhole(sessionExtraPaxCost(session))
+                            }}</span
+                          >
+                        </div>
+                        <div
+                          v-for="line in sessionAddonLines(session)"
+                          :key="line.id"
+                          class="relative flex justify-between pl-4 text-sm before:absolute before:left-0 before:content-['+'] before:text-gray-400"
+                        >
+                          <span class="text-gray-500">
+                            {{ line.name }} (x{{ line.qty }})
+                          </span>
+                          <span class="font-medium text-gray-900"
+                            >+RM{{ formatPriceWhole(line.total) }}</span
+                          >
+                        </div>
+                      </div>
+                    </div>
+                  </template>
+
                   <!-- Theme Item -->
-                  <div>
-                    <div class="flex justify-between items-start mb-1">
-                      <h4 class="text-base font-medium text-gray-900">
+                  <div v-else class="bk-session-row !py-0">
+                    <div class="bk-session-thumb">
+                      <img
+                        v-if="selectedTheme?.images?.[0]"
+                        :src="selectedTheme.images[0]"
+                        :alt="selectedTheme?.name"
+                        class="h-full w-full object-cover"
+                      />
+                      <div
+                        v-else
+                        class="flex h-full w-full items-center justify-center text-[var(--bk-faint)]"
+                      >
+                        <ImageIcon class="h-4 w-4" />
+                      </div>
+                    </div>
+                    <div class="min-w-0 flex-1">
+                    <div class="mb-1 flex items-start justify-between gap-3">
+                      <h4 class="bk-title truncate text-[15px] sm:text-base">
                         {{ selectedTheme?.name }}
                       </h4>
-                      <span class="text-base font-medium text-gray-900"
-                        >RM{{
+                      <span class="shrink-0 text-[15px] font-semibold tabular-nums text-[var(--bk-text)] sm:text-base">
+                        RM{{
                           formatPriceWhole(selectedTheme?.base_price || 0)
-                        }}</span
-                      >
+                        }}
+                      </span>
                     </div>
-                    <div class="mt-1 space-y-1.5">
-                      <p class="text-gray-500 text-sm flex items-center gap-2">
-                        <Calendar class="w-4 h-4 text-gray-400" />
+                    <div class="mt-1 space-y-2">
+                      <p class="flex items-center gap-2 text-sm font-medium text-[var(--bk-muted)]">
+                        <Calendar class="h-4 w-4 shrink-0 text-[var(--bk-faint)]" />
                         {{ formatDate(selectedDate) }}
                       </p>
                       <div
                         v-if="
                           isMultipleSlotEnabled && confirmedSlots.length > 0
                         "
-                        class="space-y-1"
+                        class="flex flex-wrap gap-1"
                       >
-                        <div
+                        <span
                           v-for="slot in confirmedSlots"
                           :key="slot.hold?.holdId || slot.id"
-                          class="flex items-center gap-2 text-gray-600 font-medium text-sm pl-0.5"
+                          class="bk-time-pill"
                         >
-                          <div
-                            class="w-1.5 h-1.5 rounded-full bg-gray-300"
-                          ></div>
-                          {{ slot.start }} - {{ slot.end }}
-                        </div>
+                          {{ slot.start }}
+                        </span>
                       </div>
                       <p
                         v-else
-                        class="text-gray-600 text-sm font-medium flex items-center gap-2 pl-0.5"
+                        class="text-sm font-semibold tabular-nums text-[var(--bk-text)]"
                       >
-                        <span
-                          class="w-1.5 h-1.5 rounded-full bg-gray-300 inline-block"
-                        ></span>
                         {{ selectedSlot?.start }} - {{ selectedSlot?.end }}
                       </p>
                     </div>
@@ -5037,8 +6257,6 @@ watch(
                       "
                       class="mt-4 space-y-2"
                     >
-                      <!-- Special Pricing -->
-                      <!-- Special Pricing -->
                       <div
                         v-if="specialPricingAmount !== 0"
                         class="flex justify-between text-sm pl-4 relative"
@@ -5063,7 +6281,6 @@ watch(
                         </span>
                       </div>
 
-                      <!-- Extra Pax -->
                       <div
                         v-if="extraPaxCost > 0"
                         class="flex justify-between text-sm pl-4 relative before:content-['+'] before:absolute before:left-0 before:text-gray-400"
@@ -5078,7 +6295,6 @@ watch(
                         >
                       </div>
 
-                      <!-- Addons -->
                       <template v-for="(qty, id) in selectedAddons" :key="id">
                         <div
                           v-if="qty > 0"
@@ -5101,10 +6317,11 @@ watch(
                         </div>
                       </template>
                     </div>
+                    </div>
                   </div>
 
                   <!-- Separator -->
-                  <div class="border-t border-gray-100"></div>
+                  <div class="border-t border-[var(--bk-border)]" />
 
                   <!-- 3. Coupon Section -->
                   <div>
@@ -5120,7 +6337,7 @@ watch(
                         @click="handleApplyCoupon"
                         :disabled="!couponCode.trim() || isValidatingCoupon"
                         type="button"
-                      class="h-11 shrink-0 rounded-lg bg-gray-900 px-5 text-sm font-medium text-white transition-colors hover:bg-black disabled:opacity-40"
+                        class="bk-cta-primary bk-cta-primary--inline !min-w-0 px-5"
                       >
                         {{ isValidatingCoupon ? "..." : t("apply") || "Guna" }}
                       </button>
@@ -5759,6 +6976,9 @@ watch(
       :initialIndex="galleryState.initialIndex"
       :title="galleryState.title"
       :description="galleryState.description"
+      :meta-items="galleryState.metaItems"
+      :includes-label="galleryState.includesLabel"
+      :includes-items="galleryState.includesItems"
       @close="closeGallery"
     />
   </div>

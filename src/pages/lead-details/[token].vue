@@ -68,7 +68,7 @@
           Complete your details
         </h1>
         <p class="mt-1 text-sm opacity-70">
-          Step {{ currentStep + 1 }} of {{ steps.length }} — {{ steps[currentStep].title }}
+          Step {{ currentStep + 1 }} of {{ steps.length }}: {{ steps[currentStep].title }}
         </p>
         <div class="mt-4 flex gap-1.5">
           <div
@@ -225,7 +225,7 @@
           <p class="text-sm opacity-70">
             {{
               form.autoCreateQuotation
-                ? "Pick at least one package — we will create your quotation."
+                ? "Pick at least one package: we will create your quotation."
                 : "Pick packages you are interested in (optional)."
             }}
           </p>

@@ -244,7 +244,7 @@ function invoiceHref(invoiceId: string) {
   const params = new URLSearchParams();
   if (token.value) params.set("t", token.value);
   params.set("invoiceId", invoiceId);
-  // Localhost resolves studio via ?studio= — new tabs do not inherit sessionStorage.
+  // Localhost resolves studio via ?studio=: new tabs do not inherit sessionStorage.
   const studio =
     String(route.query.studio || "").trim() ||
     studioStore.studio?.slug ||

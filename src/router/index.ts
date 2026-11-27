@@ -229,7 +229,7 @@ router.beforeEach(async (to, _from, next) => {
     }
   }
 
-  // Platform-only page — no studio context required
+  // Platform-only page: no studio context required
   if (to.name === "studio-not-found") {
     document.title = (to.meta.title as string) || "SESIFOTO";
     next();

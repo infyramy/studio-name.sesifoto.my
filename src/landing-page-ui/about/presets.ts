@@ -19,7 +19,7 @@ export const DEFAULT_ABOUT_VALUES: AboutValueProp[] = [
     id: "val-1",
     title: "Candid & unposed",
     description:
-      "Kami rakam detik semula jadi — bukan pose kaku. Anda boleh enjoy hari tanpa risau kamera.",
+      "Kami rakam detik semula jadi: bukan pose kaku. Anda boleh enjoy hari tanpa risau kamera.",
   },
   {
     id: "val-2",
@@ -72,7 +72,7 @@ export const DEFAULT_ABOUT_TESTIMONIAL: AboutTestimonial = {
   imageUrl: TESTIMONIAL_IMG,
   quote:
     "Thank you for being the best photographer during our wedding. Lots of candid moments instead of stiff posed shots.",
-  attribution: "RAIHAN & AZZAT — TERENGGANU / KUALA LUMPUR",
+  attribution: "RAIHAN & AZZAT: TERENGGANU / KUALA LUMPUR",
 };
 
 export function createDefaultAboutConfig(): AboutPageConfig {

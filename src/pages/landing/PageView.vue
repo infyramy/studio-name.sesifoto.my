@@ -81,9 +81,9 @@ function applyLandingDefaultLanguage(
 ) {
   if (landingLanguageApplied.value) return;
   if (!rawStyle || !("defaultLanguage" in rawStyle)) return;
-  studioStore.setLanguage(
-    normalized.defaultLanguage === "en" ? "EN" : "BM",
-  );
+  // Do not call setLanguage here: that would lock session preference to default
+    // and block later homepage toggles from being the first real visitor choice.
+  studioStore.applyDefaultLanguageIfUnset(normalized.defaultLanguage);
   landingLanguageApplied.value = true;
 }
 
@@ -179,22 +179,29 @@ function readCachedSiteTheme(): LandingPageTheme | null {
 }
 
 function rememberSiteTheme(next: LandingPageTheme) {
-  lastSiteTheme.value = next;
+  const studioLogo = studioStore.studio?.logo_url?.trim();
+  const studioName = studioStore.studio?.name?.trim();
+  const cached: LandingPageTheme = {
+  ...next,
+  ...(studioLogo ? { logoUrl: studioLogo } : {}),
+  ...(studioName ? { studioName } : {}),
+  };
+  lastSiteTheme.value = cached;
   try {
     sessionStorage.setItem(
       siteThemeCacheKey(),
       JSON.stringify({
-        presetName: next.presetName,
-        primaryColor: next.primaryColor,
-        primaryTextColor: next.primaryTextColor,
-        secondaryColor: next.secondaryColor,
-        secondaryTextColor: next.secondaryTextColor,
-        mode: next.mode,
-        titleFont: next.titleFont,
-        bodyFont: next.bodyFont,
-        logoUrl: next.logoUrl,
-        studioName: next.studioName,
-        radius: next.radius,
+        presetName: cached.presetName,
+        primaryColor: cached.primaryColor,
+        primaryTextColor: cached.primaryTextColor,
+        secondaryColor: cached.secondaryColor,
+        secondaryTextColor: cached.secondaryTextColor,
+        mode: cached.mode,
+        titleFont: cached.titleFont,
+        bodyFont: cached.bodyFont,
+        logoUrl: cached.logoUrl,
+        studioName: cached.studioName,
+        radius: cached.radius,
       }),
     );
   } catch {
@@ -222,13 +229,24 @@ const showBoot = computed(
   () => isInitialLoading.value || (!!pageError.value && !hasReadyPage.value),
 );
 
-const bootTheme = computed(
-  () =>
+const bootTheme = computed(() => {
+  const base =
     siteStyle.value ||
     theme.value ||
     lastSiteTheme.value ||
-    normalizeLandingPageConfig({}, studioDefaults.value),
-);
+    normalizeLandingPageConfig({}, studioDefaults.value);
+
+    // Prefer live studio logo/name so boot never sticks on a stale cache or old default.
+    const studioLogo = studioStore.studio?.logo_url?.trim();
+    const studioName = studioStore.studio?.name?.trim();
+    if (!studioLogo && !studioName) return base;
+
+    return {
+    ...base,
+    ...(studioLogo ? { logoUrl: studioLogo } : {}),
+    ...(studioName ? { studioName } : {}),
+    };
+    });
 
 function clearPageConfigs() {
   portfolioConfig.value = null;
@@ -344,7 +362,14 @@ function onLeadGallery(index: number) {
 </script>
 
 <template>
-  <div class="min-h-dvh w-full">
+  <div
+    class="w-full"
+    :class="
+      isLinksHome && theme?.linkPageDesign?.pageHeight !== 'Scroll'
+        ? 'h-dvh max-h-dvh overflow-hidden'
+        : 'min-h-dvh'
+    "
+  >
     <LandingPageBootState
       v-if="showBoot"
       :theme="bootTheme"

@@ -8,6 +8,14 @@ div.landing-surface {
   flex-direction: column;
 }
 
+/* Non-scroll link themes: exact viewport lock (paired with h-dvh / overflow-hidden utilities) */
+div.landing-surface.h-dvh {
+  height: 100dvh;
+  max-height: 100dvh;
+  min-height: 100dvh;
+  overflow: hidden;
+}
+
 .lp-boot {
   display: flex;
   flex-direction: column;
@@ -36,9 +44,18 @@ div.landing-surface {
   height: 2.75rem;
   width: 2.75rem;
   border-radius: 999px;
+  box-sizing: border-box;
+}
+
+.lp-boot__logo--studio {
+  object-fit: cover;
+  padding: 0;
+  background: transparent;
+}
+
+.lp-boot__logo--default {
   object-fit: contain;
   padding: 14%;
-  box-sizing: border-box;
 }
 
 .lp-boot__name {
@@ -196,7 +213,7 @@ div.landing-surface {
   }
 }
 
-/* Opacity only — any leftover transform on the sticky header breaks position:sticky. */
+/* Opacity only: any leftover transform on the sticky header breaks position:sticky. */
 @keyframes lp-header-in {
   from {
     opacity: 0;

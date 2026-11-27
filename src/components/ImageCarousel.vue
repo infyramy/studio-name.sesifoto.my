@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted, nextTick } from "vue";
+import { computed, ref, watch, onMounted, onUnmounted, nextTick } from "vue";
 import {
   X,
   ChevronLeft,
@@ -7,13 +7,29 @@ import {
   Image as ImageIcon,
 } from "lucide-vue-next";
 
+export type CarouselMetaItem = { label: string; value: string };
+export type CarouselIncludeItem = string | { name: string; detail?: string };
+
 const props = defineProps<{
   show: boolean;
   images: string[];
   initialIndex?: number;
   title?: string;
   description?: string;
+  /** Top meta chips (price, duration, pax, etc.). */
+  metaItems?: CarouselMetaItem[];
+  /** Optional labeled list (e.g. package themes included). */
+  includesLabel?: string;
+  includesItems?: CarouselIncludeItem[];
 }>();
+
+const normalizedIncludes = computed(() =>
+  (props.includesItems || []).map((item) =>
+    typeof item === "string"
+      ? { name: item, detail: undefined as string | undefined }
+      : { name: item.name, detail: item.detail },
+  ),
+);
 
 const emit = defineEmits<{
   (e: "close"): void;
@@ -258,19 +274,78 @@ const handleSwipe = () => {
       <div
         class="shrink-0 space-y-4 px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-4 sm:px-6"
       >
-        <div v-if="title || description" class="mx-auto max-w-2xl">
+        <div
+          v-if="
+            title ||
+            description ||
+            (metaItems && metaItems.length) ||
+            normalizedIncludes.length
+          "
+          class="mx-auto max-w-2xl"
+        >
           <p v-if="title" class="text-base font-medium text-white">
             {{ title }}
           </p>
+          <div
+            v-if="metaItems && metaItems.length"
+            class="mt-2.5 flex flex-wrap gap-1.5"
+          >
+            <span
+              v-for="(meta, index) in metaItems"
+              :key="`${meta.label}-${index}`"
+              class="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-medium text-white/85"
+            >
+              <span class="text-white/45">{{ meta.label }}</span>
+              <span>{{ meta.value }}</span>
+            </span>
+          </div>
           <p
             v-if="description"
-            class="mt-1 whitespace-pre-line text-sm leading-relaxed text-white/60"
-            :class="isCaptionExpanded ? 'max-h-[30vh] overflow-y-auto' : 'line-clamp-2'"
+            class="mt-2 whitespace-pre-line text-sm leading-relaxed text-white/60"
+            :class="
+              isCaptionExpanded
+                ? 'max-h-[30vh] overflow-y-auto'
+                : 'line-clamp-2'
+            "
           >
             {{ description }}
           </p>
+          <div
+            v-if="normalizedIncludes.length"
+            class="mt-3"
+            :class="isCaptionExpanded ? 'max-h-[30vh] overflow-y-auto' : ''"
+          >
+            <p
+              v-if="includesLabel"
+              class="text-[11px] font-medium uppercase tracking-wide text-white/45"
+            >
+              {{ includesLabel }}
+            </p>
+            <ol class="mt-1.5 space-y-2">
+              <li
+                v-for="(item, index) in normalizedIncludes"
+                :key="`${index}-${item.name}`"
+                class="flex gap-2 text-sm leading-snug text-white/70"
+              >
+                <span
+                  class="flex size-5 shrink-0 items-center justify-center rounded-full bg-white/10 text-[10px] font-semibold tabular-nums text-white/80"
+                >
+                  {{ index + 1 }}
+                </span>
+                <div class="min-w-0 pt-0.5">
+                  <p class="font-medium text-white/85">{{ item.name }}</p>
+                  <p v-if="item.detail" class="mt-0.5 text-xs text-white/45">
+                    {{ item.detail }}
+                  </p>
+                </div>
+              </li>
+            </ol>
+          </div>
           <button
-            v-if="description && description.length > 120"
+            v-if="
+              (description && description.length > 120) ||
+              normalizedIncludes.length > 3
+            "
             type="button"
             class="mt-1 text-sm text-white/80 underline-offset-2 hover:underline"
             @click="isCaptionExpanded = !isCaptionExpanded"
@@ -281,23 +356,31 @@ const handleSwipe = () => {
 
         <div
           v-if="images.length > 1"
-          class="mx-auto flex max-w-2xl gap-2 overflow-x-auto"
+          class="mx-auto flex max-w-2xl justify-center gap-2 overflow-x-auto py-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           <button
             v-for="(img, index) in images"
             :key="index"
             type="button"
-            class="h-12 w-12 shrink-0 overflow-hidden rounded-md transition-opacity"
+            class="relative shrink-0 rounded-[0.6rem] p-[1.5px] transition-all duration-200"
             :class="
               currentIndex === index
-                ? 'opacity-100 ring-2 ring-white ring-offset-2 ring-offset-black'
-                : 'opacity-40 hover:opacity-70'
+                ? 'bg-white opacity-100'
+                : 'bg-transparent opacity-35 hover:opacity-60'
             "
             :aria-label="`Image ${index + 1}`"
             :aria-current="currentIndex === index"
             @click="currentIndex = index"
           >
-            <img :src="img" alt="" class="h-full w-full object-cover" />
+            <span
+              class="relative block h-11 w-11 overflow-hidden rounded-[calc(0.6rem-1.5px)]"
+            >
+              <img :src="img" alt="" class="h-full w-full object-cover" />
+              <span
+                v-if="currentIndex === index"
+                class="pointer-events-none absolute inset-x-1.5 bottom-1 h-0.5 rounded-full bg-white/95"
+              />
+            </span>
           </button>
         </div>
       </div>

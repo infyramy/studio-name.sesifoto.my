@@ -91,7 +91,7 @@
           </div>
           <div>
             <p class="quote-meta__label">Client</p>
-            <p class="quote-meta__value">{{ quote.clientName || "—" }}</p>
+            <p class="quote-meta__value">{{ quote.clientName || "-" }}</p>
           </div>
           <div v-if="quote.eventTitle">
             <p class="quote-meta__label">Event</p>
@@ -106,7 +106,7 @@
           <div>
             <p class="quote-meta__label">Valid until</p>
             <p class="quote-meta__value">
-              {{ quote.validUntil ? formatDateLong(quote.validUntil) : "—" }}
+              {{ quote.validUntil ? formatDateLong(quote.validUntil) : "-" }}
             </p>
           </div>
         </div>
@@ -155,7 +155,7 @@
               color: 'var(--p-accent)',
             }"
           >
-            Quotation accepted — thank you!
+            Quotation accepted: thank you!
           </div>
           <a
             v-if="quote.postAcceptPayUrl"
@@ -181,7 +181,7 @@
               : quote.status === "declined"
                 ? "Quotation declined"
                 : quote.status === "draft"
-                  ? "Draft — not sent yet"
+                  ? "Draft: not sent yet"
                   : quote.status === "superseded"
                     ? "Replaced by newer quotation"
                     : "Quotation closed"
@@ -740,7 +740,7 @@ const scheduleSteps = computed((): ScheduleStep[] => {
     const balance = roundMoney(Math.max(0, total - due));
     const depositCaption =
       q.depositType === "percent"
-        ? `${q.depositValue}% of total — pay this first to confirm`
+        ? `${q.depositValue}% of total: pay this first to confirm`
         : "Pay this first to confirm the booking";
     return [
       {

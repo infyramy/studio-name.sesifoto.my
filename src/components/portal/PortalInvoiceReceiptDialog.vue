@@ -53,7 +53,7 @@
               {{ studioName }}
             </h3>
             <p class="mt-1 text-sm text-[#6B7280]">
-              Invoice #{{ invoice?.number || "—" }}
+              Invoice #{{ invoice?.number || "-" }}
             </p>
           </div>
           <SafeImage
@@ -69,7 +69,7 @@
               Billed to
             </p>
             <p class="mt-1 font-medium">
-              {{ invoice?.clientName || clientName || "—" }}
+              {{ invoice?.clientName || clientName || "-" }}
             </p>
           </div>
           <div class="text-right">
@@ -162,7 +162,7 @@ const receiptRoot = ref<HTMLElement | null>(null);
 
 const receiptStatus = computed(() => {
   const inv = props.invoice;
-  if (!inv) return "—";
+  if (!inv) return "-";
   if (inv.balanceDue <= 0 || inv.status === "paid") return "Paid in full";
   if (inv.paidAmount > 0) return "Partially paid";
   return "Unpaid";

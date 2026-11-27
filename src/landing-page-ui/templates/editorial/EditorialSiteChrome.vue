@@ -106,7 +106,7 @@ const forceMobileChrome = computed(
     props.previewLayout === "mobile" || props.previewLayout === "tablet",
 );
 
-/** Display utility must live in one class — do not pair `hidden` with bare `flex`. */
+/** Display utility must live in one class: do not pair `hidden` with bare `flex`. */
 const desktopNavClass = computed(() =>
   forceMobileChrome.value ? "hidden" : "hidden md:flex",
 );

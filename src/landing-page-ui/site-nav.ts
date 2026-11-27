@@ -16,18 +16,18 @@ const NAV_LABEL_KEYS: Record<SiteNavItemKey, LandingPageUiKey> = {
   leadForm: "navLeadForm",
 };
 
-/** Header left — home + portfolio */
+/** Header left: home + portfolio */
 export const SITE_NAV_HEADER_LEFT: FixedSiteNavItem[] = [
   { id: "nav-home", key: "home", url: "/" },
   { id: "nav-portfolio", key: "portfolio", url: "/portfolio" },
 ];
 
-/** Header right — lead form */
+/** Header right: lead form */
 export const SITE_NAV_HEADER_RIGHT: FixedSiteNavItem[] = [
   { id: "nav-lead-form", key: "leadForm", url: "/lead-form" },
 ];
 
-/** Footer — all page-editor pages */
+/** Footer: all page-editor pages */
 export const SITE_NAV_FOOTER: FixedSiteNavItem[] = [
   { id: "footer-home", key: "home", url: "/" },
   { id: "footer-portfolio", key: "portfolio", url: "/portfolio" },

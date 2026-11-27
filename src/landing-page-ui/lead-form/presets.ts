@@ -24,7 +24,7 @@ export function createDefaultLeadFormConfig(): LeadFormPageConfig {
     brandLabel: "STUDIO",
     heroHeading: "Ceritakan tentang hari anda",
     heroSubtitle:
-      "Nota ringkas — kami akan balas melalui WhatsApp, biasanya dalam sehari.",
+      "Nota ringkas: kami akan balas melalui WhatsApp, biasanya dalam sehari.",
     heroDescription:
       "Kami percaya setiap detik berharga. Sejak 2019, kami merakam detik-detik indah pasangan di seluruh Malaysia.",
     showFormHeader: true,

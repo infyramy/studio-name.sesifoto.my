@@ -14,6 +14,7 @@ import type {
   WebsiteSettings,
   BatchBookingRequest,
   BatchBookingItem,
+  BookingPackage,
 } from "@/types";
 import { getStudioSlugFromSubdomain } from "@/utils/slug";
 
@@ -224,6 +225,7 @@ export const api = {
       cartModeEnabled: data.cartModeEnabled,
       cartHoldDuration: data.cartHoldDuration,
       allowMultipleSlot: data.allowMultipleSlot,
+      allowSingleThemeBooking: data.allowSingleThemeBooking ?? true,
       bookingWindowStart: data.bookingWindowStart,
       bookingWindowEnd: data.bookingWindowEnd,
       chipFeeMode: data.chipFeeMode as "on_top" | "absorbed" | undefined,
@@ -281,6 +283,80 @@ export const api = {
         referralCode: referralCode || undefined,
       },
     });
+  },
+
+  // ===== Booking Package APIs =====
+  async getBookingPackages(slug?: string): Promise<BookingPackage[]> {
+    const studioSlug = slug || getStudioSlug();
+    const data = await apiFetch(`/public/studio/${studioSlug}/packages`);
+    return (data || []).map((pkg: any) => ({
+      id: pkg.id,
+      name: pkg.name,
+      descriptionShort: pkg.descriptionShort ?? null,
+      images: Array.isArray(pkg.images) ? pkg.images : [],
+      basePrice: Number(pkg.basePrice) || 0,
+      depositAmount:
+        pkg.depositAmount != null ? Number(pkg.depositAmount) : null,
+      timingMode:
+        pkg.timingMode === "continuous" ? ("continuous" as const) : ("separated" as const),
+      allowThemeReorder:
+        pkg.timingMode === "continuous" ? !!pkg.allowThemeReorder : false,
+      sortOrder: pkg.sortOrder ?? 0,
+      themes: (pkg.themes || []).map((t: any) => ({
+        themeId: t.themeId,
+        sequence: t.sequence,
+        name: t.name,
+        durationMinutes: t.durationMinutes,
+        basePax: t.basePax,
+        images: Array.isArray(t.images) ? t.images : [],
+      })),
+    }));
+  },
+
+  async getPackageChainSlots(
+    packageId: string,
+    date: string,
+    themeIds: string[],
+    sessionId?: string,
+  ): Promise<{
+    starts: Array<{
+      startTime: string;
+      chain: Array<{
+        themeId: string;
+        sequence: number;
+        startTime: string;
+        endTime: string;
+      }>;
+    }>;
+    themeIds: string[];
+    autoReordered: boolean;
+  }> {
+    const slug = getStudioSlug();
+    const data = await apiFetch(
+      `/public/studio/${slug}/packages/${packageId}/chain-slots`,
+      {
+        query: {
+          date,
+          themeIds: themeIds.join(","),
+          ...(sessionId ? { sessionId } : {}),
+        },
+      },
+    );
+    return {
+      starts: (data?.starts || []).map((row: any) => ({
+        startTime: row.startTime,
+        chain: (row.chain || []).map((seg: any) => ({
+          themeId: seg.themeId,
+          sequence: seg.sequence,
+          startTime: seg.startTime,
+          endTime: seg.endTime,
+        })),
+      })),
+      themeIds: Array.isArray(data?.themeIds)
+        ? data.themeIds.map(String)
+        : [...themeIds],
+      autoReordered: !!data?.autoReordered,
+    };
   },
 
   // ===== Theme APIs =====
@@ -538,6 +614,8 @@ export const api = {
         consentTc: request.consent_tc,
         consentMarketing: request.consent_marketing,
         sessionId: request.session_id,
+        packageId: request.package_id,
+        bookingGroupId: request.booking_group_id,
         items: request.items.map((item) => ({
           themeId: item.theme_id,
           bookingDate: item.booking_date,
@@ -548,6 +626,7 @@ export const api = {
           discountAmount: item.discount_amount,
           referralCode: item.referral_code,
           subtotal: item.subtotal,
+          packageSequence: item.package_sequence,
           addons: item.selected_addons.map((a) => ({
             addonId: a.addon_id,
             quantity: a.quantity,

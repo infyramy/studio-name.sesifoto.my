@@ -33,7 +33,7 @@ function removeLandingMetaTags() {
 
 /**
  * Client-side SEO/OG tags for the landing page route.
- * Not SSR — crawlers that do not run JS may miss these tags.
+ * Not SSR: crawlers that do not run JS may miss these tags.
  */
 export function useLandingPageMeta(
   theme: Ref<LandingPageTheme | null>,

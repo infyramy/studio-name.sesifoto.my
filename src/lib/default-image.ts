@@ -6,7 +6,7 @@ import logoLight from "@/assets/logo/logo-light.png";
  */
 export const DEFAULT_SESIFOTO_IMAGE = logoLight as string;
 
-/** Public path (no bundler hash) — useful in serialized theme JSON / static HTML. */
+/** Public path (no bundler hash): useful in serialized theme JSON / static HTML. */
 export const DEFAULT_SESIFOTO_IMAGE_PUBLIC = "/logo-light.png";
 
 /** Dark plate behind the light Sesifoto mark so it stays readable. */

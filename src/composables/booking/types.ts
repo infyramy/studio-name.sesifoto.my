@@ -26,6 +26,9 @@ export interface BookingCartItem {
     message: string;
     amount: number;
   };
+  packageId?: string;
+  bookingGroupId?: string;
+  packageSequence?: number;
 }
 
 export interface BookingPersistedState {

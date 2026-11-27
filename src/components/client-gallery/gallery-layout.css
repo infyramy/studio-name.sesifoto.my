@@ -7,7 +7,7 @@
   font-family: var(--g-display, "Cormorant Garamond"), Georgia, serif;
 }
 
-/* Custom gallery scrollbars — thin, theme-aware */
+/* Custom gallery scrollbars: thin, theme-aware */
 .gallery-page,
 .film-rail {
   scrollbar-width: thin;
